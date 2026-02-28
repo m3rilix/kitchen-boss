@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import { useAuthStore } from '@/store/authStore';
@@ -10,13 +10,38 @@ import { SessionHeader } from '@/components/SessionHeader';
 import { ActivityLog } from '@/components/ActivityLog';
 import { LoginPage } from '@/components/LoginPage';
 import { AdminPage } from '@/components/AdminPage';
+import { SharedSessionView } from '@/components/SharedSessionView';
+import { getSessionFromUrl, clearSessionFromUrl } from '@/lib/sessionSharing';
 import { Plus } from 'lucide-react';
+import type { Session } from '@/types';
 
 function App() {
   const { session, addCourt } = useSessionStore();
   const { isAuthenticated, isAccessValid, isAdmin } = useAuthStore();
   const theme = useThemeClasses();
   const [showAdmin, setShowAdmin] = useState(false);
+  const [sharedSession, setSharedSession] = useState<Session | null>(null);
+
+  // Check for shared session in URL on mount
+  useEffect(() => {
+    const sessionFromUrl = getSessionFromUrl();
+    if (sessionFromUrl) {
+      setSharedSession(sessionFromUrl);
+    }
+  }, []);
+
+  // If viewing a shared session, show read-only view (bypass login)
+  if (sharedSession) {
+    return (
+      <SharedSessionView 
+        session={sharedSession} 
+        onExit={() => {
+          setSharedSession(null);
+          clearSessionFromUrl();
+        }} 
+      />
+    );
+  }
 
   // Show login if not authenticated
   if (!isAuthenticated) {
