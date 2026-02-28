@@ -10,7 +10,7 @@ const firebaseConfig = {
   messagingSenderId: "543015650850",
   appId: "1:543015650850:web:03dcb808c18a93937dec7b",
   measurementId: "G-P2LTH550YL",
-  databaseURL: "https://kitchen-boss-df506-default-rtdb.firebaseio.com"
+  databaseURL: "https://kitchen-boss-df506-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
 
 // Initialize Firebase
@@ -32,22 +32,34 @@ export async function shareSession(session: Session): Promise<string> {
   const shareCode = generateShareCode();
   const sessionRef = ref(database, `sessions/${shareCode}`);
   
-  await set(sessionRef, {
-    ...session,
-    sharedAt: Date.now(),
-    lastUpdated: Date.now()
-  });
-  
-  return shareCode;
+  try {
+    // Session has Date objects that need to be serialized
+    const sessionData = JSON.parse(JSON.stringify(session));
+    await set(sessionRef, {
+      ...sessionData,
+      sharedAt: Date.now(),
+      lastUpdated: Date.now()
+    });
+    return shareCode;
+  } catch (error) {
+    console.error('Firebase shareSession error:', error);
+    throw error;
+  }
 }
 
 // Update shared session in Firebase
 export async function updateSharedSession(shareCode: string, session: Session): Promise<void> {
   const sessionRef = ref(database, `sessions/${shareCode}`);
-  await set(sessionRef, {
-    ...session,
-    lastUpdated: Date.now()
-  });
+  try {
+    const sessionData = JSON.parse(JSON.stringify(session));
+    await set(sessionRef, {
+      ...sessionData,
+      lastUpdated: Date.now()
+    });
+  } catch (error) {
+    console.error('Firebase updateSharedSession error:', error);
+    throw error;
+  }
 }
 
 // Get session from Firebase by share code

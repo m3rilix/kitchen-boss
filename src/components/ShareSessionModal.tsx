@@ -19,7 +19,13 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
 
   // Generate or use existing share code
   useEffect(() => {
-    if (isOpen && session && !shareCode) {
+    if (!isOpen || !session) return;
+    
+    if (shareCode) {
+      // Already have a share code, just generate the URL
+      setShareUrl(generateShareUrlWithCode(shareCode));
+    } else {
+      // Need to create a new share code
       setIsSharing(true);
       shareSession(session)
         .then((code) => {
@@ -31,8 +37,6 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
           console.error('Failed to share session:', err);
           setIsSharing(false);
         });
-    } else if (shareCode) {
-      setShareUrl(generateShareUrlWithCode(shareCode));
     }
   }, [isOpen, session, shareCode, setShareCode]);
 
