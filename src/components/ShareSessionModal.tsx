@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
-import { generateShareUrl, generateQRCodeUrl } from '@/lib/sessionSharing';
-import { X, Copy, Check, QrCode, Eye } from 'lucide-react';
+import { shareSession, generateShareUrlWithCode, generateQRCodeUrl } from '@/lib/firebase';
+import { X, Copy, Check, QrCode, Wifi, Loader2 } from 'lucide-react';
 
 interface ShareSessionModalProps {
   isOpen: boolean;
@@ -10,15 +10,35 @@ interface ShareSessionModalProps {
 }
 
 export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
-  const { session } = useSessionStore();
+  const { session, shareCode, setShareCode } = useSessionStore();
   const theme = useThemeClasses();
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string>('');
+
+  // Generate or use existing share code
+  useEffect(() => {
+    if (isOpen && session && !shareCode) {
+      setIsSharing(true);
+      shareSession(session)
+        .then((code) => {
+          setShareCode(code);
+          setShareUrl(generateShareUrlWithCode(code));
+          setIsSharing(false);
+        })
+        .catch((err) => {
+          console.error('Failed to share session:', err);
+          setIsSharing(false);
+        });
+    } else if (shareCode) {
+      setShareUrl(generateShareUrlWithCode(shareCode));
+    }
+  }, [isOpen, session, shareCode, setShareCode]);
 
   if (!isOpen || !session) return null;
 
-  const shareUrl = generateShareUrl(session);
-  const qrCodeUrl = generateQRCodeUrl(shareUrl, 250);
+  const qrCodeUrl = shareUrl ? generateQRCodeUrl(shareUrl, 250) : '';
 
   const handleCopy = async () => {
     try {
@@ -45,13 +65,21 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
         </div>
 
         <div className="p-4 space-y-4">
+          {/* Loading State */}
+          {isSharing ? (
+            <div className="flex items-center justify-center gap-3 p-6">
+              <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+              <span className="text-slate-600">Creating share link...</span>
+            </div>
+          ) : (
+            <>
           {/* Info */}
-          <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
-            <Eye className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-700">
-              <p className="font-medium">Read-Only Snapshot</p>
-              <p className="text-blue-600 mt-0.5">
-                This link contains a snapshot of the current session. Share a new link after changes to update viewers.
+          <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+            <Wifi className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-green-700">
+              <p className="font-medium">Real-Time Sync</p>
+              <p className="text-green-600 mt-0.5">
+                Viewers will see live updates as games progress. No need to re-share!
               </p>
             </div>
           </div>
@@ -120,7 +148,14 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
             <p className="text-xs text-slate-500 mt-1">
               {session.players.length} players • {session.courts.length} courts
             </p>
+            {shareCode && (
+              <p className="text-xs text-slate-500 mt-1">
+                Code: <span className="font-mono font-medium text-slate-700">{shareCode}</span>
+              </p>
+            )}
           </div>
+          </>
+          )}
         </div>
 
         {/* Footer */}

@@ -13,6 +13,7 @@
     "@types/pako": "^2.0.4",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
+    "firebase": "^12.10.0",
     "lucide-react": "^0.294.0",
     "pako": "^2.1.0",
     "react": "^18.2.0",

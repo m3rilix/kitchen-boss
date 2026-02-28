@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType } from '@/types';
+import { updateSharedSession } from '@/lib/firebase';
 
 // Helper to generate share code
 const generateShareCode = () => {
@@ -68,6 +69,11 @@ interface SessionState {
   getPlayerById: (playerId: string) => Player | undefined;
   getPlayersInQueue: () => Player[];
   getAvailablePlayers: () => Player[];
+  
+  // Firebase sync
+  shareCode: string | null;
+  setShareCode: (code: string | null) => void;
+  syncToFirebase: () => Promise<void>;
 }
 
 export const useSessionStore = create<SessionState>()(
@@ -734,10 +740,26 @@ export const useSessionStore = create<SessionState>()(
           (p) => p.isActive && !playersInGames.has(p.id)
         );
       },
+
+      // Firebase sync
+      shareCode: null,
+      
+      setShareCode: (code) => set({ shareCode: code }),
+      
+      syncToFirebase: async () => {
+        const state = get();
+        if (state.shareCode && state.session) {
+          try {
+            await updateSharedSession(state.shareCode, state.session);
+          } catch (error) {
+            console.error('Failed to sync to Firebase:', error);
+          }
+        }
+      },
     }),
     {
       name: 'kitchenboss-session',
-      partialize: (state) => ({ session: state.session }),
+      partialize: (state) => ({ session: state.session, shareCode: state.shareCode }),
     }
   )
 );

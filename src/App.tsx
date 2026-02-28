@@ -11,33 +11,58 @@ import { ActivityLog } from '@/components/ActivityLog';
 import { LoginPage } from '@/components/LoginPage';
 import { AdminPage } from '@/components/AdminPage';
 import { SharedSessionView } from '@/components/SharedSessionView';
-import { getSessionFromUrl, clearSessionFromUrl } from '@/lib/sessionSharing';
+import { getShareCodeFromUrl, clearShareCodeFromUrl, subscribeToSession } from '@/lib/firebase';
 import { Plus } from 'lucide-react';
 import type { Session } from '@/types';
 
 function App() {
-  const { session, addCourt } = useSessionStore();
+  const { session, addCourt, shareCode, syncToFirebase } = useSessionStore();
   const { isAuthenticated, isAccessValid, isAdmin } = useAuthStore();
   const theme = useThemeClasses();
   const [showAdmin, setShowAdmin] = useState(false);
   const [sharedSession, setSharedSession] = useState<Session | null>(null);
+  const [viewingShareCode, setViewingShareCode] = useState<string | null>(null);
 
-  // Check for shared session in URL on mount
+  // Check for share code in URL on mount and subscribe to real-time updates
   useEffect(() => {
-    const sessionFromUrl = getSessionFromUrl();
-    if (sessionFromUrl) {
-      setSharedSession(sessionFromUrl);
+    const codeFromUrl = getShareCodeFromUrl();
+    if (codeFromUrl) {
+      setViewingShareCode(codeFromUrl);
+      // Subscribe to real-time updates
+      const unsubscribe = subscribeToSession(codeFromUrl, (sessionData) => {
+        setSharedSession(sessionData);
+      });
+      return () => unsubscribe();
     }
   }, []);
 
+  // Sync to Firebase whenever session changes (if sharing is active)
+  useEffect(() => {
+    if (shareCode && session) {
+      syncToFirebase();
+    }
+  }, [session, shareCode, syncToFirebase]);
+
   // If viewing a shared session, show read-only view (bypass login)
-  if (sharedSession) {
+  if (sharedSession || viewingShareCode) {
+    if (!sharedSession) {
+      // Loading state while fetching from Firebase
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-slate-600">Loading session...</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <SharedSessionView 
         session={sharedSession} 
         onExit={() => {
           setSharedSession(null);
-          clearSessionFromUrl();
+          setViewingShareCode(null);
+          clearShareCodeFromUrl();
         }} 
       />
     );
