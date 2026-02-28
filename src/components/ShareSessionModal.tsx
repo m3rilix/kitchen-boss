@@ -49,9 +49,9 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
           <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
             <Eye className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-700">
-              <p className="font-medium">Read-Only View</p>
+              <p className="font-medium">Read-Only Snapshot</p>
               <p className="text-blue-600 mt-0.5">
-                Anyone with this link can view the current session state. They cannot make changes.
+                This link contains a snapshot of the current session. Share a new link after changes to update viewers.
               </p>
             </div>
           </div>

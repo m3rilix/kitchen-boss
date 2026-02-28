@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import type { Session, Player, Court } from '@/types';
 import { useThemeClasses } from '@/store/themeStore';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
-import { Users, Clock, Eye } from 'lucide-react';
+import { Users, Clock, Eye, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface SharedSessionViewProps {
   session: Session;
@@ -11,6 +12,7 @@ interface SharedSessionViewProps {
 
 export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   const theme = useThemeClasses();
+  const [showRefreshInfo, setShowRefreshInfo] = useState(false);
 
   // Get player by ID
   const getPlayerById = (playerId: string): Player | undefined => {
@@ -67,6 +69,14 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                   </span>
                 </div>
               </div>
+              <button
+                onClick={() => setShowRefreshInfo(true)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium ${theme.text} ${theme.bg100} rounded-lg hover:opacity-80 transition`}
+                title="Refresh session"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
               <SettingsDropdown />
               <button
                 onClick={onExit}
@@ -78,6 +88,40 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
           </div>
         </div>
       </header>
+
+      {/* Refresh Info Modal */}
+      {showRefreshInfo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl w-full max-w-sm overflow-hidden">
+            <div className="p-4 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                  <AlertCircle className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-800 dark:text-slate-100">Session Snapshot</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    This is a snapshot of the session at the time the link was shared.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                <p className="text-sm text-slate-700 dark:text-slate-300">
+                  <strong>To see updates:</strong> Ask the session host to share a new link, or scan a new QR code.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowRefreshInfo(false)}
+                className={`w-full py-2 text-sm font-medium text-white ${theme.bg500} rounded-lg hover:opacity-90 transition`}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
