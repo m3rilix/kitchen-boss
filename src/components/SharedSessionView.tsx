@@ -3,7 +3,7 @@ import { useThemeClasses } from '@/store/themeStore';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { useState, useMemo } from 'react';
-import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers } from 'lucide-react';
 
 interface SharedSessionViewProps {
   session: Session;
@@ -89,12 +89,88 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
     return session.players.find(p => p.id === playerId);
   };
 
-  // Get players in queue
-  const getPlayersInQueue = (): Player[] => {
-    return session.queue
-      .map(id => session.players.find(p => p.id === id))
-      .filter((p): p is Player => p !== undefined);
-  };
+  // Build stacks matching the Manager View logic exactly
+  const stackQueue = useMemo(() => {
+    const getPlayersInStackOrder = (stackIds: string[]): Player[] => {
+      return stackIds
+        .map(id => session.players.find(p => p.id === id))
+        .filter((p): p is Player => p !== undefined && p.isActive);
+    };
+    
+    // Get players by stack type
+    const winners = getPlayersInStackOrder(session.winnerStack ?? []);
+    const losers = getPlayersInStackOrder(session.loserStack ?? []);
+    const free = getPlayersInStackOrder(session.waitingStack ?? []);
+    
+    // Combine losers + free and sort by wait time (matches game selection logic)
+    const allLosersAndFree = [...losers, ...free].sort((a, b) => {
+      if (a.waitingSince === 0 && b.waitingSince === 0) return 0;
+      if (a.waitingSince === 0) return 1;
+      if (b.waitingSince === 0) return -1;
+      return a.waitingSince - b.waitingSince;
+    });
+    
+    type StackGroup = {
+      id: string;
+      players: Player[];
+      type: 'winners' | 'mixed' | 'forming';
+      label: string;
+      isReady: boolean;
+    };
+    
+    const stacks: StackGroup[] = [];
+    let stackNumber = 1;
+    
+    // Winner stacks (ready groups of 4)
+    const winnerReadyCount = Math.floor(winners.length / 4);
+    for (let i = 0; i < winnerReadyCount; i++) {
+      stacks.push({
+        id: `winners-${i}`,
+        players: winners.slice(i * 4, (i + 1) * 4),
+        type: 'winners',
+        label: `Stack ${stackNumber++}`,
+        isReady: true,
+      });
+    }
+    
+    // Mixed stacks from losers + free (ready groups of 4)
+    const mixedReadyCount = Math.floor(allLosersAndFree.length / 4);
+    for (let i = 0; i < mixedReadyCount; i++) {
+      stacks.push({
+        id: `mixed-${i}`,
+        players: allLosersAndFree.slice(i * 4, (i + 1) * 4),
+        type: 'mixed',
+        label: `Stack ${stackNumber++}`,
+        isReady: true,
+      });
+    }
+    
+    // Forming stacks (remaining players)
+    const remainingWinners = winners.slice(winnerReadyCount * 4);
+    const remainingMixed = allLosersAndFree.slice(mixedReadyCount * 4);
+    
+    if (remainingWinners.length > 0) {
+      stacks.push({
+        id: 'forming-winners',
+        players: remainingWinners,
+        type: 'forming',
+        label: `Winners Forming (${remainingWinners.length}/4)`,
+        isReady: false,
+      });
+    }
+    
+    if (remainingMixed.length > 0) {
+      stacks.push({
+        id: 'forming-mixed',
+        players: remainingMixed,
+        type: 'forming',
+        label: `Forming (${remainingMixed.length}/4)`,
+        isReady: false,
+      });
+    }
+    
+    return stacks;
+  }, [session.players, session.winnerStack, session.loserStack, session.waitingStack]);
 
   // Count players in games
   const playersInGame = session.courts.reduce((count, court) => {
@@ -234,50 +310,71 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Queue */}
+            {/* Stack Queue - matches Manager View exactly */}
             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                 <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-amber-500" />
-                  Queue ({session.queue.length})
+                  <Layers className="w-4 h-4 text-amber-500" />
+                  Stack Queue ({session.queue.length})
                 </h3>
               </div>
-              <div className="p-4">
-                {session.queue.length === 0 ? (
+              <div className="p-3 max-h-80 overflow-y-auto">
+                {stackQueue.length === 0 ? (
                   <p className="text-sm text-slate-500 text-center py-4">No players waiting</p>
                 ) : (
-                  <div className="space-y-2">
-                    {getPlayersInQueue().slice(0, 8).map((player, index) => (
-                      <div
-                        key={player.id}
-                        className={`flex items-center gap-3 p-2 rounded-lg ${
-                          index < 4 ? `${theme.bg100} border ${theme.border}` : 'bg-slate-50 dark:bg-slate-700'
-                        }`}
-                      >
-                        <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold flex-shrink-0 ${
-                          index < 4 ? `${theme.bg500} text-white` : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                  <div className="space-y-3">
+                    {stackQueue.map((stack) => (
+                      <div key={stack.id} className="space-y-1">
+                        {/* Stack Header */}
+                        <div className={`flex items-center justify-between px-2 py-1 rounded-lg ${
+                          stack.isReady 
+                            ? stack.type === 'winners' 
+                              ? 'bg-green-100 dark:bg-green-900/30' 
+                              : 'bg-blue-100 dark:bg-blue-900/30'
+                            : 'bg-slate-100 dark:bg-slate-700'
                         }`}>
-                          {index + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate block">{player.name}</span>
-                          {player.waitingSince > 0 && (
-                            <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {formatWaitTime(player.waitingSince, player.gamesPlayed)}
+                          <span className={`text-xs font-semibold ${
+                            stack.isReady
+                              ? stack.type === 'winners'
+                                ? 'text-green-700 dark:text-green-300'
+                                : 'text-blue-700 dark:text-blue-300'
+                              : 'text-slate-600 dark:text-slate-400'
+                          }`}>
+                            {stack.label}
+                          </span>
+                          {stack.isReady && (
+                            <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                              <Play className="w-3 h-3" />
+                              Ready
                             </span>
                           )}
                         </div>
-                        {index < 4 && (
-                          <span className={`text-xs ${theme.text} font-medium flex-shrink-0`}>Next up</span>
-                        )}
+                        {/* Stack Players */}
+                        <div className="grid grid-cols-2 gap-1">
+                          {stack.players.map((player) => (
+                            <div
+                              key={player.id}
+                              className={`flex items-center gap-2 p-1.5 rounded-lg text-xs ${
+                                stack.type === 'winners'
+                                  ? 'bg-green-50 dark:bg-green-900/20'
+                                  : stack.isReady
+                                    ? 'bg-blue-50 dark:bg-blue-900/20'
+                                    : 'bg-slate-50 dark:bg-slate-700/50'
+                              }`}
+                            >
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 ${
+                                stack.type === 'winners'
+                                  ? 'bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-200'
+                                  : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                              }`}>
+                                {player.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="truncate text-slate-700 dark:text-slate-200">{player.name}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
-                    {session.queue.length > 8 && (
-                      <p className="text-xs text-slate-500 text-center pt-2">
-                        +{session.queue.length - 8} more in queue
-                      </p>
-                    )}
                   </div>
                 )}
               </div>
