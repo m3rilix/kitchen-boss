@@ -86,13 +86,15 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
 
   // Get player by ID
   const getPlayerById = (playerId: string): Player | undefined => {
-    return session.players.find(p => p.id === playerId);
+    return session?.players?.find(p => p.id === playerId);
   };
 
   // Build stacks matching the Manager View logic exactly
   const stackQueue = useMemo(() => {
+    if (!session?.players) return [];
+    
     const getPlayersInStackOrder = (stackIds: string[]): Player[] => {
-      return stackIds
+      return (stackIds || [])
         .map(id => session.players.find(p => p.id === id))
         .filter((p): p is Player => p !== undefined && p.isActive);
     };

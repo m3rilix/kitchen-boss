@@ -353,6 +353,10 @@ export const useSessionStore = create<SessionState>()(
             session: {
               ...state.session,
               queue: state.session.queue.filter((id) => id !== playerId),
+              // Also remove from all stacks
+              winnerStack: state.session.winnerStack.filter((id) => id !== playerId),
+              loserStack: state.session.loserStack.filter((id) => id !== playerId),
+              waitingStack: state.session.waitingStack.filter((id) => id !== playerId),
             },
           };
         });
