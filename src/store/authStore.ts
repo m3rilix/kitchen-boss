@@ -69,7 +69,7 @@ export const useAuthStore = create<AuthStore>()(
     (set, get) => ({
       currentUser: null,
       users: [
-        // Default admin user
+        // Default admin user (hidden in production)
         {
           id: 'admin-001',
           email: 'admin@kitchenboss.app',
@@ -81,7 +81,56 @@ export const useAuthStore = create<AuthStore>()(
           createdAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
           isActive: true,
-        }
+        },
+        // Demo accounts for testers and clients
+        {
+          id: 'demo-001',
+          email: 'demo1@kitchenboss.app',
+          name: 'Demo User 1',
+          role: 'user' as UserRole,
+          accessTier: '30_days' as AccessTier,
+          accessStartDate: new Date().toISOString(),
+          accessEndDate: calculateEndDate('30_days'),
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          isActive: true,
+        },
+        {
+          id: 'demo-002',
+          email: 'demo2@kitchenboss.app',
+          name: 'Demo User 2',
+          role: 'user' as UserRole,
+          accessTier: '30_days' as AccessTier,
+          accessStartDate: new Date().toISOString(),
+          accessEndDate: calculateEndDate('30_days'),
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          isActive: true,
+        },
+        {
+          id: 'demo-003',
+          email: 'demo3@kitchenboss.app',
+          name: 'Demo User 3',
+          role: 'user' as UserRole,
+          accessTier: '60_days' as AccessTier,
+          accessStartDate: new Date().toISOString(),
+          accessEndDate: calculateEndDate('60_days'),
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          isActive: true,
+        },
+        {
+          id: 'demo-004',
+          email: 'demo4@kitchenboss.app',
+          name: 'Demo User 4',
+          role: 'user' as UserRole,
+          accessTier: '60_days' as AccessTier,
+          accessStartDate: new Date().toISOString(),
+          accessEndDate: calculateEndDate('60_days'),
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          isActive: true,
+        },
       ],
       isAuthenticated: false,
       isLoading: false,
@@ -104,8 +153,17 @@ export const useAuthStore = create<AuthStore>()(
         // Get stored credentials
         const storedCreds = JSON.parse(localStorage.getItem('kitchenboss-credentials') || '{}') as StoredCredentials;
         
-        // Check password (default admin password is 'admin123')
-        const storedPassword = storedCreds[email.toLowerCase()] || (email.toLowerCase() === 'admin@kitchenboss.app' ? 'admin123' : null);
+        // Default passwords for built-in accounts
+        const defaultPasswords: Record<string, string> = {
+          'admin@kitchenboss.app': 'admin123',
+          'demo1@kitchenboss.app': 'demo123',
+          'demo2@kitchenboss.app': 'demo123',
+          'demo3@kitchenboss.app': 'demo123',
+          'demo4@kitchenboss.app': 'demo123',
+        };
+        
+        // Check password (use stored or default)
+        const storedPassword = storedCreds[email.toLowerCase()] || defaultPasswords[email.toLowerCase()] || null;
         
         if (storedPassword !== password) {
           set({ isLoading: false, error: 'Invalid password' });

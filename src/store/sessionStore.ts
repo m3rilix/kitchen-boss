@@ -337,10 +337,26 @@ export const useSessionStore = create<SessionState>()(
         set((state) => {
           if (!state.session) return state;
           if (state.session.queue.includes(playerId)) return state;
+          
+          // Also add to waitingStack if not already in any stack
+          const inWinnerStack = state.session.winnerStack.includes(playerId);
+          const inLoserStack = state.session.loserStack.includes(playerId);
+          const inWaitingStack = state.session.waitingStack.includes(playerId);
+          
+          // Update player's waitingSince timestamp
+          const updatedPlayers = state.session.players.map(p => 
+            p.id === playerId ? { ...p, waitingSince: Date.now() } : p
+          );
+          
           return {
             session: {
               ...state.session,
               queue: [...state.session.queue, playerId],
+              // Add to waitingStack if not in any stack
+              waitingStack: (!inWinnerStack && !inLoserStack && !inWaitingStack) 
+                ? [...state.session.waitingStack, playerId]
+                : state.session.waitingStack,
+              players: updatedPlayers,
             },
           };
         });
