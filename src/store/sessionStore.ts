@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType } from '@/types';
 import { updateSharedSession } from '@/lib/firebase';
+import { getNextGamePlayers } from '@/lib/smartQueue';
 
 // Helper to generate share code
 const generateShareCode = () => {
@@ -33,6 +34,8 @@ interface SessionState {
   // Session actions
   createSession: (config: SessionConfig) => void;
   endSession: () => void;
+  resetSession: () => void; // Dev only - resets games/queues but keeps players
+  updateSessionName: (name: string) => void;
   
   // Court actions
   addCourt: () => void;
@@ -50,12 +53,19 @@ interface SessionState {
   removeFromQueue: (playerId: string) => void;
   moveInQueue: (playerId: string, direction: 'up' | 'down') => void;
   moveToFrontOfQueue: (playerId: string) => void;
+  movePlayerToPosition: (playerId: string, newIndex: number) => void;
+  moveStackToFront: (playerIds: string[]) => void;
+  movePlayerToStack: (playerId: string, targetStack: 'winner' | 'loser' | 'waiting') => void;
+  
+  // Next stack selection (for manual override) - stores player IDs of the selected stack
+  nextStackPlayerIds: string[] | null;
+  setNextStackPlayerIds: (playerIds: string[] | null) => void;
   
   // Validation
   isNameDuplicate: (name: string) => boolean;
   
   // Game actions
-  startGame: (courtId: string, team1: [string, string], team2: [string, string]) => void;
+  startGame: (courtId: string, team1: [string, string], team2: [string, string], skippedQueue?: boolean) => void;
   endGame: (courtId: string, winner: 'team1' | 'team2', score?: { team1: number; team2: number }) => void;
   cancelGame: (courtId: string) => void;
   autoAssignNextGame: (courtId: string) => void;
@@ -64,6 +74,7 @@ interface SessionState {
   // Maintenance actions (during game)
   removePlayerFromGame: (courtId: string, team: 'team1' | 'team2', index: number) => void;
   pullPlayerToGame: (courtId: string, team: 'team1' | 'team2', index: number) => void;
+  replacePlayerInGame: (courtId: string, team: 'team1' | 'team2', index: number, newPlayerId: string) => void;
   
   // Utility
   getPlayerById: (playerId: string) => Player | undefined;
@@ -80,6 +91,9 @@ export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
       session: null,
+      nextStackPlayerIds: null,
+      
+      setNextStackPlayerIds: (playerIds) => set({ nextStackPlayerIds: playerIds }),
 
       createSession: (config) => {
         const courts: Court[] = Array.from({ length: config.courtCount }, (_, i) => ({
@@ -104,12 +118,79 @@ export const useSessionStore = create<SessionState>()(
             createdAt: new Date(),
             isActive: true,
             shareCode: generateShareCode(),
+                                                              
+            winnerStack: [],
+            loserStack: [],
+            waitingStack: [],
+            useSmartQueue: true, // Enable smart queue by default
+            stackCounter: 0, // Tracks total stacks played
           },
         });
       },
 
       endSession: () => {
         set({ session: null });
+      },
+
+      updateSessionName: (name) => {
+        set((state) => {
+          if (!state.session) return state;
+          return {
+            session: {
+              ...state.session,
+              name: name.trim(),
+            },
+          };
+        });
+      },
+
+      resetSession: () => {
+        set((state) => {
+          if (!state.session) return state;
+          
+          // Reset all players to initial state (including status/colors)
+          const resetPlayers = state.session.players.map(p => ({
+            ...p,
+            gamesPlayed: 0,
+            gamesWon: 0,
+            isActive: true,
+            currentCourtId: undefined,
+            waitingSince: Date.now(),
+            winStreak: 0,
+            loseStreak: 0,
+            lastGameResult: undefined, // Reset win/lose status (color icons)
+            lastPartners: [],
+            lastOpponents: [],
+          }));
+          
+          // Put all players in waiting stack
+          const allPlayerIds = resetPlayers.map(p => p.id);
+          
+          // Reset courts
+          const resetCourts = state.session.courts.map(c => ({
+            ...c,
+            status: 'available' as const,
+            currentGame: undefined,
+          }));
+          
+          return {
+            nextStackPlayerIds: null, // Reset next stack selection
+            session: {
+              ...state.session,
+              players: resetPlayers,
+              courts: resetCourts,
+              queue: allPlayerIds,
+              gamesCompleted: [],
+              winnerStack: [],
+              loserStack: [],
+              waitingStack: allPlayerIds,
+              stackCounter: 0,
+              activityLog: [
+                createLogEntry('player_added', `Session reset - ${resetPlayers.length} players ready`),
+              ],
+            },
+          };
+        });
       },
 
       addCourt: () => {
@@ -183,10 +264,24 @@ export const useSessionStore = create<SessionState>()(
             gamesWon: 0,
             checkedInAt: new Date(),
             isActive: true,
+            // Smart queue fields
+            winStreak: 0,
+            loseStreak: 0,
+            lastPartners: [],
+            lastOpponents: [],
+            waitingSince: Date.now(),
           };
+          
+          // Legacy FIFO queue
           const newQueue = moveToFront 
             ? [newPlayer.id, ...state.session.queue]
             : [...state.session.queue, newPlayer.id];
+          
+          // Smart queue: new players go to waiting stack (with defensive check)
+          const currentWaitingStack = state.session.waitingStack ?? [];
+          const newWaitingStack = moveToFront
+            ? [newPlayer.id, ...currentWaitingStack]
+            : [...currentWaitingStack, newPlayer.id];
           
           const logMessage = moveToFront 
             ? `${name} added and moved to front of queue`
@@ -197,6 +292,7 @@ export const useSessionStore = create<SessionState>()(
               ...state.session,
               players: [...state.session.players, newPlayer],
               queue: newQueue,
+              waitingStack: newWaitingStack,
               activityLog: [
                 createLogEntry('player_added', logMessage, { playerNames: [name] }),
                 ...state.session.activityLog,
@@ -214,6 +310,10 @@ export const useSessionStore = create<SessionState>()(
               ...state.session,
               players: state.session.players.filter((p) => p.id !== playerId),
               queue: state.session.queue.filter((id) => id !== playerId),
+              // Also remove from smart queue stacks
+              winnerStack: state.session.winnerStack.filter((id) => id !== playerId),
+              loserStack: state.session.loserStack.filter((id) => id !== playerId),
+              waitingStack: state.session.waitingStack.filter((id) => id !== playerId),
             },
           };
         });
@@ -271,10 +371,24 @@ export const useSessionStore = create<SessionState>()(
           const player = state.session.players.find(p => p.id === playerId);
           [queue[index], queue[newIndex]] = [queue[newIndex], queue[index]];
           
+          // Also move in the appropriate smart queue stack
+          const moveInStack = (stack: string[]): string[] => {
+            const newStack = [...stack];
+            const stackIndex = newStack.indexOf(playerId);
+            if (stackIndex === -1) return stack;
+            const newStackIndex = direction === 'up' ? stackIndex - 1 : stackIndex + 1;
+            if (newStackIndex < 0 || newStackIndex >= newStack.length) return stack;
+            [newStack[stackIndex], newStack[newStackIndex]] = [newStack[newStackIndex], newStack[stackIndex]];
+            return newStack;
+          };
+          
           return {
             session: {
               ...state.session,
               queue,
+              winnerStack: moveInStack(state.session.winnerStack ?? []),
+              loserStack: moveInStack(state.session.loserStack ?? []),
+              waitingStack: moveInStack(state.session.waitingStack ?? []),
               activityLog: [
                 createLogEntry(
                   direction === 'up' ? 'player_moved_up' : 'player_moved_down',
@@ -301,15 +415,156 @@ export const useSessionStore = create<SessionState>()(
           queue.splice(index, 1);
           queue.unshift(playerId);
           
+          // Also move to front in the appropriate smart queue stack
+          const moveToFrontInStack = (stack: string[]): string[] => {
+            const newStack = stack.filter(id => id !== playerId);
+            if (stack.includes(playerId)) {
+              newStack.unshift(playerId);
+            }
+            return newStack;
+          };
+          
           return {
             session: {
               ...state.session,
               queue,
+              winnerStack: moveToFrontInStack(state.session.winnerStack ?? []),
+              loserStack: moveToFrontInStack(state.session.loserStack ?? []),
+              waitingStack: moveToFrontInStack(state.session.waitingStack ?? []),
               activityLog: [
                 createLogEntry(
                   'player_moved_front',
                   `${player?.name || 'Player'} skipped to front of queue`,
                   { playerNames: [player?.name || ''] }
+                ),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      movePlayerToPosition: (playerId, newIndex) => {
+        set((state) => {
+          if (!state.session) return state;
+          
+          const queue = [...state.session.queue];
+          const currentIndex = queue.indexOf(playerId);
+          if (currentIndex === -1 || currentIndex === newIndex) return state;
+          
+          // Remove from current position
+          queue.splice(currentIndex, 1);
+          // Insert at new position
+          queue.splice(newIndex, 0, playerId);
+          
+          const player = state.session.players.find(p => p.id === playerId);
+          
+          // Also update in the appropriate stack
+          const moveInStack = (stack: string[]): string[] => {
+            const newStack = stack.filter(id => id !== playerId);
+            if (stack.includes(playerId)) {
+              // Calculate relative position in stack
+              const stackCurrentIdx = stack.indexOf(playerId);
+              const diff = newIndex - currentIndex;
+              const newStackIdx = Math.max(0, Math.min(newStack.length, stackCurrentIdx + diff));
+              newStack.splice(newStackIdx, 0, playerId);
+            }
+            return newStack;
+          };
+          
+          return {
+            session: {
+              ...state.session,
+              queue,
+              winnerStack: moveInStack(state.session.winnerStack ?? []),
+              loserStack: moveInStack(state.session.loserStack ?? []),
+              waitingStack: moveInStack(state.session.waitingStack ?? []),
+              activityLog: [
+                createLogEntry(
+                  'player_moved',
+                  `${player?.name || 'Player'} moved to position ${newIndex + 1}`,
+                  { playerNames: [player?.name || ''] }
+                ),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      moveStackToFront: (playerIds) => {
+        set((state) => {
+          if (!state.session || playerIds.length === 0) return state;
+          
+          // Remove these players from queue and add to front
+          const queue = state.session.queue.filter(id => !playerIds.includes(id));
+          const newQueue = [...playerIds, ...queue];
+          
+          // Also move in the appropriate stacks
+          const moveToFrontInStack = (stack: string[]): string[] => {
+            const inStack = playerIds.filter(id => stack.includes(id));
+            const rest = stack.filter(id => !playerIds.includes(id));
+            return [...inStack, ...rest];
+          };
+          
+          const playerNames = playerIds.map(id => 
+            state.session!.players.find(p => p.id === id)?.name || ''
+          ).filter(Boolean);
+          
+          return {
+            session: {
+              ...state.session,
+              queue: newQueue,
+              winnerStack: moveToFrontInStack(state.session.winnerStack ?? []),
+              loserStack: moveToFrontInStack(state.session.loserStack ?? []),
+              waitingStack: moveToFrontInStack(state.session.waitingStack ?? []),
+              activityLog: [
+                createLogEntry(
+                  'stack_moved',
+                  `Stack moved to front: ${playerNames.join(', ')}`,
+                  { playerNames }
+                ),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      movePlayerToStack: (playerId, targetStack) => {
+        set((state) => {
+          if (!state.session) return state;
+          
+          const player = state.session.players.find(p => p.id === playerId);
+          if (!player) return state;
+          
+          // Remove from all stacks
+          let newWinnerStack = state.session.winnerStack.filter(id => id !== playerId);
+          let newLoserStack = state.session.loserStack.filter(id => id !== playerId);
+          let newWaitingStack = state.session.waitingStack.filter(id => id !== playerId);
+          
+          // Add to target stack
+          if (targetStack === 'winner') {
+            newWinnerStack = [...newWinnerStack, playerId];
+          } else if (targetStack === 'loser') {
+            newLoserStack = [...newLoserStack, playerId];
+          } else {
+            newWaitingStack = [...newWaitingStack, playerId];
+          }
+          
+          const stackName = targetStack === 'winner' ? 'Winners' : targetStack === 'loser' ? 'Losers' : 'Free';
+          
+          return {
+            session: {
+              ...state.session,
+              winnerStack: newWinnerStack,
+              loserStack: newLoserStack,
+              waitingStack: newWaitingStack,
+              activityLog: [
+                createLogEntry(
+                  'player_moved',
+                  `${player.name} moved to ${stackName} stack`,
+                  { playerNames: [player.name] }
                 ),
                 ...state.session.activityLog,
               ],
@@ -327,7 +582,7 @@ export const useSessionStore = create<SessionState>()(
         );
       },
 
-      startGame: (courtId, team1, team2) => {
+      startGame: (courtId, team1, team2, skippedQueue = false) => {
         set((state) => {
           if (!state.session) return state;
 
@@ -342,12 +597,43 @@ export const useSessionStore = create<SessionState>()(
           const court = state.session.courts.find(c => c.id === courtId);
           const team1Names = team1.map(id => state.session!.players.find(p => p.id === id)?.name || '');
           const team2Names = team2.map(id => state.session!.players.find(p => p.id === id)?.name || '');
+          const allNames = [...team1Names, ...team2Names];
 
-          // Remove players from queue
+          // Remove players from queue and all stacks
           const allPlayerIds = [...team1, ...team2];
           const newQueue = state.session.queue.filter(
             (id) => !allPlayerIds.includes(id)
           );
+          
+          // Remove from smart queue stacks and update waitingSince to 0 (in game)
+          const newWinnerStack = state.session.winnerStack.filter(id => !allPlayerIds.includes(id));
+          const newLoserStack = state.session.loserStack.filter(id => !allPlayerIds.includes(id));
+          const newWaitingStack = state.session.waitingStack.filter(id => !allPlayerIds.includes(id));
+          
+          // Update players' waitingSince to 0 (they're in a game now)
+          const updatedPlayers = state.session.players.map(p => 
+            allPlayerIds.includes(p.id) ? { ...p, waitingSince: 0 } : p
+          );
+
+          // Build activity log entries
+          const logEntries: ActivityLogEntry[] = [
+            createLogEntry(
+              'game_started',
+              `Game started on ${court?.name}: ${team1Names.join(' & ')} vs ${team2Names.join(' & ')}`,
+              { courtId, courtName: court?.name, team1Names, team2Names }
+            ),
+          ];
+          
+          // Add "skipped the queue" entry if applicable
+          if (skippedQueue) {
+            logEntries.unshift(
+              createLogEntry(
+                'stack_skipped',
+                `${allNames.join(', ')} skipped the queue`,
+                { playerNames: allNames }
+              )
+            );
+          }
 
           return {
             session: {
@@ -357,13 +643,14 @@ export const useSessionStore = create<SessionState>()(
                   ? { ...c, status: 'in_game', currentGame: game }
                   : c
               ),
+              players: updatedPlayers,
               queue: newQueue,
+              winnerStack: newWinnerStack,
+              loserStack: newLoserStack,
+              waitingStack: newWaitingStack,
+              stackCounter: (state.session.stackCounter ?? 0) + 1, // Increment stack counter
               activityLog: [
-                createLogEntry(
-                  'game_started',
-                  `Game started on ${court?.name}: ${team1Names.join(' & ')} vs ${team2Names.join(' & ')}`,
-                  { courtId, courtName: court?.name, team1Names, team2Names }
-                ),
+                ...logEntries,
                 ...state.session.activityLog,
               ],
             },
@@ -385,36 +672,57 @@ export const useSessionStore = create<SessionState>()(
             score,
           };
 
-          // Update player stats
+          // Determine winners and losers
           const winningTeam = winner === 'team1' ? court.currentGame.team1 : court.currentGame.team2;
           const losingTeam = winner === 'team1' ? court.currentGame.team2 : court.currentGame.team1;
           const allPlayerIds = [...court.currentGame.team1, ...court.currentGame.team2];
 
+          // Update player stats with smart queue tracking
           const updatedPlayers = state.session.players.map((p) => {
             if (!allPlayerIds.includes(p.id)) return p;
+            
+            const isWinner = winningTeam.includes(p.id);
+            const partnerId = isWinner
+              ? winningTeam.find(id => id !== p.id)!
+              : losingTeam.find(id => id !== p.id)!;
+            const opponentIds = isWinner ? losingTeam : winningTeam;
+            
             return {
               ...p,
               gamesPlayed: p.gamesPlayed + 1,
-              gamesWon: winningTeam.includes(p.id) ? p.gamesWon + 1 : p.gamesWon,
+              gamesWon: isWinner ? p.gamesWon + 1 : p.gamesWon,
+              // Smart queue fields
+              winStreak: isWinner ? p.winStreak + 1 : 0,
+              loseStreak: isWinner ? 0 : p.loseStreak + 1,
+              lastPartners: [partnerId, ...p.lastPartners].slice(0, 3),
+              lastOpponents: [...opponentIds, ...p.lastOpponents].slice(0, 4),
+              waitingSince: Date.now(),
+              lastGameResult: (isWinner ? 'won' : 'lost') as 'won' | 'lost',
             };
           });
 
-          // Handle rotation based on mode - ALL players go back to queue
+          // Handle rotation based on mode - ALL players go back to queue (legacy)
           let newQueue = [...state.session.queue];
           const rotationMode = state.session.rotationMode;
 
           if (rotationMode === 'winners_stay' || rotationMode === 'king_of_court') {
-            // Losers go to back of queue immediately
-            // Winners will be handled by autoAssignNextGame (they stay on court)
-            // But if no new game starts, winners should also be in queue
             newQueue = [...newQueue, ...losingTeam, ...winningTeam];
           } else if (rotationMode === 'full_rotation' || rotationMode === 'skill_based') {
-            // All players go to back of queue
             newQueue = [...newQueue, ...allPlayerIds];
           } else {
-            // Default: all players go to queue
             newQueue = [...newQueue, ...allPlayerIds];
           }
+
+          // Smart queue: update stacks
+          // Remove all 4 players from all stacks first
+          let newWinnerStack = state.session.winnerStack.filter(id => !allPlayerIds.includes(id));
+          let newLoserStack = state.session.loserStack.filter(id => !allPlayerIds.includes(id));
+          let newWaitingStack = state.session.waitingStack.filter(id => !allPlayerIds.includes(id));
+          
+          // Add winners to winner stack
+          newWinnerStack = [...newWinnerStack, ...winningTeam];
+          // Add losers to loser stack
+          newLoserStack = [...newLoserStack, ...losingTeam];
 
           // Get player names for logging
           const winnerNames = winningTeam.map(id => state.session!.players.find(p => p.id === id)?.name || '');
@@ -430,6 +738,10 @@ export const useSessionStore = create<SessionState>()(
               ),
               players: updatedPlayers,
               queue: newQueue,
+              // Smart queue stacks
+              winnerStack: newWinnerStack,
+              loserStack: newLoserStack,
+              waitingStack: newWaitingStack,
               gamesCompleted: [...state.session.gamesCompleted, completedGame],
               activityLog: [
                 createLogEntry(
@@ -461,18 +773,30 @@ export const useSessionStore = create<SessionState>()(
           const allPlayerIds = [...court.currentGame.team1, ...court.currentGame.team2];
           const playerNames = allPlayerIds.map(id => state.session!.players.find(p => p.id === id)?.name || '');
 
-          // Add players back to front of queue
+          // Add players back to front of queue (legacy)
           const newQueue = [...allPlayerIds, ...state.session.queue];
+          
+          // Add players back to front of waiting stack (smart queue)
+          // They go to waitingStack since the game was cancelled (no win/loss)
+          const currentWaitingStack = state.session.waitingStack ?? [];
+          const newWaitingStack = [...allPlayerIds, ...currentWaitingStack];
+          
+          // Update players' waitingSince to now (they're back in queue)
+          const updatedPlayers = state.session.players.map(p => 
+            allPlayerIds.includes(p.id) ? { ...p, waitingSince: Date.now() } : p
+          );
 
           return {
             session: {
               ...state.session,
+              players: updatedPlayers,
               courts: state.session.courts.map((c) =>
                 c.id === courtId
-                  ? { ...c, status: 'maintenance', currentGame: undefined }
+                  ? { ...c, status: 'available', currentGame: undefined }
                   : c
               ),
               queue: newQueue,
+              waitingStack: newWaitingStack,
               activityLog: [
                 createLogEntry(
                   'game_ended',
@@ -493,48 +817,82 @@ export const useSessionStore = create<SessionState>()(
         const court = state.session.courts.find((c) => c.id === courtId);
         if (!court || court.status !== 'available') return;
 
-        // Get next 4 players from queue
-        const availableInQueue = state.session.queue.filter((id) => {
-          const player = state.session?.players.find((p) => p.id === id);
-          return player?.isActive;
-        });
-
-        // For winners_stay mode, check if there are winners on this court
         let team1: [string, string] | null = null;
         let team2: [string, string] | null = null;
 
-        const lastGame = state.session.gamesCompleted
-          .filter((g) => g.courtId === courtId)
-          .pop();
-
-        if (
-          (state.session.rotationMode === 'winners_stay' ||
-            state.session.rotationMode === 'king_of_court') &&
-          lastGame?.winner
-        ) {
-          // Winners stay on court
-          const winners =
-            lastGame.winner === 'team1' ? lastGame.team1 : lastGame.team2;
+        // Use smart queue if enabled
+        if (state.session.useSmartQueue) {
+          // Check if user manually selected specific players for next game
+          const nextStackPlayerIds = state.nextStackPlayerIds;
           
-          // Check if winners are still active
-          const activeWinners = winners.filter((id) => {
+          if (nextStackPlayerIds && nextStackPlayerIds.length === 4) {
+            // Verify all players are still available (not in a game)
+            const playersInGames = new Set<string>();
+            state.session.courts.forEach((c) => {
+              if (c.currentGame) {
+                c.currentGame.team1.forEach((id) => playersInGames.add(id));
+                c.currentGame.team2.forEach((id) => playersInGames.add(id));
+              }
+            });
+            
+            const availablePlayers = nextStackPlayerIds.filter(id => !playersInGames.has(id));
+            if (availablePlayers.length === 4) {
+              team1 = [availablePlayers[0], availablePlayers[1]];
+              team2 = [availablePlayers[2], availablePlayers[3]];
+              // Reset the manual selection after use
+              set({ nextStackPlayerIds: null });
+            }
+          }
+          
+          // If no manual selection or it failed, use auto selection
+          if (!team1 || !team2) {
+            const nextGame = getNextGamePlayers(state.session);
+            if (nextGame) {
+              team1 = nextGame.team1;
+              team2 = nextGame.team2;
+            }
+          }
+        } else {
+          // Legacy FIFO queue logic
+          const availableInQueue = state.session.queue.filter((id) => {
             const player = state.session?.players.find((p) => p.id === id);
             return player?.isActive;
           });
 
-          if (activeWinners.length === 2) {
-            team1 = winners as [string, string];
-            // Get next 2 from queue for team2
-            if (availableInQueue.length >= 2) {
-              team2 = [availableInQueue[0], availableInQueue[1]];
+          // For winners_stay mode, check if there are winners on this court
+          const lastGame = state.session.gamesCompleted
+            .filter((g) => g.courtId === courtId)
+            .pop();
+
+          if (
+            (state.session.rotationMode === 'winners_stay' ||
+              state.session.rotationMode === 'king_of_court') &&
+            lastGame?.winner
+          ) {
+            // Winners stay on court
+            const winners =
+              lastGame.winner === 'team1' ? lastGame.team1 : lastGame.team2;
+            
+            // Check if winners are still active
+            const activeWinners = winners.filter((id) => {
+              const player = state.session?.players.find((p) => p.id === id);
+              return player?.isActive;
+            });
+
+            if (activeWinners.length === 2) {
+              team1 = winners as [string, string];
+              // Get next 2 from queue for team2
+              if (availableInQueue.length >= 2) {
+                team2 = [availableInQueue[0], availableInQueue[1]];
+              }
             }
           }
-        }
 
-        // If no winners staying, get 4 from queue
-        if (!team1 && !team2 && availableInQueue.length >= 4) {
-          team1 = [availableInQueue[0], availableInQueue[1]];
-          team2 = [availableInQueue[2], availableInQueue[3]];
+          // If no winners staying, get 4 from queue
+          if (!team1 && !team2 && availableInQueue.length >= 4) {
+            team1 = [availableInQueue[0], availableInQueue[1]];
+            team2 = [availableInQueue[2], availableInQueue[3]];
+          }
         }
 
         if (team1 && team2) {
@@ -590,7 +948,7 @@ export const useSessionStore = create<SessionState>()(
         });
       },
 
-      // Remove a player from an active game and put them 2nd in queue
+      // Remove a player from an active game and put them at bottom of queue
       removePlayerFromGame: (courtId, team, index) => {
         set((state) => {
           if (!state.session) return state;
@@ -614,26 +972,32 @@ export const useSessionStore = create<SessionState>()(
             newTeam2[index] = ''; // Mark as empty
           }
 
-          // Add player to 2nd position in queue (after first player)
-          const newQueue = [...state.session.queue];
-          // Remove if already in queue
-          const existingIndex = newQueue.indexOf(playerId);
-          if (existingIndex !== -1) {
-            newQueue.splice(existingIndex, 1);
-          }
-          // Insert at position 1 (2nd place)
-          newQueue.splice(1, 0, playerId);
+          // Add player to END of queue (bottom of stack)
+          const newQueue = state.session.queue.filter(id => id !== playerId);
+          newQueue.push(playerId);
+          
+          // Add player to END of waiting stack (smart queue)
+          const currentWaitingStack = state.session.waitingStack ?? [];
+          const newWaitingStack = currentWaitingStack.filter(id => id !== playerId);
+          newWaitingStack.push(playerId);
+          
+          // Update player's waitingSince
+          const updatedPlayers = state.session.players.map(p => 
+            p.id === playerId ? { ...p, waitingSince: Date.now() } : p
+          );
 
           // Create log entry
           const logEntry = createLogEntry(
             'player_removed',
-            `${player?.name || 'Player'} removed from ${court.name} and moved to 2nd in queue`
+            `${player?.name || 'Player'} removed from ${court.name} and moved to bottom of queue`
           );
 
           return {
             session: {
               ...state.session,
+              players: updatedPlayers,
               queue: newQueue,
+              waitingStack: newWaitingStack,
               activityLog: [logEntry, ...state.session.activityLog],
               courts: state.session.courts.map((c) =>
                 c.id === courtId
@@ -693,6 +1057,87 @@ export const useSessionStore = create<SessionState>()(
               ...state.session,
               queue: newQueue,
               activityLog: [logEntry, ...state.session.activityLog],
+              courts: state.session.courts.map((c) =>
+                c.id === courtId
+                  ? {
+                      ...c,
+                      currentGame: {
+                        ...game,
+                        team1: newTeam1,
+                        team2: newTeam2,
+                      },
+                    }
+                  : c
+              ),
+            },
+          };
+        });
+      },
+
+      // Replace a player in game with a specific player from queue
+      replacePlayerInGame: (courtId, team, index, newPlayerId) => {
+        set((state) => {
+          if (!state.session) return state;
+
+          const court = state.session.courts.find((c) => c.id === courtId);
+          if (!court?.currentGame) return state;
+
+          const game = court.currentGame;
+          const newPlayer = state.session.players.find(p => p.id === newPlayerId);
+          
+          // Get the player being replaced
+          const oldPlayerId = team === 'team1' ? game.team1[index] : game.team2[index];
+          const oldPlayer = state.session.players.find(p => p.id === oldPlayerId);
+          
+          if (!newPlayer || !oldPlayerId) return state;
+
+          // Create new team arrays
+          const newTeam1 = [...game.team1] as [string, string];
+          const newTeam2 = [...game.team2] as [string, string];
+          
+          if (team === 'team1') {
+            newTeam1[index] = newPlayerId;
+          } else {
+            newTeam2[index] = newPlayerId;
+          }
+
+          // Remove new player from queue and all stacks
+          const newQueue = state.session.queue.filter(id => id !== newPlayerId);
+          const newWinnerStack = state.session.winnerStack.filter(id => id !== newPlayerId);
+          const newLoserStack = state.session.loserStack.filter(id => id !== newPlayerId);
+          const newWaitingStack = state.session.waitingStack.filter(id => id !== newPlayerId);
+          
+          // Add old player to bottom of waiting stack
+          const updatedWaitingStack = [...newWaitingStack, oldPlayerId];
+          const updatedQueue = [...newQueue, oldPlayerId];
+
+          // Update waitingSince for both players
+          const updatedPlayers = state.session.players.map(p => {
+            if (p.id === newPlayerId) {
+              return { ...p, waitingSince: 0 }; // In game now
+            }
+            if (p.id === oldPlayerId) {
+              return { ...p, waitingSince: Date.now() }; // Back in queue
+            }
+            return p;
+          });
+
+          return {
+            session: {
+              ...state.session,
+              queue: updatedQueue,
+              winnerStack: newWinnerStack,
+              loserStack: newLoserStack,
+              waitingStack: updatedWaitingStack,
+              players: updatedPlayers,
+              activityLog: [
+                createLogEntry(
+                  'player_moved',
+                  `${newPlayer.name} replaced ${oldPlayer?.name || 'player'} on ${court.name}`,
+                  { playerNames: [newPlayer.name, oldPlayer?.name || ''] }
+                ),
+                ...state.session.activityLog,
+              ],
               courts: state.session.courts.map((c) =>
                 c.id === courtId
                   ? {

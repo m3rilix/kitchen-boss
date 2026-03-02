@@ -3,7 +3,7 @@ import { useSessionStore } from '@/store/sessionStore';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeClasses } from '@/store/themeStore';
 import type { RotationMode } from '@/types';
-import { Users, RotateCcw, MapPin, Calendar, Clock, Shield, LogOut } from 'lucide-react';
+import { Users, RotateCcw, MapPin, Calendar, Clock, Shield, LogOut, ChevronDown, Lock } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 
@@ -11,26 +11,48 @@ interface SessionSetupProps {
   onAdminClick?: () => void;
 }
 
-const rotationModes: { value: RotationMode; label: string; description: string }[] = [
-  {
-    value: 'winners_stay',
-    label: 'Winners Stay',
-    description: 'Winning team stays on court, losers go to back of queue',
-  },
+type SubMode = 'win_lose_stack' | 'full_rotation';
+
+interface RotationModeOption {
+  value: RotationMode;
+  label: string;
+  description: string;
+  disabled?: boolean;
+  hasSubModes?: boolean;
+  subModes?: { value: SubMode; label: string; description: string; disabled?: boolean }[];
+}
+
+const rotationModes: RotationModeOption[] = [
   {
     value: 'full_rotation',
-    label: 'Full Rotation',
-    description: 'All 4 players rotate out after each game',
+    label: 'Stack Queue',
+    description: 'Players are pre-grouped into stacks of 4',
+    hasSubModes: true,
+    subModes: [
+      {
+        value: 'win_lose_stack',
+        label: 'Win-Lose Stack',
+        description: 'Winners play winners, losers play losers',
+      },
+      {
+        value: 'full_rotation',
+        label: 'Round Robin',
+        description: 'Everyone plays with everyone (balanced rotation)',
+        disabled: true,
+      },
+    ],
   },
   {
     value: 'king_of_court',
     label: 'King of the Court',
     description: 'Winners stay until they lose',
+    disabled: true,
   },
   {
     value: 'skill_based',
     label: 'Skill-Based',
     description: 'Balance teams based on skill ratings',
+    disabled: true,
   },
 ];
 
@@ -56,6 +78,8 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
   const [time, setTime] = useState(getCurrentTime());
   const [courtCount, setCourtCount] = useState(2);
   const [rotationMode, setRotationMode] = useState<RotationMode>('full_rotation');
+  const [subMode, setSubMode] = useState<SubMode>('win_lose_stack');
+  const [expandedMode, setExpandedMode] = useState<RotationMode | null>('full_rotation');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,27 +233,103 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
             </label>
             <div className="space-y-2">
               {rotationModes.map((mode) => (
-                <label
-                  key={mode.value}
-                  className={`flex items-start p-3 border rounded-lg cursor-pointer transition ${
-                    rotationMode === mode.value
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="rotationMode"
-                    value={mode.value}
-                    checked={rotationMode === mode.value}
-                    onChange={(e) => setRotationMode(e.target.value as RotationMode)}
-                    className="mt-1 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div className="ml-3">
-                    <span className="font-medium text-slate-800">{mode.label}</span>
-                    <p className="text-sm text-slate-500">{mode.description}</p>
+                <div key={mode.value}>
+                  <div
+                    onClick={() => {
+                      if (mode.disabled) return;
+                      if (mode.hasSubModes) {
+                        setExpandedMode(expandedMode === mode.value ? null : mode.value);
+                        setRotationMode(mode.value);
+                      } else {
+                        setRotationMode(mode.value);
+                        setExpandedMode(null);
+                      }
+                    }}
+                    className={`flex items-start p-3 border rounded-lg transition ${
+                      mode.disabled 
+                        ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-60'
+                        : rotationMode === mode.value
+                          ? 'border-blue-500 bg-blue-50 cursor-pointer'
+                          : 'border-slate-200 hover:border-slate-300 cursor-pointer'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="rotationMode"
+                      value={mode.value}
+                      checked={rotationMode === mode.value}
+                      disabled={mode.disabled}
+                      onChange={() => {}}
+                      className="mt-1 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-medium ${mode.disabled ? 'text-slate-400' : 'text-slate-800'}`}>
+                          {mode.label}
+                        </span>
+                        {mode.disabled && (
+                          <span className="flex items-center gap-1 text-xs text-slate-400">
+                            <Lock className="w-3 h-3" />
+                            Coming Soon
+                          </span>
+                        )}
+                        {mode.hasSubModes && !mode.disabled && (
+                          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${
+                            expandedMode === mode.value ? 'rotate-180' : ''
+                          }`} />
+                        )}
+                      </div>
+                      <p className={`text-sm ${mode.disabled ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {mode.description}
+                      </p>
+                    </div>
                   </div>
-                </label>
+                  
+                  {/* Sub-modes */}
+                  {mode.hasSubModes && expandedMode === mode.value && mode.subModes && (
+                    <div className="ml-6 mt-2 space-y-2 border-l-2 border-blue-200 pl-4">
+                      {mode.subModes.map((sub) => (
+                        <div
+                          key={sub.value}
+                          onClick={() => !sub.disabled && setSubMode(sub.value)}
+                          className={`flex items-start p-2 border rounded-lg transition ${
+                            sub.disabled
+                              ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-60'
+                              : subMode === sub.value
+                                ? 'border-blue-400 bg-blue-50 cursor-pointer'
+                                : 'border-slate-200 hover:border-slate-300 cursor-pointer'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="subMode"
+                            value={sub.value}
+                            checked={subMode === sub.value}
+                            disabled={sub.disabled}
+                            onChange={() => {}}
+                            className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div className="ml-2 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-medium text-sm ${sub.disabled ? 'text-slate-400' : 'text-slate-700'}`}>
+                                {sub.label}
+                              </span>
+                              {sub.disabled && (
+                                <span className="flex items-center gap-1 text-xs text-slate-400">
+                                  <Lock className="w-3 h-3" />
+                                  Coming Soon
+                                </span>
+                              )}
+                            </div>
+                            <p className={`text-xs ${sub.disabled ? 'text-slate-400' : 'text-slate-500'}`}>
+                              {sub.description}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>

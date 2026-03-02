@@ -8,6 +8,13 @@ export interface Player {
   gamesWon: number;
   checkedInAt: Date;
   isActive: boolean;
+  // Smart queue tracking (Full experience ready)
+  winStreak: number;
+  loseStreak: number;
+  lastPartners: string[];   // Last 2-3 partner IDs
+  lastOpponents: string[];  // Last 2-3 opponent IDs
+  waitingSince: number;     // Timestamp when entered queue (0 if in game)
+  lastGameResult?: 'won' | 'lost' | null; // Track last game result for visual status
 }
 
 export interface Game {
@@ -36,7 +43,10 @@ export type ActivityType =
   | 'player_moved_front'
   | 'player_moved_up'
   | 'player_moved_down'
-  | 'player_removed';
+  | 'player_moved'
+  | 'player_removed'
+  | 'stack_moved'
+  | 'stack_skipped';
 
 export interface ActivityLogEntry {
   id: string;
@@ -62,13 +72,19 @@ export interface Session {
   time?: string;
   courts: Court[];
   players: Player[];
-  queue: string[]; // Player IDs in queue order
+  queue: string[]; // Player IDs in queue order (legacy FIFO, still used as fallback)
   rotationMode: RotationMode;
   gamesCompleted: Game[];
   activityLog: ActivityLogEntry[];
   createdAt: Date;
   isActive: boolean;
   shareCode?: string; // For session sharing
+  // Smart queue stacks
+  winnerStack: string[];   // Players who won their last game
+  loserStack: string[];    // Players who lost their last game
+  waitingStack: string[];  // New players or overflow
+  useSmartQueue: boolean;  // Toggle between FIFO and smart queue
+  stackCounter: number;    // Increments each time a stack is played (for naming)
 }
 
 export interface SessionConfig {
