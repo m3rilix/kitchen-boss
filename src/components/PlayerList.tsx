@@ -22,7 +22,6 @@ export function PlayerList() {
   const [playerNames, setPlayerNames] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string[]>([]);
-  const [moveToFront, setMoveToFront] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'games' | 'wins' | 'losses' | 'waitTime'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -80,21 +79,16 @@ export function PlayerList() {
       setDuplicateWarning(duplicates);
       // Still add the non-duplicate names
       if (newNames.length > 0) {
-        // If moving to front, add in reverse order so first name ends up first
-        const namesToAdd = moveToFront ? [...newNames].reverse() : newNames;
-        namesToAdd.forEach(name => addPlayer(name, undefined, moveToFront));
+        newNames.forEach(name => addPlayer(name));
       }
       return;
     }
     
     if (newNames.length > 0) {
-      // If moving to front, add in reverse order so first name ends up first
-      const namesToAdd = moveToFront ? [...newNames].reverse() : newNames;
-      namesToAdd.forEach(name => addPlayer(name, undefined, moveToFront));
+      newNames.forEach(name => addPlayer(name));
       setPlayerNames('');
       setShowAddForm(false);
       setDuplicateWarning([]);
-      setMoveToFront(false);
     }
   };
 
@@ -128,8 +122,18 @@ export function PlayerList() {
           result = (a.gamesPlayed - a.gamesWon) - (b.gamesPlayed - b.gamesWon);
           break;
         case 'waitTime':
-          // Lower waitingSince = waiting longer
-          result = a.waitingSince - b.waitingSince;
+          // Only compare waiting times for players actually waiting (waitingSince > 0)
+          // Players in game (waitingSince = 0) should be considered as not waiting at all
+          if (a.waitingSince === 0 && b.waitingSince === 0) {
+            result = 0;
+          } else if (a.waitingSince === 0) {
+            result = 1; // a is in game, b is waiting
+          } else if (b.waitingSince === 0) {
+            result = -1; // b is in game, a is waiting
+          } else {
+            // Lower waitingSince = waiting longer
+            result = a.waitingSince - b.waitingSince;
+          }
           break;
         default:
           result = a.name.localeCompare(b.name);
@@ -315,19 +319,6 @@ export function PlayerList() {
               </div>
             )}
             
-            {/* Move to Front Option */}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={moveToFront}
-                onChange={(e) => setMoveToFront(e.target.checked)}
-                className="w-4 h-4 text-purple-600 border-slate-300 rounded focus:ring-purple-500"
-              />
-              <span className="text-sm text-slate-600">
-                Skip to front of queue
-              </span>
-            </label>
-            
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-500 flex items-center gap-1">
                 <Users className="w-3 h-3" />
@@ -345,7 +336,6 @@ export function PlayerList() {
                     setPlayerNames('');
                     setShowAddForm(false);
                     setDuplicateWarning([]);
-                    setMoveToFront(false);
                   }}
                   className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition"
                 >
@@ -354,14 +344,9 @@ export function PlayerList() {
                 <button
                   type="submit"
                   disabled={nameCount === 0}
-                  className={`px-4 py-1.5 text-sm font-medium text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition ${
-                    moveToFront 
-                      ? 'bg-purple-600 hover:bg-purple-700' 
-                      : `${theme.bg600} hover:opacity-90`
-                  }`}
+                  className={`px-4 py-1.5 text-sm font-medium text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition ${theme.bg600} hover:opacity-90`}
                 >
                   Add {nameCount > 0 ? `${nameCount} Player${nameCount !== 1 ? 's' : ''}` : ''}
-                  {moveToFront && ' (Front)'}
                 </button>
               </div>
             </div>

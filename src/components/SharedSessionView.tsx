@@ -72,6 +72,7 @@ const sortOptions = [
   { value: 'name', label: 'Name' },
   { value: 'games', label: 'Games' },
   { value: 'wins', label: 'Wins' },
+  { value: 'losses', label: 'Losses' },
   { value: 'waitTime', label: 'Wait Time' },
 ] as const;
 
@@ -84,6 +85,17 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
 
+  // Early return if no session
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-slate-500">Session not found</p>
+        </div>
+      </div>
+    );
+  }
+
   // Get player by ID
   const getPlayerById = (playerId: string): Player | undefined => {
     return session?.players?.find(p => p.id === playerId);
@@ -91,13 +103,19 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
 
   // Build stacks matching the Manager View logic exactly
   const stackQueue = useMemo(() => {
-    if (!session?.players) return [];
-    
-    const getPlayersInStackOrder = (stackIds: string[]): Player[] => {
-      return (stackIds || [])
-        .map(id => session.players.find(p => p.id === id))
-        .filter((p): p is Player => p !== undefined && p.isActive);
-    };
+    try {
+      if (!session?.players) return [];
+      
+      const getPlayersInStackOrder = (stackIds: string[]): Player[] => {
+        try {
+          return (stackIds || [])
+            .map(id => session.players.find(p => p.id === id))
+            .filter((p): p is Player => p !== undefined && p.isActive);
+        } catch (e) {
+          console.error('Error in getPlayersInStackOrder:', e);
+          return [];
+        }
+      };
     
     // Get players by stack type
     const winners = getPlayersInStackOrder(session.winnerStack ?? []);
@@ -106,10 +124,13 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
     
     // Combine losers + free and sort by wait time (matches game selection logic)
     const allLosersAndFree = [...losers, ...free].sort((a, b) => {
-      if (a.waitingSince === 0 && b.waitingSince === 0) return 0;
-      if (a.waitingSince === 0) return 1;
-      if (b.waitingSince === 0) return -1;
-      return a.waitingSince - b.waitingSince;
+      // Handle undefined/null values
+      const aWait = a?.waitingSince ?? 0;
+      const bWait = b?.waitingSince ?? 0;
+      if (aWait === 0 && bWait === 0) return 0;
+      if (aWait === 0) return 1;
+      if (bWait === 0) return -1;
+      return aWait - bWait;
     });
     
     type StackGroup = {
@@ -148,8 +169,13 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
     
     // Combine ALL ready stacks and sort by longest waiting player (matches Manager View)
     const allReadyStacks = [...winnerReadyStacks, ...mixedReadyStacks].sort((a, b) => {
-      const aMinWait = Math.min(...a.players.map(p => p.waitingSince || Infinity));
-      const bMinWait = Math.min(...b.players.map(p => p.waitingSince || Infinity));
+      // Handle empty stacks
+      if (!a.players.length && !b.players.length) return 0;
+      if (!a.players.length) return 1;
+      if (!b.players.length) return -1;
+      
+      const aMinWait = Math.min(...a.players.map(p => p?.waitingSince ?? Infinity));
+      const bMinWait = Math.min(...b.players.map(p => p?.waitingSince ?? Infinity));
       return aMinWait - bMinWait;
     });
     
@@ -185,37 +211,53 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
     
     // Sort forming stacks by longest waiting player too
     formingStacks.sort((a, b) => {
-      const aMinWait = Math.min(...a.players.map(p => p.waitingSince || Infinity));
-      const bMinWait = Math.min(...b.players.map(p => p.waitingSince || Infinity));
+      // Handle empty stacks
+      if (!a.players.length && !b.players.length) return 0;
+      if (!a.players.length) return 1;
+      if (!b.players.length) return -1;
+      
+      const aMinWait = Math.min(...a.players.map(p => p?.waitingSince ?? Infinity));
+      const bMinWait = Math.min(...b.players.map(p => p?.waitingSince ?? Infinity));
       return aMinWait - bMinWait;
     });
     
     return [...allReadyStacks, ...formingStacks];
+    } catch (e) {
+      console.error('Error in stackQueue computation:', e);
+      return [];
+    }
   }, [session.players, session.winnerStack, session.loserStack, session.waitingStack]);
 
   // Count players in games
-  const playersInGame = session.courts.reduce((count, court) => {
+  const playersInGame = session?.courts?.reduce((count, court) => {
     return count + (court.currentGame ? 4 : 0);
-  }, 0);
+  }, 0) || 0;
 
   // Get player status based on their stack
   const getPlayerStatus = (playerId: string): 'winner' | 'loser' | 'waiting' | 'playing' => {
-    // Check if in game
-    for (const court of session.courts) {
-      if (court.currentGame) {
-        if (court.currentGame.team1.includes(playerId) || court.currentGame.team2.includes(playerId)) {
-          return 'playing';
+    try {
+      // Check if in game
+      for (const court of session?.courts || []) {
+        if (court.currentGame) {
+          if (court.currentGame.team1.includes(playerId) || court.currentGame.team2.includes(playerId)) {
+            return 'playing';
+          }
         }
       }
+      if (session?.winnerStack?.includes(playerId)) return 'winner';
+      if (session?.loserStack?.includes(playerId)) return 'loser';
+      return 'waiting';
+    } catch (e) {
+      console.error('Error in getPlayerStatus:', e);
+      return 'waiting';
     }
-    if (session.winnerStack?.includes(playerId)) return 'winner';
-    if (session.loserStack?.includes(playerId)) return 'loser';
-    return 'waiting';
   };
 
   // Filter and sort players
   const filteredAndSortedPlayers = useMemo(() => {
-    let players = session.players.filter(p => p.isActive);
+    try {
+      let players = session?.players?.filter(p => p.isActive) || [];
+      if (!players.length) return [];
     
     // Filter by search
     if (searchQuery.trim()) {
@@ -226,23 +268,48 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
     
     // Sort
     return players.sort((a, b) => {
+      // Handle undefined players
+      if (!a && !b) return 0;
+      if (!a) return 1;
+      if (!b) return -1;
+      
       let result = 0;
       switch (sortBy) {
         case 'name':
-          result = a.name.localeCompare(b.name);
+          result = (a.name || '').localeCompare(b.name || '');
           break;
         case 'games':
-          result = a.gamesPlayed - b.gamesPlayed;
+          result = (a.gamesPlayed || 0) - (b.gamesPlayed || 0);
           break;
         case 'wins':
-          result = a.gamesWon - b.gamesWon;
+          result = (a.gamesWon || 0) - (b.gamesWon || 0);
+          break;
+        case 'losses':
+          result = ((a.gamesPlayed || 0) - (a.gamesWon || 0)) - ((b.gamesPlayed || 0) - (b.gamesWon || 0));
           break;
         case 'waitTime':
-          result = a.waitingSince - b.waitingSince;
+          // Only compare waiting times for players actually waiting (waitingSince > 0)
+          // Players in game (waitingSince = 0) should be considered as not waiting at all
+          const aWait = a.waitingSince || 0;
+          const bWait = b.waitingSince || 0;
+          if (aWait === 0 && bWait === 0) {
+            result = 0;
+          } else if (aWait === 0) {
+            result = 1; // a is in game, b is waiting
+          } else if (bWait === 0) {
+            result = -1; // b is in game, a is waiting
+          } else {
+            // Lower waitingSince = waiting longer
+            result = aWait - bWait;
+          }
           break;
       }
       return sortDir === 'asc' ? result : -result;
     });
+    } catch (e) {
+      console.error('Error in filteredAndSortedPlayers:', e);
+      return [];
+    }
   }, [session.players, searchQuery, sortBy, sortDir]);
 
   return (
@@ -464,12 +531,12 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                     const status = getPlayerStatus(player.id);
                     return (
                       <div key={player.id} className={`flex items-center gap-3 p-2 rounded-lg ${
-                        status === 'playing' ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
+                        status === 'playing' ? 'bg-red-50 dark:bg-red-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
                       }`}>
                         {/* Avatar with status color */}
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 ${
                           status === 'playing' 
-                            ? 'bg-blue-200 dark:bg-blue-800 text-blue-700 dark:text-blue-200'
+                            ? 'bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-200'
                             : status === 'winner'
                               ? 'bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-200'
                               : status === 'loser'
@@ -483,7 +550,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{player.name}</span>
                             {status === 'playing' && (
-                              <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                              <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded">
                                 Playing
                               </span>
                             )}

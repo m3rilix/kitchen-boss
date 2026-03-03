@@ -175,36 +175,36 @@ export function LoginPage() {
           </div>
         </div>
 
-        {/* Demo credentials */}
-        <div className="mt-4 p-3 bg-slate-100 rounded-lg border border-slate-200 space-y-2">
-          <p className="text-xs text-slate-600 text-center font-medium">Demo Accounts</p>
-          <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
-            <div className="text-center">
-              <p className="font-medium">demo1@kitchenboss.app</p>
-              <p className="text-slate-400">demo123 (30 days)</p>
+        {/* Demo credentials - only show in development */}
+        {import.meta.env.DEV && (
+          <div className="mt-4 p-3 bg-slate-100 rounded-lg border border-slate-200 space-y-2">
+            <p className="text-xs text-slate-600 text-center font-medium">Demo Accounts</p>
+            <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
+              <div className="text-center">
+                <p className="font-medium">demo1@kitchenboss.app</p>
+                <p className="text-slate-400">demo123 (30 days)</p>
+              </div>
+              <div className="text-center">
+                <p className="font-medium">demo2@kitchenboss.app</p>
+                <p className="text-slate-400">demo123 (30 days)</p>
+              </div>
+              <div className="text-center">
+                <p className="font-medium">demo3@kitchenboss.app</p>
+                <p className="text-slate-400">demo123 (60 days)</p>
+              </div>
+              <div className="text-center">
+                <p className="font-medium">demo4@kitchenboss.app</p>
+                <p className="text-slate-400">demo123 (60 days)</p>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="font-medium">demo2@kitchenboss.app</p>
-              <p className="text-slate-400">demo123 (30 days)</p>
-            </div>
-            <div className="text-center">
-              <p className="font-medium">demo3@kitchenboss.app</p>
-              <p className="text-slate-400">demo123 (60 days)</p>
-            </div>
-            <div className="text-center">
-              <p className="font-medium">demo4@kitchenboss.app</p>
-              <p className="text-slate-400">demo123 (60 days)</p>
-            </div>
-          </div>
-          {/* Admin credentials - only show in development */}
-          {import.meta.env.DEV && (
+            {/* Admin credentials */}
             <div className="pt-2 border-t border-slate-200 text-center">
               <p className="text-xs text-orange-600">
                 <span className="font-medium">Dev Admin:</span> admin@kitchenboss.app / admin123
               </p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Settings button (top right) */}
