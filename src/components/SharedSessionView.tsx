@@ -12,7 +12,7 @@ interface SharedSessionViewProps {
 
 // Format waiting time - only show "Just joined" for players with 0 games
 const formatWaitTime = (waitingSince: number, gamesPlayed: number = 0): string => {
-  if (waitingSince === 0) return 'In game';
+  if (waitingSince === 0) return 'Live';
   const now = Date.now();
   const waitMs = now - waitingSince;
   const minutes = Math.floor(waitMs / 60000);
@@ -357,13 +357,13 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                 <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                 <div>
                   <p className="text-xs text-slate-500 dark:text-slate-400">Waiting</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-100">{session.queue.length}</p>
+                  <p className="font-semibold text-slate-800 dark:text-slate-100">{session?.queue?.length || 0}</p>
                 </div>
               </div>
               <div className="w-px h-8 bg-slate-200 dark:bg-slate-600" />
               <div className="text-sm">
                 <p className="text-xs text-slate-500 dark:text-slate-400">Courts</p>
-                <p className="font-semibold text-slate-800 dark:text-slate-100">{session.courts.length}</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{session?.courts?.length || 0}</p>
               </div>
             </div>
 
@@ -387,10 +387,10 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
           {/* Courts Section */}
           <div className="lg:col-span-2 space-y-4">
             <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">
-              Courts ({session.courts.length})
+              Courts ({session?.courts?.length || 0})
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {session.courts.map((court) => (
+              {(session?.courts || []).map((court) => (
                 <ReadOnlyCourtView key={court.id} court={court} getPlayerById={getPlayerById} />
               ))}
             </div>
@@ -403,7 +403,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
               <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                 <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                   <Layers className="w-4 h-4 text-amber-500" />
-                  Stack Queue ({session.queue.length})
+                  Stack Queue ({session?.queue?.length || 0})
                 </h3>
               </div>
               <div className="p-3 max-h-80 overflow-y-auto">
@@ -473,7 +473,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
               <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                 <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                   <Users className="w-4 h-4 text-blue-500" />
-                  All Players ({session.players.filter(p => p.isActive).length})
+                  All Players ({session?.players?.filter(p => p.isActive).length || 0})
                 </h3>
               </div>
               
@@ -550,8 +550,9 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{player.name}</span>
                             {status === 'playing' && (
-                              <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded">
-                                Playing
+                              <span className="px-1.5 py-0.5 text-xs font-bold bg-red-600 text-white rounded flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                                LIVE
                               </span>
                             )}
                           </div>
@@ -584,11 +585,11 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                 </h3>
               </div>
               <div className="p-4 max-h-48 overflow-y-auto">
-                {session.activityLog.length === 0 ? (
+                {(session?.activityLog?.length || 0) === 0 ? (
                   <p className="text-sm text-slate-500 text-center py-4">No activity yet</p>
                 ) : (
                   <div className="space-y-2">
-                    {session.activityLog.slice(0, 10).map((entry) => (
+                    {(session?.activityLog || []).slice(0, 10).map((entry) => (
                       <div 
                         key={entry.id} 
                         className="flex items-start gap-2 py-1"
@@ -644,15 +645,20 @@ function ReadOnlyCourtView({ court, getPlayerById }: { court: Court; getPlayerBy
       }`}>
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-slate-800 dark:text-slate-100">{court.name}</h3>
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-            isMaintenance 
-              ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
-              : isInGame 
-                ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' 
-                : 'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-300'
-          }`}>
-            {isMaintenance ? 'Maintenance' : isInGame ? 'In Game' : 'Available'}
-          </span>
+          {isMaintenance ? (
+            <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 rounded-full">
+              Maintenance
+            </span>
+          ) : isInGame ? (
+            <span className="px-2 py-0.5 text-xs font-bold bg-red-600 text-white border border-red-700 rounded-full flex items-center gap-1 animate-pulse">
+              <span className="w-2 h-2 bg-white rounded-full" />
+              LIVE
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-300 rounded-full">
+              Available
+            </span>
+          )}
         </div>
       </div>
 
