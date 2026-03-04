@@ -30,8 +30,8 @@ const getDaysRemaining = (endDate: string | null): number | null => {
   return Math.max(0, diff);
 };
 
-// Session timeout in milliseconds (10 minutes)
-const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
+// Session timeout in milliseconds (1 hour)
+const SESSION_TIMEOUT_MS = 60 * 60 * 1000;
 
 // Generate a unique session ID
 const generateSessionId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
