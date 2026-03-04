@@ -68,80 +68,70 @@ export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
       currentUser: null,
-      users: (() => {
-        const baseUsers: User[] = [
-          // Default admin user (hidden in production)
-          {
-            id: 'admin-001',
-            email: 'admin@kitchenboss.app',
-            name: 'Admin',
-            role: 'admin' as UserRole,
-            accessTier: 'infinite' as AccessTier,
-            accessStartDate: new Date().toISOString(),
-            accessEndDate: null,
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-            isActive: true,
-          }
-        ];
-        
-        // Only add demo accounts in development
-        if (import.meta.env.DEV) {
-          baseUsers.push(
-            // Demo accounts for testers and clients
-            {
-              id: 'demo-001',
-              email: 'demo1@kitchenboss.app',
-              name: 'Demo User 1',
-              role: 'user' as UserRole,
-              accessTier: '30_days' as AccessTier,
-              accessStartDate: new Date().toISOString(),
-              accessEndDate: calculateEndDate('30_days'),
-              createdAt: new Date().toISOString(),
-              lastLoginAt: new Date().toISOString(),
-              isActive: true,
-            },
-            {
-              id: 'demo-002',
-              email: 'demo2@kitchenboss.app',
-              name: 'Demo User 2',
-              role: 'user' as UserRole,
-              accessTier: '30_days' as AccessTier,
-              accessStartDate: new Date().toISOString(),
-              accessEndDate: calculateEndDate('30_days'),
-              createdAt: new Date().toISOString(),
-              lastLoginAt: new Date().toISOString(),
-              isActive: true,
-            },
-            {
-              id: 'demo-003',
-              email: 'demo3@kitchenboss.app',
-              name: 'Demo User 3',
-              role: 'user' as UserRole,
-              accessTier: '60_days' as AccessTier,
-              accessStartDate: new Date().toISOString(),
-              accessEndDate: calculateEndDate('60_days'),
-              createdAt: new Date().toISOString(),
-              lastLoginAt: new Date().toISOString(),
-              isActive: true,
-            },
-            {
-              id: 'demo-004',
-              email: 'demo4@kitchenboss.app',
-              name: 'Demo User 4',
-              role: 'user' as UserRole,
-              accessTier: '60_days' as AccessTier,
-              accessStartDate: new Date().toISOString(),
-              accessEndDate: calculateEndDate('60_days'),
-              createdAt: new Date().toISOString(),
-              lastLoginAt: new Date().toISOString(),
-              isActive: true,
-            }
-          );
-        }
-        
-        return baseUsers;
-      })(),
+      users: [
+        // Default admin user
+        {
+          id: 'admin-001',
+          email: 'admin@kitchenboss.app',
+          name: 'Admin',
+          role: 'admin' as UserRole,
+          accessTier: 'infinite' as AccessTier,
+          accessStartDate: new Date().toISOString(),
+          accessEndDate: null,
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          isActive: true,
+        },
+        // Demo accounts (always available for login, but hidden in prod UI)
+        {
+          id: 'demo-001',
+          email: 'demo1@kitchenboss.app',
+          name: 'Demo User 1',
+          role: 'user' as UserRole,
+          accessTier: '30_days' as AccessTier,
+          accessStartDate: new Date().toISOString(),
+          accessEndDate: calculateEndDate('30_days'),
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          isActive: true,
+        },
+        {
+          id: 'demo-002',
+          email: 'demo2@kitchenboss.app',
+          name: 'Demo User 2',
+          role: 'user' as UserRole,
+          accessTier: '30_days' as AccessTier,
+          accessStartDate: new Date().toISOString(),
+          accessEndDate: calculateEndDate('30_days'),
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          isActive: true,
+        },
+        {
+          id: 'demo-003',
+          email: 'demo3@kitchenboss.app',
+          name: 'Demo User 3',
+          role: 'user' as UserRole,
+          accessTier: '60_days' as AccessTier,
+          accessStartDate: new Date().toISOString(),
+          accessEndDate: calculateEndDate('60_days'),
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          isActive: true,
+        },
+        {
+          id: 'demo-004',
+          email: 'demo4@kitchenboss.app',
+          name: 'Demo User 4',
+          role: 'user' as UserRole,
+          accessTier: '60_days' as AccessTier,
+          accessStartDate: new Date().toISOString(),
+          accessEndDate: calculateEndDate('60_days'),
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          isActive: true,
+        },
+      ],
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -402,6 +392,90 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'kitchenboss-auth',
+      merge: (persistedState: unknown, currentState: AuthStore) => {
+        const persisted = persistedState as Partial<AuthStore> | undefined;
+        
+        // Default users that should always exist
+        const defaultUsers: User[] = [
+          {
+            id: 'admin-001',
+            email: 'admin@kitchenboss.app',
+            name: 'Admin',
+            role: 'admin' as UserRole,
+            accessTier: 'infinite' as AccessTier,
+            accessStartDate: new Date().toISOString(),
+            accessEndDate: null,
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString(),
+            isActive: true,
+          },
+          {
+            id: 'demo-001',
+            email: 'demo1@kitchenboss.app',
+            name: 'Demo User 1',
+            role: 'user' as UserRole,
+            accessTier: '30_days' as AccessTier,
+            accessStartDate: new Date().toISOString(),
+            accessEndDate: calculateEndDate('30_days'),
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString(),
+            isActive: true,
+          },
+          {
+            id: 'demo-002',
+            email: 'demo2@kitchenboss.app',
+            name: 'Demo User 2',
+            role: 'user' as UserRole,
+            accessTier: '30_days' as AccessTier,
+            accessStartDate: new Date().toISOString(),
+            accessEndDate: calculateEndDate('30_days'),
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString(),
+            isActive: true,
+          },
+          {
+            id: 'demo-003',
+            email: 'demo3@kitchenboss.app',
+            name: 'Demo User 3',
+            role: 'user' as UserRole,
+            accessTier: '60_days' as AccessTier,
+            accessStartDate: new Date().toISOString(),
+            accessEndDate: calculateEndDate('60_days'),
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString(),
+            isActive: true,
+          },
+          {
+            id: 'demo-004',
+            email: 'demo4@kitchenboss.app',
+            name: 'Demo User 4',
+            role: 'user' as UserRole,
+            accessTier: '60_days' as AccessTier,
+            accessStartDate: new Date().toISOString(),
+            accessEndDate: calculateEndDate('60_days'),
+            createdAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString(),
+            isActive: true,
+          },
+        ];
+        
+        // Merge persisted users with default users (ensure defaults always exist)
+        const persistedUsers = persisted?.users || [];
+        const mergedUsers = [...defaultUsers];
+        
+        // Add any non-default users from persisted state
+        persistedUsers.forEach(user => {
+          if (!defaultUsers.some(d => d.id === user.id)) {
+            mergedUsers.push(user);
+          }
+        });
+        
+        return {
+          ...currentState,
+          ...persisted,
+          users: mergedUsers,
+        };
+      },
     }
   )
 );

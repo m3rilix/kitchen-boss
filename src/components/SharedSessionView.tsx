@@ -215,7 +215,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
       console.error('Error in stackQueue computation:', e);
       return [];
     }
-  }, [session.players, session.winnerStack, session.loserStack, session.waitingStack]);
+  }, [session?.players, session?.winnerStack, session?.loserStack, session?.waitingStack]);
 
   // Count players in games
   const playersInGame = session?.courts?.reduce((count, court) => {
@@ -648,7 +648,7 @@ function ReadOnlyCourtView({ court, getPlayerById }: { court: Court; getPlayerBy
             isMaintenance 
               ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
               : isInGame 
-                ? `${theme.bg100} ${theme.text}` 
+                ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' 
                 : 'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-300'
           }`}>
             {isMaintenance ? 'Maintenance' : isInGame ? 'In Game' : 'Available'}
