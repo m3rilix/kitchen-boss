@@ -22,6 +22,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
     toggleUserActive, 
     deleteUser,
     extendAccess,
+    forceLogoutUser,
     currentUser 
   } = useAuthStore();
   const theme = useThemeClasses();
@@ -308,6 +309,31 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         <UserCog className="w-4 h-4" />
                         Toggle Admin
                       </button>
+                      {(() => {
+                        const { isOnline } = getOnlineStatus(user.id);
+                        return isOnline ? (
+                          <button
+                            onClick={async () => {
+                              if (confirm(`Force logout ${user.name}?`)) {
+                                try {
+                                  await forceLogoutUser(user.id);
+                                  // Refresh active sessions to update UI
+                                  const sessions = await getAllActiveSessions();
+                                  setActiveSessions(sessions);
+                                } catch (error) {
+                                  console.error('Error force logging out user:', error);
+                                }
+                              }
+                              setSelectedUser(null);
+                            }}
+                            disabled={user.id === currentUser?.id}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 transition disabled:opacity-50"
+                          >
+                            <WifiOff className="w-4 h-4" />
+                            Force Logout
+                          </button>
+                        ) : null;
+                      })()}
                       <button
                         onClick={() => {
                           if (confirm(`Delete user ${user.name}?`)) {

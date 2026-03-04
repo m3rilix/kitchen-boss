@@ -65,6 +65,7 @@ interface AuthStore {
   toggleUserActive: (userId: string) => void;
   deleteUser: (userId: string) => void;
   extendAccess: (userId: string, days: number) => void;
+  forceLogoutUser: (userId: string) => Promise<void>;
   
   // Helpers
   isAccessValid: () => boolean;
@@ -500,6 +501,16 @@ export const useAuthStore = create<AuthStore>()(
         if (currentUser?.id === userId) {
           const updated = updatedUsers.find(u => u.id === userId);
           if (updated) set({ currentUser: updated });
+        }
+      },
+
+      forceLogoutUser: async (userId: string) => {
+        try {
+          const { removeActiveSession } = await import('@/lib/firebase');
+          await removeActiveSession(userId);
+        } catch (error) {
+          console.error('Error force logging out user:', error);
+          throw error;
         }
       },
 

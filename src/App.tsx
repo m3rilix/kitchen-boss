@@ -129,9 +129,9 @@ function App() {
             Your session has expired due to inactivity. Please log in again.
           </p>
           <button
-            onClick={() => {
+            onClick={async () => {
               setSessionExpired(false);
-              useAuthStore.getState().logout();
+              await useAuthStore.getState().logout();
             }}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition"
           >
@@ -152,7 +152,7 @@ function App() {
             Your access has expired. Please contact an administrator to renew your subscription.
           </p>
           <button
-            onClick={() => useAuthStore.getState().logout()}
+            onClick={async () => await useAuthStore.getState().logout()}
             className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition"
           >
             Sign Out
