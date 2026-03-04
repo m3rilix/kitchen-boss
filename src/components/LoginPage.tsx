@@ -182,25 +182,25 @@ export function LoginPage() {
             <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
               <div className="text-center">
                 <p className="font-medium">demo1@kitchenboss.app</p>
-                <p className="text-slate-400">demo123 (30 days)</p>
+                <p className="text-slate-400">Kb7xP2m (30 days)</p>
               </div>
               <div className="text-center">
                 <p className="font-medium">demo2@kitchenboss.app</p>
-                <p className="text-slate-400">demo123 (30 days)</p>
+                <p className="text-slate-400">Qw9Tn4k (30 days)</p>
               </div>
               <div className="text-center">
                 <p className="font-medium">demo3@kitchenboss.app</p>
-                <p className="text-slate-400">demo123 (60 days)</p>
+                <p className="text-slate-400">Ry5Hj8s (60 days)</p>
               </div>
               <div className="text-center">
                 <p className="font-medium">demo4@kitchenboss.app</p>
-                <p className="text-slate-400">demo123 (60 days)</p>
+                <p className="text-slate-400">Lm3Vb6p (60 days)</p>
               </div>
             </div>
             {/* Admin credentials */}
             <div className="pt-2 border-t border-slate-200 text-center">
               <p className="text-xs text-orange-600">
-                <span className="font-medium">Dev Admin:</span> admin@kitchenboss.app / admin123
+                <span className="font-medium">Dev Admin:</span> admin@kitchenboss.app / admin123!!
               </p>
             </div>
           </div>

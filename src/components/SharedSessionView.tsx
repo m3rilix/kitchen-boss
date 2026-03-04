@@ -85,17 +85,6 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
 
-  // Early return if no session
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-slate-500">Session not found</p>
-        </div>
-      </div>
-    );
-  }
-
   // Get player by ID
   const getPlayerById = (playerId: string): Player | undefined => {
     return session?.players?.find(p => p.id === playerId);
@@ -310,7 +299,18 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
       console.error('Error in filteredAndSortedPlayers:', e);
       return [];
     }
-  }, [session.players, searchQuery, sortBy, sortDir]);
+  }, [session?.players, searchQuery, sortBy, sortDir]);
+
+  // Early return if no session (after all hooks)
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-slate-500">Session not found</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors">

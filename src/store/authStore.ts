@@ -165,11 +165,11 @@ export const useAuthStore = create<AuthStore>()(
         
         // Default passwords for built-in accounts
         const defaultPasswords: Record<string, string> = {
-          'admin@kitchenboss.app': 'admin123',
-          'demo1@kitchenboss.app': 'demo123',
-          'demo2@kitchenboss.app': 'demo123',
-          'demo3@kitchenboss.app': 'demo123',
-          'demo4@kitchenboss.app': 'demo123',
+          'admin@kitchenboss.app': 'admin123!!',
+          'demo1@kitchenboss.app': 'Kb7xP2m',
+          'demo2@kitchenboss.app': 'Qw9Tn4k',
+          'demo3@kitchenboss.app': 'Ry5Hj8s',
+          'demo4@kitchenboss.app': 'Lm3Vb6p',
         };
         
         // Check password (use stored or default)
