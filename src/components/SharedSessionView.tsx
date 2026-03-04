@@ -12,7 +12,7 @@ interface SharedSessionViewProps {
 
 // Format waiting time - only show "Just joined" for players with 0 games
 const formatWaitTime = (waitingSince: number, gamesPlayed: number = 0): string => {
-  if (waitingSince === 0) return 'Live';
+  if (waitingSince === 0) return 'In game';
   const now = Date.now();
   const waitMs = now - waitingSince;
   const minutes = Math.floor(waitMs / 60000);
@@ -550,9 +550,8 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{player.name}</span>
                             {status === 'playing' && (
-                              <span className="px-1.5 py-0.5 text-xs font-bold bg-red-600 text-white rounded flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                                LIVE
+                              <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded">
+                                Playing
                               </span>
                             )}
                           </div>

@@ -30,6 +30,12 @@ const getDaysRemaining = (endDate: string | null): number | null => {
   return Math.max(0, diff);
 };
 
+// Session timeout in milliseconds (10 minutes)
+const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
+
+// Generate a unique session ID
+const generateSessionId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
 interface AuthStore {
   // State
   currentUser: User | null;
@@ -37,6 +43,8 @@ interface AuthStore {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  lastActivityAt: number | null;
+  sessionId: string | null;
 
   // Auth actions
   login: (email: string, password: string) => Promise<boolean>;
@@ -44,6 +52,11 @@ interface AuthStore {
   loginAsGuest: () => void;
   logout: () => void;
   isGuest: () => boolean;
+  
+  // Session management
+  updateActivity: () => void;
+  checkSessionTimeout: () => boolean;
+  isSessionValid: () => boolean;
   
   // User management (admin)
   getAllUsers: () => User[];
@@ -135,6 +148,8 @@ export const useAuthStore = create<AuthStore>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      lastActivityAt: null,
+      sessionId: null,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
@@ -148,6 +163,19 @@ export const useAuthStore = create<AuthStore>()(
         if (!user) {
           set({ isLoading: false, error: 'User not found' });
           return false;
+        }
+
+        // Check if user is already logged in elsewhere (single session enforcement)
+        const activeSessions = JSON.parse(localStorage.getItem('kitchenboss-active-sessions') || '{}') as Record<string, { sessionId: string; lastActivity: number }>;
+        const existingSession = activeSessions[user.id];
+        
+        if (existingSession) {
+          // Check if the existing session is still active (within timeout)
+          const timeSinceActivity = Date.now() - existingSession.lastActivity;
+          if (timeSinceActivity < SESSION_TIMEOUT_MS) {
+            set({ isLoading: false, error: 'This account is already logged in on another device/browser. Please wait for that session to expire or log out from there.' });
+            return false;
+          }
         }
 
         // Get stored credentials
@@ -184,12 +212,23 @@ export const useAuthStore = create<AuthStore>()(
         const updatedUser = { ...user, lastLoginAt: new Date().toISOString() };
         const updatedUsers = users.map(u => u.id === user.id ? updatedUser : u);
 
+        // Create new session
+        const newSessionId = generateSessionId();
+        const now = Date.now();
+        
+        // Store active session
+        const sessions = JSON.parse(localStorage.getItem('kitchenboss-active-sessions') || '{}');
+        sessions[user.id] = { sessionId: newSessionId, lastActivity: now };
+        localStorage.setItem('kitchenboss-active-sessions', JSON.stringify(sessions));
+
         set({ 
           currentUser: updatedUser, 
           users: updatedUsers,
           isAuthenticated: true, 
           isLoading: false,
-          error: null
+          error: null,
+          sessionId: newSessionId,
+          lastActivityAt: now
         });
         
         return true;
@@ -262,12 +301,80 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       logout: () => {
-        set({ currentUser: null, isAuthenticated: false, error: null });
+        const { currentUser } = get();
+        
+        // Remove active session
+        if (currentUser) {
+          const sessions = JSON.parse(localStorage.getItem('kitchenboss-active-sessions') || '{}');
+          delete sessions[currentUser.id];
+          localStorage.setItem('kitchenboss-active-sessions', JSON.stringify(sessions));
+        }
+        
+        set({ 
+          currentUser: null, 
+          isAuthenticated: false, 
+          error: null,
+          sessionId: null,
+          lastActivityAt: null
+        });
       },
 
       isGuest: () => {
         const { currentUser } = get();
         return currentUser?.email === 'guest@local';
+      },
+      
+      // Session management
+      updateActivity: () => {
+        const { currentUser, sessionId } = get();
+        if (!currentUser || !sessionId) return;
+        
+        const now = Date.now();
+        
+        // Update local state
+        set({ lastActivityAt: now });
+        
+        // Update stored session
+        const sessions = JSON.parse(localStorage.getItem('kitchenboss-active-sessions') || '{}');
+        if (sessions[currentUser.id]) {
+          sessions[currentUser.id].lastActivity = now;
+          localStorage.setItem('kitchenboss-active-sessions', JSON.stringify(sessions));
+        }
+      },
+      
+      checkSessionTimeout: () => {
+        const { lastActivityAt, isAuthenticated, logout } = get();
+        
+        if (!isAuthenticated || !lastActivityAt) return false;
+        
+        const timeSinceActivity = Date.now() - lastActivityAt;
+        if (timeSinceActivity >= SESSION_TIMEOUT_MS) {
+          logout();
+          return true; // Session timed out
+        }
+        return false;
+      },
+      
+      isSessionValid: () => {
+        const { currentUser, sessionId, lastActivityAt } = get();
+        
+        if (!currentUser || !sessionId) return false;
+        
+        // Check timeout
+        if (lastActivityAt) {
+          const timeSinceActivity = Date.now() - lastActivityAt;
+          if (timeSinceActivity >= SESSION_TIMEOUT_MS) return false;
+        }
+        
+        // Check if this session is still the active one
+        const sessions = JSON.parse(localStorage.getItem('kitchenboss-active-sessions') || '{}');
+        const storedSession = sessions[currentUser.id];
+        
+        if (!storedSession || storedSession.sessionId !== sessionId) {
+          return false; // Session was invalidated (logged in elsewhere)
+        }
+        
+        return true;
       },
 
       getAllUsers: () => {

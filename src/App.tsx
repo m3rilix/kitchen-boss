@@ -17,11 +17,57 @@ import type { Session } from '@/types';
 
 function App() {
   const { session, addCourt, shareCode, syncToFirebase } = useSessionStore();
-  const { isAuthenticated, isAccessValid, isAdmin } = useAuthStore();
+  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout } = useAuthStore();
   const theme = useThemeClasses();
   const [showAdmin, setShowAdmin] = useState(false);
   const [sharedSession, setSharedSession] = useState<Session | null>(null);
   const [viewingShareCode, setViewingShareCode] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  // Session timeout check - runs every minute
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    const checkTimeout = () => {
+      const timedOut = checkSessionTimeout();
+      if (timedOut) {
+        setSessionExpired(true);
+      }
+    };
+    
+    // Check immediately
+    checkTimeout();
+    
+    // Check every minute
+    const interval = setInterval(checkTimeout, 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [isAuthenticated, checkSessionTimeout]);
+
+  // Update activity on user interactions
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    const handleActivity = () => {
+      updateActivity();
+    };
+    
+    // Track various user activities
+    window.addEventListener('click', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('scroll', handleActivity);
+    window.addEventListener('mousemove', handleActivity);
+    
+    // Initial activity update
+    updateActivity();
+    
+    return () => {
+      window.removeEventListener('click', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('scroll', handleActivity);
+      window.removeEventListener('mousemove', handleActivity);
+    };
+  }, [isAuthenticated, updateActivity]);
 
   // Check for share code in URL on mount and subscribe to real-time updates
   useEffect(() => {
@@ -71,6 +117,29 @@ function App() {
   // Show login if not authenticated
   if (!isAuthenticated) {
     return <LoginPage />;
+  }
+
+  // Show session expired message
+  if (sessionExpired) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md text-center">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Session Expired</h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-4">
+            Your session has expired due to inactivity. Please log in again.
+          </p>
+          <button
+            onClick={() => {
+              setSessionExpired(false);
+              useAuthStore.getState().logout();
+            }}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition"
+          >
+            Log In Again
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Check if access is still valid
