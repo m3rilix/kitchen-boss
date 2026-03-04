@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeClasses } from '@/store/themeStore';
 import type { AccessTier, UserRole } from '@/types/user';
+import { getAllActiveSessions, type ActiveSession } from '@/lib/firebase';
 import { 
   Users, Shield, Clock, Infinity, Calendar, 
   MoreVertical, Trash2, UserCog, ArrowLeft,
-  CheckCircle, XCircle, Plus
+  CheckCircle, XCircle, Plus, Wifi, WifiOff
 } from 'lucide-react';
 import { SettingsDropdown } from './SettingsDropdown';
 
@@ -27,8 +28,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [showExtendModal, setShowExtendModal] = useState<string | null>(null);
   const [extendDays, setExtendDays] = useState(30);
+  const [activeSessions, setActiveSessions] = useState<Record<string, ActiveSession>>({});
 
   const users = getAllUsers();
+
+  // Load active sessions on mount and refresh every 30 seconds
+  useEffect(() => {
+    const loadActiveSessions = async () => {
+      try {
+        const sessions = await getAllActiveSessions();
+        setActiveSessions(sessions);
+      } catch (error) {
+        console.error('Error loading active sessions:', error);
+      }
+    };
+
+    loadActiveSessions();
+    const interval = setInterval(loadActiveSessions, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   const getDaysRemaining = (endDate: string | null): number | null => {
     if (endDate === null) return null;
@@ -44,6 +63,25 @@ export function AdminPage({ onBack }: AdminPageProps) {
       day: 'numeric',
       year: 'numeric'
     });
+  };
+
+  const getOnlineStatus = (userId: string) => {
+    const session = activeSessions[userId];
+    if (!session) return { isOnline: false, minutesAgo: null };
+
+    const minutesAgo = Math.floor((Date.now() - session.lastActivity) / (1000 * 60));
+    const isOnline = minutesAgo < 60; // Consider online if active within last hour
+
+    return { isOnline, minutesAgo };
+  };
+
+  const formatLastActivity = (minutesAgo: number) => {
+    if (minutesAgo < 1) return 'Just now';
+    if (minutesAgo < 60) return `${minutesAgo}m ago`;
+    const hoursAgo = Math.floor(minutesAgo / 60);
+    if (hoursAgo < 24) return `${hoursAgo}h ago`;
+    const daysAgo = Math.floor(hoursAgo / 24);
+    return `${daysAgo}d ago`;
   };
 
   const getAccessBadge = (tier: AccessTier, endDate: string | null) => {
@@ -127,10 +165,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            <div className="col-span-3">User</div>
-            <div className="col-span-2">Role</div>
+            <div className="col-span-2">User</div>
+            <div className="col-span-1">Role</div>
             <div className="col-span-2">Access</div>
             <div className="col-span-2">Status</div>
+            <div className="col-span-2">Online</div>
             <div className="col-span-2">Last Login</div>
             <div className="col-span-1">Actions</div>
           </div>
@@ -145,13 +184,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 }`}
               >
                 {/* User Info */}
-                <div className="col-span-3">
+                <div className="col-span-2">
                   <p className="font-medium text-slate-800 dark:text-slate-100 truncate">{user.name}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
                 </div>
 
                 {/* Role */}
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <select
                     value={user.role}
                     onChange={(e) => updateUserRole(user.id, e.target.value as UserRole)}
@@ -202,6 +241,33 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       </>
                     )}
                   </button>
+                </div>
+
+                {/* Online Status */}
+                <div className="col-span-2">
+                  {(() => {
+                    const { isOnline, minutesAgo } = getOnlineStatus(user.id);
+                    return (
+                      <div className="flex items-center gap-2">
+                        {isOnline ? (
+                          <div className="flex items-center gap-1">
+                            <Wifi className="w-3 h-3 text-green-500" />
+                            <span className="text-xs text-green-600 dark:text-green-400 font-medium">Online</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <WifiOff className="w-3 h-3 text-slate-400" />
+                            <span className="text-xs text-slate-500 dark:text-slate-400">Offline</span>
+                          </div>
+                        )}
+                        {minutesAgo !== null && (
+                          <span className="text-xs text-slate-400">
+                            {formatLastActivity(minutesAgo)}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Last Login */}

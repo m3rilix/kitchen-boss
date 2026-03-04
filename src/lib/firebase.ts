@@ -120,3 +120,68 @@ export function generateQRCodeUrl(shareUrl: string, size: number = 200): string 
   const encoded = encodeURIComponent(shareUrl);
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}`;
 }
+
+// Session management for cross-browser login prevention
+export interface ActiveSession {
+  sessionId: string;
+  lastActivity: number;
+  userAgent?: string;
+  ipAddress?: string;
+}
+
+// Store active session in Firebase
+export async function storeActiveSession(userId: string, sessionData: ActiveSession): Promise<void> {
+  const sessionRef = ref(database, `activeSessions/${userId}`);
+  try {
+    await set(sessionRef, sessionData);
+  } catch (error) {
+    console.error('Firebase storeActiveSession error:', error);
+    throw error;
+  }
+}
+
+// Get active session from Firebase
+export async function getActiveSession(userId: string): Promise<ActiveSession | null> {
+  const sessionRef = ref(database, `activeSessions/${userId}`);
+  try {
+    const snapshot = await get(sessionRef);
+    return snapshot.exists() ? snapshot.val() as ActiveSession : null;
+  } catch (error) {
+    console.error('Firebase getActiveSession error:', error);
+    return null;
+  }
+}
+
+// Remove active session from Firebase
+export async function removeActiveSession(userId: string): Promise<void> {
+  const sessionRef = ref(database, `activeSessions/${userId}`);
+  try {
+    await remove(sessionRef);
+  } catch (error) {
+    console.error('Firebase removeActiveSession error:', error);
+    throw error;
+  }
+}
+
+// Get all active sessions (for admin)
+export async function getAllActiveSessions(): Promise<Record<string, ActiveSession>> {
+  const sessionsRef = ref(database, 'activeSessions');
+  try {
+    const snapshot = await get(sessionsRef);
+    return snapshot.exists() ? snapshot.val() : {};
+  } catch (error) {
+    console.error('Firebase getAllActiveSessions error:', error);
+    return {};
+  }
+}
+
+// Update session activity
+export async function updateSessionActivity(userId: string): Promise<void> {
+  const sessionRef = ref(database, `activeSessions/${userId}/lastActivity`);
+  try {
+    await set(sessionRef, Date.now());
+  } catch (error) {
+    console.error('Firebase updateSessionActivity error:', error);
+    // Don't throw error for activity updates to avoid disrupting user experience
+  }
+}

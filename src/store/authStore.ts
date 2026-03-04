@@ -50,13 +50,13 @@ interface AuthStore {
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, name: string) => Promise<boolean>;
   loginAsGuest: () => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   isGuest: () => boolean;
   
   // Session management
-  updateActivity: () => void;
+  updateActivity: () => Promise<void>;
   checkSessionTimeout: () => boolean;
-  isSessionValid: () => boolean;
+  isSessionValid: () => Promise<boolean>;
   
   // User management (admin)
   getAllUsers: () => User[];
@@ -166,16 +166,21 @@ export const useAuthStore = create<AuthStore>()(
         }
 
         // Check if user is already logged in elsewhere (single session enforcement)
-        const activeSessions = JSON.parse(localStorage.getItem('kitchenboss-active-sessions') || '{}') as Record<string, { sessionId: string; lastActivity: number }>;
-        const existingSession = activeSessions[user.id];
-        
-        if (existingSession) {
-          // Check if the existing session is still active (within timeout)
-          const timeSinceActivity = Date.now() - existingSession.lastActivity;
-          if (timeSinceActivity < SESSION_TIMEOUT_MS) {
-            set({ isLoading: false, error: 'This account is already logged in on another device/browser. Please wait for that session to expire or log out from there.' });
-            return false;
+        try {
+          const { getActiveSession } = await import('@/lib/firebase');
+          const existingSession = await getActiveSession(user.id);
+          
+          if (existingSession) {
+            // Check if the existing session is still active (within timeout)
+            const timeSinceActivity = Date.now() - existingSession.lastActivity;
+            if (timeSinceActivity < SESSION_TIMEOUT_MS) {
+              set({ isLoading: false, error: 'This account is already logged in on another device/browser. Please wait for that session to expire or log out from there.' });
+              return false;
+            }
           }
+        } catch (error) {
+          console.error('Error checking active session:', error);
+          // Continue with login if Firebase check fails
         }
 
         // Get stored credentials
@@ -216,10 +221,18 @@ export const useAuthStore = create<AuthStore>()(
         const newSessionId = generateSessionId();
         const now = Date.now();
         
-        // Store active session
-        const sessions = JSON.parse(localStorage.getItem('kitchenboss-active-sessions') || '{}');
-        sessions[user.id] = { sessionId: newSessionId, lastActivity: now };
-        localStorage.setItem('kitchenboss-active-sessions', JSON.stringify(sessions));
+        // Store active session in Firebase
+        try {
+          const { storeActiveSession } = await import('@/lib/firebase');
+          await storeActiveSession(user.id, {
+            sessionId: newSessionId,
+            lastActivity: now,
+            userAgent: navigator.userAgent
+          });
+        } catch (error) {
+          console.error('Error storing active session:', error);
+          // Continue with login even if Firebase storage fails
+        }
 
         set({ 
           currentUser: updatedUser, 
@@ -300,14 +313,17 @@ export const useAuthStore = create<AuthStore>()(
         });
       },
 
-      logout: () => {
+      logout: async () => {
         const { currentUser } = get();
         
-        // Remove active session
+        // Remove active session from Firebase
         if (currentUser) {
-          const sessions = JSON.parse(localStorage.getItem('kitchenboss-active-sessions') || '{}');
-          delete sessions[currentUser.id];
-          localStorage.setItem('kitchenboss-active-sessions', JSON.stringify(sessions));
+          try {
+            const { removeActiveSession } = await import('@/lib/firebase');
+            await removeActiveSession(currentUser.id);
+          } catch (error) {
+            console.error('Error removing active session:', error);
+          }
         }
         
         set({ 
@@ -325,7 +341,7 @@ export const useAuthStore = create<AuthStore>()(
       },
       
       // Session management
-      updateActivity: () => {
+      updateActivity: async () => {
         const { currentUser, sessionId } = get();
         if (!currentUser || !sessionId) return;
         
@@ -334,11 +350,13 @@ export const useAuthStore = create<AuthStore>()(
         // Update local state
         set({ lastActivityAt: now });
         
-        // Update stored session
-        const sessions = JSON.parse(localStorage.getItem('kitchenboss-active-sessions') || '{}');
-        if (sessions[currentUser.id]) {
-          sessions[currentUser.id].lastActivity = now;
-          localStorage.setItem('kitchenboss-active-sessions', JSON.stringify(sessions));
+        // Update Firebase session activity
+        try {
+          const { updateSessionActivity } = await import('@/lib/firebase');
+          await updateSessionActivity(currentUser.id);
+        } catch (error) {
+          console.error('Error updating session activity:', error);
+          // Don't throw error to avoid disrupting user experience
         }
       },
       
@@ -355,7 +373,7 @@ export const useAuthStore = create<AuthStore>()(
         return false;
       },
       
-      isSessionValid: () => {
+      isSessionValid: async () => {
         const { currentUser, sessionId, lastActivityAt } = get();
         
         if (!currentUser || !sessionId) return false;
@@ -366,12 +384,17 @@ export const useAuthStore = create<AuthStore>()(
           if (timeSinceActivity >= SESSION_TIMEOUT_MS) return false;
         }
         
-        // Check if this session is still the active one
-        const sessions = JSON.parse(localStorage.getItem('kitchenboss-active-sessions') || '{}');
-        const storedSession = sessions[currentUser.id];
-        
-        if (!storedSession || storedSession.sessionId !== sessionId) {
-          return false; // Session was invalidated (logged in elsewhere)
+        // Check if this session is still the active one in Firebase
+        try {
+          const { getActiveSession } = await import('@/lib/firebase');
+          const storedSession = await getActiveSession(currentUser.id);
+          
+          if (!storedSession || storedSession.sessionId !== sessionId) {
+            return false; // Session was invalidated (logged in elsewhere)
+          }
+        } catch (error) {
+          console.error('Error validating session:', error);
+          // Return true if Firebase check fails to avoid disrupting user experience
         }
         
         return true;
