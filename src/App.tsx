@@ -28,8 +28,8 @@ function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     
-    const checkTimeout = () => {
-      const timedOut = checkSessionTimeout();
+    const checkTimeout = async () => {
+      const timedOut = await checkSessionTimeout();
       if (timedOut) {
         setSessionExpired(true);
       }

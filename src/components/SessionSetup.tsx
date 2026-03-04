@@ -121,7 +121,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
             <SettingsDropdown />
             {/* Logout */}
             <button
-              onClick={logout}
+              onClick={async () => await logout()}
               className="p-2 text-slate-500 hover:text-red-500 transition"
               title="Sign Out"
             >

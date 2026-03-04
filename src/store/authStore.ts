@@ -55,7 +55,7 @@ interface AuthStore {
   
   // Session management
   updateActivity: () => Promise<void>;
-  checkSessionTimeout: () => boolean;
+  checkSessionTimeout: () => Promise<boolean>;
   isSessionValid: () => Promise<boolean>;
   
   // User management (admin)
@@ -361,14 +361,14 @@ export const useAuthStore = create<AuthStore>()(
         }
       },
       
-      checkSessionTimeout: () => {
+      checkSessionTimeout: async () => {
         const { lastActivityAt, isAuthenticated, logout } = get();
         
         if (!isAuthenticated || !lastActivityAt) return false;
         
         const timeSinceActivity = Date.now() - lastActivityAt;
         if (timeSinceActivity >= SESSION_TIMEOUT_MS) {
-          logout();
+          await logout();
           return true; // Session timed out
         }
         return false;

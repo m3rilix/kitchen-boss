@@ -182,7 +182,7 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
                 </p>
               </div>
               <button
-                onClick={logout}
+                onClick={async () => await logout()}
                 className="p-1 text-slate-400 hover:text-red-500 transition"
                 title="Sign Out"
               >
