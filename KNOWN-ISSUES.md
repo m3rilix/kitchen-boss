@@ -18,7 +18,27 @@
 
 ## ⚠️ Known Limitations
 
-### 1. Session State Not Transferred Between Devices
+### 1. User Accounts Not Stored in Firebase
+**Status**: By Design (requires backend implementation)  
+**Description**: Newly created user accounts are stored in browser localStorage, not Firebase. Accounts created on Browser 1 cannot be accessed on Browser 2.
+
+**Why**: User registration stores credentials in localStorage (Zustand persist). There's no backend database to sync accounts across devices.
+
+**Current Behavior**:
+- ✅ Built-in accounts (admin, demo1-4) work on all browsers
+- ❌ New registered accounts only exist on the browser where they were created
+- ❌ Accounts don't sync between devices
+
+**To Fix**: Would require:
+1. Backend API for user registration
+2. Database to store user accounts (Firebase Auth or custom backend)
+3. Server-side authentication instead of client-side localStorage
+
+**Workaround**: Use the built-in demo accounts for testing across multiple devices.
+
+---
+
+### 2. Session State Not Transferred Between Devices
 **Status**: By Design (requires architectural change)  
 **Description**: When transferring a session to a new device, only authentication transfers. The game state (courts, players, queue) does not transfer.
 

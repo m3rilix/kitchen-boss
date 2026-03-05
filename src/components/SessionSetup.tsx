@@ -70,7 +70,7 @@ const getCurrentTime = () => {
 
 export function SessionSetup({ onAdminClick }: SessionSetupProps) {
   const { createSession } = useSessionStore();
-  const { currentUser, logout, getDaysRemaining, isAdmin } = useAuthStore();
+  const { currentUser, logout, getTimeRemaining, isAdmin } = useAuthStore();
   const theme = useThemeClasses();
   const [name, setName] = useState('Open Play Session');
   const [location, setLocation] = useState('');
@@ -86,7 +86,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
     createSession({ name, location, date, time, courtCount, rotationMode });
   };
 
-  const daysRemaining = getDaysRemaining();
+  const timeRemaining = getTimeRemaining();
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex items-center justify-center p-4 transition-colors">
@@ -94,17 +94,27 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
       <div className="fixed top-0 left-0 right-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3">
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 ${theme.bg100} rounded-full flex items-center justify-center`}>
+            <img 
+              src="/kitchen-boss-logo.png" 
+              alt="Kitchen Boss" 
+              className="w-10 h-10"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                const fallback = e.currentTarget.nextElementSibling;
+                if (fallback) fallback.classList.remove('hidden');
+              }}
+            />
+            <div className={`hidden w-8 h-8 ${theme.bg100} rounded-full flex items-center justify-center`}>
               <PickleballIcon className={`w-5 h-5 ${theme.text}`} />
             </div>
-            <span className="font-semibold text-slate-800">Kitchen Boss</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-100">Kitchen Boss</span>
           </div>
           <div className="flex items-center gap-3">
             {/* User Info */}
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{currentUser?.name}</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {daysRemaining === null ? 'Unlimited access' : `${daysRemaining} days remaining`}
+                {timeRemaining === null ? 'Unlimited access' : `${timeRemaining} remaining`}
               </p>
             </div>
             {/* Admin Button */}

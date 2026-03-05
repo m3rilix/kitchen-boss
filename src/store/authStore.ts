@@ -30,6 +30,27 @@ const getDaysRemaining = (endDate: string | null): number | null => {
   return Math.max(0, diff);
 };
 
+// Get time remaining as formatted string (hours or days)
+const getTimeRemaining = (endDate: string | null): string | null => {
+  if (endDate === null) return null; // infinite
+  const end = new Date(endDate);
+  const now = new Date();
+  const diffMs = end.getTime() - now.getTime();
+  
+  if (diffMs <= 0) return '0 hours';
+  
+  const hours = Math.ceil(diffMs / (1000 * 60 * 60));
+  
+  // If less than 24 hours, show hours
+  if (hours < 24) {
+    return `${hours} hour${hours !== 1 ? 's' : ''}`;
+  }
+  
+  // Otherwise show days
+  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return `${days} day${days !== 1 ? 's' : ''}`;
+};
+
 // Session timeout in milliseconds (1 hour)
 const SESSION_TIMEOUT_MS = 60 * 60 * 1000;
 
@@ -71,6 +92,7 @@ interface AuthStore {
   // Helpers
   isAccessValid: () => boolean;
   getDaysRemaining: () => number | null;
+  getTimeRemaining: () => string | null;
   isAdmin: () => boolean;
 }
 
@@ -545,6 +567,12 @@ export const useAuthStore = create<AuthStore>()(
         const { currentUser } = get();
         if (!currentUser) return null;
         return getDaysRemaining(currentUser.accessEndDate);
+      },
+
+      getTimeRemaining: () => {
+        const { currentUser } = get();
+        if (!currentUser) return null;
+        return getTimeRemaining(currentUser.accessEndDate);
       },
 
       isAdmin: () => {

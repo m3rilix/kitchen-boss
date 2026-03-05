@@ -52,6 +52,7 @@ function App() {
     const unsubscribe = onSessionChange(currentUser.id, (firebaseSession) => {
       // If session exists in Firebase but sessionId doesn't match, session was transferred
       // Only trigger logout if this is not the current active session
+      // If firebaseSession is null, user logged out normally (don't show transfer modal)
       if (firebaseSession && firebaseSession.sessionId !== sessionId && isCurrentSession) {
         setSessionTransferred(true);
         isCurrentSession = false; // Prevent multiple logout calls
@@ -136,21 +137,16 @@ function App() {
     );
   }
 
+  // Reset session transferred state when user logs out
+  useEffect(() => {
+    if (!isAuthenticated && sessionTransferred) {
+      setSessionTransferred(false);
+    }
+  }, [isAuthenticated, sessionTransferred]);
+
   // Show login if not authenticated
   if (!isAuthenticated) {
-    return (
-      <>
-        <LoginPage />
-        {/* Only show transfer modal if user is not authenticated AND session was transferred */}
-        {sessionTransferred && (
-          <SessionTransferredModal
-            onClose={() => {
-              setSessionTransferred(false);
-            }}
-          />
-        )}
-      </>
-    );
+    return <LoginPage />;
   }
 
   // Show session expired message

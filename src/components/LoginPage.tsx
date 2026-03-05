@@ -67,7 +67,17 @@ export function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className={`w-20 h-20 ${theme.bg100} rounded-full flex items-center justify-center mx-auto mb-4`}>
+          <img 
+            src="/kitchen-boss-logo.png" 
+            alt="Kitchen Boss Logo" 
+            className="w-32 h-32 mx-auto mb-4"
+            onError={(e) => {
+              // Fallback to icon if image not found
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+            }}
+          />
+          <div className={`hidden w-20 h-20 ${theme.bg100} rounded-full flex items-center justify-center mx-auto mb-4`}>
             <PickleballIcon className={`w-12 h-12 ${theme.text}`} />
           </div>
           <h1 className="text-2xl font-bold text-slate-800">

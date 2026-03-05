@@ -13,13 +13,13 @@ interface SessionHeaderProps {
 
 export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
   const { session, endSession, resetSession, updateSessionName } = useSessionStore();
-  const { currentUser, logout, getDaysRemaining, isAdmin } = useAuthStore();
+  const { currentUser, logout, getTimeRemaining, isAdmin } = useAuthStore();
   const theme = useThemeClasses();
   const [showShareModal, setShowShareModal] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
   const [showResetModal, setShowResetModal] = useState(false);
-  const daysRemaining = getDaysRemaining();
+  const timeRemaining = getTimeRemaining();
 
   if (!session) return null;
 
@@ -51,7 +51,17 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
         <div className="flex items-center justify-between gap-4">
           {/* Left: Logo + Title */}
           <div className="flex items-center gap-3 min-w-0">
-            <div className={`w-10 h-10 ${theme.bg100} rounded-full flex items-center justify-center flex-shrink-0`}>
+            <img 
+              src="/kitchen-boss-logo.png" 
+              alt="Kitchen Boss" 
+              className="w-12 h-12 flex-shrink-0"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                const fallback = e.currentTarget.nextElementSibling;
+                if (fallback) fallback.classList.remove('hidden');
+              }}
+            />
+            <div className={`hidden w-10 h-10 ${theme.bg100} rounded-full flex items-center justify-center flex-shrink-0`}>
               <PickleballIcon className={`w-6 h-6 ${theme.text}`} />
             </div>
             <div className="min-w-0">
@@ -178,7 +188,7 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
               <div className="text-right">
                 <p className="text-xs font-medium text-slate-700 dark:text-slate-200">{currentUser?.name}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {daysRemaining === null ? '∞' : `${daysRemaining}d`}
+                  {timeRemaining === null ? '∞' : timeRemaining}
                 </p>
               </div>
               <button
