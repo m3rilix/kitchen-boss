@@ -167,7 +167,27 @@ export const useAuthStore = create<AuthStore>()(
           return false;
         }
 
-        // Check if user is already logged in elsewhere
+        // Get stored credentials
+        const storedCreds = JSON.parse(localStorage.getItem('kitchenboss-credentials') || '{}') as StoredCredentials;
+        
+        // Default passwords for built-in accounts
+        const defaultPasswords: Record<string, string> = {
+          'admin@kitchenboss.app': 'admin123!!',
+          'demo1@kitchenboss.app': 'Kb7xP2m',
+          'demo2@kitchenboss.app': 'Qw9Tn4k',
+          'demo3@kitchenboss.app': 'Ry5Hj8s',
+          'demo4@kitchenboss.app': 'Lm3Vb6p',
+        };
+        
+        // Check password (use stored or default) - BEFORE checking existing session
+        const storedPassword = storedCreds[email.toLowerCase()] || defaultPasswords[email.toLowerCase()] || null;
+        
+        if (storedPassword !== password) {
+          set({ isLoading: false, error: 'Invalid password' });
+          return false;
+        }
+
+        // Check if user is already logged in elsewhere (AFTER password validation)
         if (!forceTransfer) {
           try {
             const { getActiveSession } = await import('@/lib/firebase');
@@ -186,26 +206,6 @@ export const useAuthStore = create<AuthStore>()(
             console.error('Error checking active session:', error);
             // Continue with login if Firebase check fails
           }
-        }
-
-        // Get stored credentials
-        const storedCreds = JSON.parse(localStorage.getItem('kitchenboss-credentials') || '{}') as StoredCredentials;
-        
-        // Default passwords for built-in accounts
-        const defaultPasswords: Record<string, string> = {
-          'admin@kitchenboss.app': 'admin123!!',
-          'demo1@kitchenboss.app': 'Kb7xP2m',
-          'demo2@kitchenboss.app': 'Qw9Tn4k',
-          'demo3@kitchenboss.app': 'Ry5Hj8s',
-          'demo4@kitchenboss.app': 'Lm3Vb6p',
-        };
-        
-        // Check password (use stored or default)
-        const storedPassword = storedCreds[email.toLowerCase()] || defaultPasswords[email.toLowerCase()] || null;
-        
-        if (storedPassword !== password) {
-          set({ isLoading: false, error: 'Invalid password' });
-          return false;
         }
 
         if (!user.isActive) {

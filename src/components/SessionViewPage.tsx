@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import { SessionHeader } from './SessionHeader';
@@ -13,13 +13,11 @@ interface SessionViewPageProps {
 }
 
 export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
-  const navigate = useNavigate();
   const { session, addCourt } = useSessionStore();
   const theme = useThemeClasses();
 
   if (!session) {
-    navigate('/create-session');
-    return null;
+    return <Navigate to="/create-session" replace />;
   }
 
   return (

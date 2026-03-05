@@ -70,7 +70,7 @@ const getCurrentTime = () => {
 
 export function SessionSetup({ onAdminClick }: SessionSetupProps) {
   const { createSession } = useSessionStore();
-  const { currentUser, logout, getDaysRemaining } = useAuthStore();
+  const { currentUser, logout, getDaysRemaining, isAdmin } = useAuthStore();
   const theme = useThemeClasses();
   const [name, setName] = useState('Open Play Session');
   const [location, setLocation] = useState('');
@@ -108,7 +108,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
               </p>
             </div>
             {/* Admin Button */}
-            {onAdminClick && (
+            {isAdmin() && onAdminClick && (
               <button
                 onClick={onAdminClick}
                 className={`p-2 ${theme.bgButton} rounded-lg transition`}
