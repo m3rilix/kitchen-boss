@@ -171,25 +171,13 @@ export const useAuthStore = create<AuthStore>()(
           const { getActiveSession } = await import('@/lib/firebase');
           const existingSession = await getActiveSession(user.id);
           
-          console.log('Checking existing session for user:', user.id, user.email);
-          console.log('Existing session found:', existingSession);
-          
           if (existingSession) {
             // Check if the existing session is still active (within timeout)
             const timeSinceActivity = Date.now() - existingSession.lastActivity;
-            const timeoutMinutes = Math.floor(timeSinceActivity / (1000 * 60));
-            console.log('Time since last activity:', timeoutMinutes, 'minutes');
-            console.log('Session timeout threshold:', Math.floor(SESSION_TIMEOUT_MS / (1000 * 60)), 'minutes');
-            
             if (timeSinceActivity < SESSION_TIMEOUT_MS) {
-              console.log('Session is still active, blocking login');
               set({ isLoading: false, error: 'This account is already logged in on another device/browser. Please wait for that session to expire or log out from there.' });
               return false;
-            } else {
-              console.log('Session has expired, allowing login');
             }
-          } else {
-            console.log('No existing session found, allowing login');
           }
         } catch (error) {
           console.error('Error checking active session:', error);
@@ -332,15 +320,11 @@ export const useAuthStore = create<AuthStore>()(
         // Remove active session from Firebase
         if (currentUser) {
           try {
-            console.log('Logging out user:', currentUser.id, currentUser.email);
             const { removeActiveSession } = await import('@/lib/firebase');
             await removeActiveSession(currentUser.id);
-            console.log('Successfully removed session from Firebase for user:', currentUser.id);
           } catch (error) {
             console.error('Error removing active session:', error);
           }
-        } else {
-          console.log('No current user to logout');
         }
         
         set({ 
@@ -350,7 +334,6 @@ export const useAuthStore = create<AuthStore>()(
           sessionId: null,
           lastActivityAt: null
         });
-        console.log('Logout completed, local state cleared');
       },
 
       isGuest: () => {

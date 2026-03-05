@@ -156,30 +156,14 @@ export async function getActiveSession(userId: string): Promise<ActiveSession | 
 export async function removeActiveSession(userId: string): Promise<void> {
   const sessionRef = ref(database, `activeSessions/${userId}`);
   try {
-    console.log('Removing session from Firebase path:', `activeSessions/${userId}`);
-    
-    // Use set(null) instead of remove() - sometimes works better with Firebase rules
+    // Use set(null) instead of remove() - works better with Firebase rules
     await set(sessionRef, null);
-    console.log('Firebase set(null) operation completed');
     
     // Verify removal by checking if it still exists
     const snapshot = await get(sessionRef);
     if (snapshot.exists()) {
-      console.error('Session still exists after set(null) attempt:', snapshot.val());
-      
-      // Try remove() as fallback
-      console.log('Trying remove() as fallback...');
+      // Try remove() as fallback if set(null) didn't work
       await remove(sessionRef);
-      
-      // Check again
-      const snapshot2 = await get(sessionRef);
-      if (snapshot2.exists()) {
-        console.error('Session still exists after remove() fallback:', snapshot2.val());
-      } else {
-        console.log('Session successfully removed with remove() fallback');
-      }
-    } else {
-      console.log('Session successfully removed from Firebase with set(null)');
     }
   } catch (error) {
     console.error('Firebase removeActiveSession error:', error);
