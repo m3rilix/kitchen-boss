@@ -50,7 +50,7 @@ interface AuthStore {
   login: (email: string, password: string, forceTransfer?: boolean) => Promise<boolean | { existingSession: any }>;
   register: (email: string, password: string, name: string) => Promise<boolean>;
   loginAsGuest: () => void;
-  logout: () => Promise<void>;
+  logout: (skipFirebaseRemoval?: boolean) => Promise<void>;
   isGuest: () => boolean;
   
   // Session management
@@ -320,11 +320,11 @@ export const useAuthStore = create<AuthStore>()(
         });
       },
 
-      logout: async () => {
+      logout: async (skipFirebaseRemoval: boolean = false) => {
         const { currentUser } = get();
         
-        // Remove active session from Firebase
-        if (currentUser) {
+        // Remove active session from Firebase (unless skipped for session transfer)
+        if (currentUser && !skipFirebaseRemoval) {
           try {
             const { removeActiveSession } = await import('@/lib/firebase');
             await removeActiveSession(currentUser.id);

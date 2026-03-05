@@ -13,7 +13,7 @@ import type { Session } from '@/types';
 
 function App() {
   const { session, shareCode, syncToFirebase } = useSessionStore();
-  const { isAuthenticated, isAccessValid, updateActivity, checkSessionTimeout, validateAndCleanupSession, currentUser, sessionId, logout } = useAuthStore();
+  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout, validateAndCleanupSession, currentUser, sessionId, logout } = useAuthStore();
   const [sharedSession, setSharedSession] = useState<Session | null>(null);
   const [viewingShareCode, setViewingShareCode] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -47,16 +47,23 @@ function App() {
   useEffect(() => {
     if (!isAuthenticated || !currentUser || !sessionId) return;
     
+    let isCurrentSession = true;
+    
     const unsubscribe = onSessionChange(currentUser.id, (firebaseSession) => {
       // If session exists in Firebase but sessionId doesn't match, session was transferred
-      if (firebaseSession && firebaseSession.sessionId !== sessionId) {
+      // Only trigger logout if this is not the current active session
+      if (firebaseSession && firebaseSession.sessionId !== sessionId && isCurrentSession) {
         setSessionTransferred(true);
+        isCurrentSession = false; // Prevent multiple logout calls
         // Logout without removing Firebase session (already transferred)
-        logout();
+        logout(true); // Skip Firebase removal since session was transferred
       }
     });
     
-    return unsubscribe;
+    return () => {
+      isCurrentSession = false;
+      unsubscribe();
+    };
   }, [isAuthenticated, currentUser, sessionId, logout]);
 
   // Update activity on user interactions
@@ -193,8 +200,10 @@ function App() {
   return (
     <>
       <Routes>
-        {/* Admin route */}
-        <Route path="/admin" element={<AdminPage onBack={() => window.history.back()} />} />
+        {/* Admin route - protected, only accessible by admin users */}
+        <Route path="/admin" element={
+          isAdmin() ? <AdminPage onBack={() => window.history.back()} /> : <Navigate to="/session" replace />
+        } />
         
         {/* Create session route */}
         <Route path="/create-session" element={<SessionSetupPage />} />
