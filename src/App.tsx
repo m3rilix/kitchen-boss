@@ -11,18 +11,20 @@ import { ActivityLog } from '@/components/ActivityLog';
 import { LoginPage } from '@/components/LoginPage';
 import { AdminPage } from '@/components/AdminPage';
 import { SharedSessionView } from '@/components/SharedSessionView';
-import { getShareCodeFromUrl, clearShareCodeFromUrl, subscribeToSession } from '@/lib/firebase';
+import { SessionTransferredModal } from '@/components/SessionTransferModal';
+import { getShareCodeFromUrl, clearShareCodeFromUrl, subscribeToSession, onSessionChange } from '@/lib/firebase';
 import { Plus } from 'lucide-react';
 import type { Session } from '@/types';
 
 function App() {
   const { session, addCourt, shareCode, syncToFirebase } = useSessionStore();
-  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout, validateAndCleanupSession } = useAuthStore();
+  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout, validateAndCleanupSession, currentUser, sessionId, logout } = useAuthStore();
   const theme = useThemeClasses();
   const [showAdmin, setShowAdmin] = useState(false);
   const [sharedSession, setSharedSession] = useState<Session | null>(null);
   const [viewingShareCode, setViewingShareCode] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [sessionTransferred, setSessionTransferred] = useState(false);
 
   // Session timeout check and validation - runs every minute
   useEffect(() => {
@@ -47,6 +49,22 @@ function App() {
     
     return () => clearInterval(interval);
   }, [isAuthenticated, checkSessionTimeout, validateAndCleanupSession]);
+
+  // Listen for session changes (detect session transfer)
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser || !sessionId) return;
+    
+    const unsubscribe = onSessionChange(currentUser.id, (firebaseSession) => {
+      // If session exists in Firebase but sessionId doesn't match, session was transferred
+      if (firebaseSession && firebaseSession.sessionId !== sessionId) {
+        setSessionTransferred(true);
+        // Logout without removing Firebase session (already transferred)
+        logout();
+      }
+    });
+    
+    return unsubscribe;
+  }, [isAuthenticated, currentUser, sessionId, logout]);
 
   // Update activity on user interactions
   useEffect(() => {
@@ -208,6 +226,16 @@ function App() {
           </div>
         </div>
       </main>
+
+      {/* Session Transferred Modal */}
+      {sessionTransferred && (
+        <SessionTransferredModal
+          onClose={async () => {
+            setSessionTransferred(false);
+            await logout();
+          }}
+        />
+      )}
     </div>
   );
 }

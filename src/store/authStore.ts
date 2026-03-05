@@ -47,7 +47,7 @@ interface AuthStore {
   sessionId: string | null;
 
   // Auth actions
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string, forceTransfer?: boolean) => Promise<boolean | { existingSession: any }>;
   register: (email: string, password: string, name: string) => Promise<boolean>;
   loginAsGuest: () => void;
   logout: () => Promise<void>;
@@ -153,36 +153,39 @@ export const useAuthStore = create<AuthStore>()(
       lastActivityAt: null,
       sessionId: null,
 
-      login: async (email: string, password: string) => {
+      login: async (email: string, password: string, forceTransfer: boolean = false) => {
         set({ isLoading: true, error: null });
         
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 500));
         
         const { users } = get();
-        const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-        
+        const user = users.find(u => u.email === email);
+
         if (!user) {
           set({ isLoading: false, error: 'User not found' });
           return false;
         }
 
-        // Check if user is already logged in elsewhere (single session enforcement)
-        try {
-          const { getActiveSession } = await import('@/lib/firebase');
-          const existingSession = await getActiveSession(user.id);
-          
-          if (existingSession) {
-            // Check if the existing session is still active (within timeout)
-            const timeSinceActivity = Date.now() - existingSession.lastActivity;
-            if (timeSinceActivity < SESSION_TIMEOUT_MS) {
-              set({ isLoading: false, error: 'This account is already logged in on another device/browser. Please wait for that session to expire or log out from there.' });
-              return false;
+        // Check if user is already logged in elsewhere
+        if (!forceTransfer) {
+          try {
+            const { getActiveSession } = await import('@/lib/firebase');
+            const existingSession = await getActiveSession(user.id);
+            
+            if (existingSession) {
+              // Check if the existing session is still active (within timeout)
+              const timeSinceActivity = Date.now() - existingSession.lastActivity;
+              if (timeSinceActivity < SESSION_TIMEOUT_MS) {
+                // Return existing session info for confirmation dialog
+                set({ isLoading: false });
+                return { existingSession };
+              }
             }
+          } catch (error) {
+            console.error('Error checking active session:', error);
+            // Continue with login if Firebase check fails
           }
-        } catch (error) {
-          console.error('Error checking active session:', error);
-          // Continue with login if Firebase check fails
         }
 
         // Get stored credentials
@@ -225,11 +228,13 @@ export const useAuthStore = create<AuthStore>()(
         
         // Store active session in Firebase
         try {
-          const { storeActiveSession } = await import('@/lib/firebase');
+          const { storeActiveSession, getDeviceInfo } = await import('@/lib/firebase');
           await storeActiveSession(user.id, {
             sessionId: newSessionId,
             lastActivity: now,
-            userAgent: navigator.userAgent
+            loginTime: now,
+            userAgent: navigator.userAgent,
+            deviceInfo: getDeviceInfo()
           });
         } catch (error) {
           console.error('Error storing active session:', error);

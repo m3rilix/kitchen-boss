@@ -4,6 +4,7 @@ import { useThemeClasses } from '@/store/themeStore';
 import { PickleballIcon } from './PickleballIcon';
 import { LogIn, UserPlus, Mail, Lock, User, AlertCircle, UserCircle } from 'lucide-react';
 import { SettingsDropdown } from './SettingsDropdown';
+import { SessionTransferModal } from './SessionTransferModal';
 
 export function LoginPage() {
   const { login, register, loginAsGuest, isLoading, error } = useAuthStore();
@@ -13,8 +14,10 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [localError, setLocalError] = useState('');
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [existingSessionInfo, setExistingSessionInfo] = useState<any>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, forceTransfer: boolean = false) => {
     e.preventDefault();
     setLocalError('');
 
@@ -36,8 +39,25 @@ export function LoginPage() {
     if (isRegister) {
       await register(email, password, name);
     } else {
-      await login(email, password);
+      const result = await login(email, password, forceTransfer);
+      
+      // Check if result is an existing session object
+      if (result && typeof result === 'object' && 'existingSession' in result) {
+        setExistingSessionInfo(result.existingSession);
+        setShowTransferModal(true);
+      }
     }
+  };
+
+  const handleTransferConfirm = async () => {
+    setShowTransferModal(false);
+    // Login with force transfer
+    await login(email, password, true);
+  };
+
+  const handleTransferCancel = () => {
+    setShowTransferModal(false);
+    setExistingSessionInfo(null);
   };
 
   const displayError = localError || error;
@@ -211,6 +231,15 @@ export function LoginPage() {
       <div className="fixed top-4 right-4">
         <SettingsDropdown />
       </div>
+
+      {/* Session Transfer Modal */}
+      {showTransferModal && existingSessionInfo && (
+        <SessionTransferModal
+          deviceInfo={existingSessionInfo.deviceInfo || 'Unknown Device'}
+          onConfirm={handleTransferConfirm}
+          onCancel={handleTransferCancel}
+        />
+      )}
     </div>
   );
 }

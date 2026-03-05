@@ -126,7 +126,8 @@ export interface ActiveSession {
   sessionId: string;
   lastActivity: number;
   userAgent?: string;
-  ipAddress?: string;
+  deviceInfo?: string;
+  loginTime?: number;
 }
 
 // Store active session in Firebase
@@ -192,4 +193,36 @@ export async function updateSessionActivity(userId: string): Promise<void> {
     console.error('Firebase updateSessionActivity error:', error);
     // Don't throw error for activity updates to avoid disrupting user experience
   }
+}
+
+// Listen for session changes (for detecting session transfers)
+export function onSessionChange(userId: string, callback: (session: ActiveSession | null) => void): () => void {
+  const sessionRef = ref(database, `activeSessions/${userId}`);
+  const unsubscribe = onValue(sessionRef, (snapshot) => {
+    const session = snapshot.exists() ? snapshot.val() as ActiveSession : null;
+    callback(session);
+  });
+  return unsubscribe;
+}
+
+// Get device/browser info for display
+export function getDeviceInfo(): string {
+  const ua = navigator.userAgent;
+  let browser = 'Unknown Browser';
+  let os = 'Unknown OS';
+  
+  // Detect browser
+  if (ua.indexOf('Chrome') > -1 && ua.indexOf('Edg') === -1) browser = 'Chrome';
+  else if (ua.indexOf('Safari') > -1 && ua.indexOf('Chrome') === -1) browser = 'Safari';
+  else if (ua.indexOf('Firefox') > -1) browser = 'Firefox';
+  else if (ua.indexOf('Edg') > -1) browser = 'Edge';
+  
+  // Detect OS
+  if (ua.indexOf('Win') > -1) os = 'Windows';
+  else if (ua.indexOf('Mac') > -1) os = 'macOS';
+  else if (ua.indexOf('Linux') > -1) os = 'Linux';
+  else if (ua.indexOf('Android') > -1) os = 'Android';
+  else if (ua.indexOf('iOS') > -1 || ua.indexOf('iPhone') > -1 || ua.indexOf('iPad') > -1) os = 'iOS';
+  
+  return `${browser} on ${os}`;
 }
