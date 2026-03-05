@@ -17,18 +17,22 @@ import type { Session } from '@/types';
 
 function App() {
   const { session, addCourt, shareCode, syncToFirebase } = useSessionStore();
-  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout } = useAuthStore();
+  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout, validateAndCleanupSession } = useAuthStore();
   const theme = useThemeClasses();
   const [showAdmin, setShowAdmin] = useState(false);
   const [sharedSession, setSharedSession] = useState<Session | null>(null);
   const [viewingShareCode, setViewingShareCode] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
 
-  // Session timeout check - runs every minute
+  // Session timeout check and validation - runs every minute
   useEffect(() => {
     if (!isAuthenticated) return;
     
     const checkTimeout = async () => {
+      // First check if session is still valid (not force logged out by admin)
+      await validateAndCleanupSession();
+      
+      // Then check for timeout
       const timedOut = await checkSessionTimeout();
       if (timedOut) {
         setSessionExpired(true);
@@ -42,7 +46,7 @@ function App() {
     const interval = setInterval(checkTimeout, 60 * 1000);
     
     return () => clearInterval(interval);
-  }, [isAuthenticated, checkSessionTimeout]);
+  }, [isAuthenticated, checkSessionTimeout, validateAndCleanupSession]);
 
   // Update activity on user interactions
   useEffect(() => {

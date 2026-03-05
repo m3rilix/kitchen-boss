@@ -57,6 +57,7 @@ interface AuthStore {
   updateActivity: () => Promise<void>;
   checkSessionTimeout: () => Promise<boolean>;
   isSessionValid: () => Promise<boolean>;
+  validateAndCleanupSession: () => Promise<void>;
   
   // User management (admin)
   getAllUsers: () => User[];
@@ -399,6 +400,20 @@ export const useAuthStore = create<AuthStore>()(
         }
         
         return true;
+      },
+
+      validateAndCleanupSession: async () => {
+        const { isAuthenticated, currentUser, logout } = get();
+        
+        if (!isAuthenticated || !currentUser) return;
+        
+        // Check if session is still valid
+        const isValid = await get().isSessionValid();
+        
+        if (!isValid) {
+          // Session is no longer valid (force logged out by admin), logout user
+          await logout();
+        }
       },
 
       getAllUsers: () => {
