@@ -176,7 +176,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
           </div>
 
           {/* User Rows */}
-          <div className="divide-y divide-slate-100 dark:divide-slate-700">
+          <div className="divide-y divide-slate-100 dark:divide-slate-700 overflow-y-auto relative">
             {users.map((user) => (
               <div 
                 key={user.id} 
@@ -287,7 +287,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
                   {/* Dropdown Menu */}
                   {selectedUser === user.id && (
-                    <div className="absolute right-0 top-8 w-48 bg-white dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg z-10">
+                    <div className="absolute right-0 top-8 w-48 bg-white dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-lg z-50">
                       <button
                         onClick={() => {
                           setShowExtendModal(user.id);
