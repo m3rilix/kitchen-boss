@@ -1,26 +1,19 @@
 import { useState, useEffect } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useSessionStore } from '@/store/sessionStore';
-import { useThemeClasses } from '@/store/themeStore';
 import { useAuthStore } from '@/store/authStore';
-import { SessionSetup } from '@/components/SessionSetup';
-import { CourtView } from '@/components/CourtView';
-import { PlayerQueue } from '@/components/PlayerQueue';
-import { PlayerList } from '@/components/PlayerList';
-import { SessionHeader } from '@/components/SessionHeader';
-import { ActivityLog } from '@/components/ActivityLog';
 import { LoginPage } from '@/components/LoginPage';
 import { AdminPage } from '@/components/AdminPage';
+import { SessionSetupPage } from '@/components/SessionSetupPage';
+import { SessionViewPage } from '@/components/SessionViewPage';
 import { SharedSessionView } from '@/components/SharedSessionView';
 import { SessionTransferredModal } from '@/components/SessionTransferModal';
 import { getShareCodeFromUrl, clearShareCodeFromUrl, subscribeToSession, onSessionChange } from '@/lib/firebase';
-import { Plus } from 'lucide-react';
 import type { Session } from '@/types';
 
 function App() {
-  const { session, addCourt, shareCode, syncToFirebase } = useSessionStore();
-  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout, validateAndCleanupSession, currentUser, sessionId, logout } = useAuthStore();
-  const theme = useThemeClasses();
-  const [showAdmin, setShowAdmin] = useState(false);
+  const { session, shareCode, syncToFirebase } = useSessionStore();
+  const { isAuthenticated, isAccessValid, updateActivity, checkSessionTimeout, validateAndCleanupSession, currentUser, sessionId, logout } = useAuthStore();
   const [sharedSession, setSharedSession] = useState<Session | null>(null);
   const [viewingShareCode, setViewingShareCode] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -138,7 +131,19 @@ function App() {
 
   // Show login if not authenticated
   if (!isAuthenticated) {
-    return <LoginPage />;
+    return (
+      <>
+        <LoginPage />
+        {sessionTransferred && (
+          <SessionTransferredModal
+            onClose={async () => {
+              setSessionTransferred(false);
+              await logout();
+            }}
+          />
+        )}
+      </>
+    );
   }
 
   // Show session expired message
@@ -184,48 +189,24 @@ function App() {
     );
   }
 
-  // Show admin page if requested
-  if (showAdmin && isAdmin()) {
-    return <AdminPage onBack={() => setShowAdmin(false)} />;
-  }
-
-  if (!session) {
-    return <SessionSetup onAdminClick={isAdmin() ? () => setShowAdmin(true) : undefined} />;
-  }
-
+  // Main app with routing
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors">
-      <SessionHeader onAdminClick={isAdmin() ? () => setShowAdmin(true) : undefined} />
-      
-      <main className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Courts Section */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Courts</h2>
-              <button
-                onClick={addCourt}
-                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium ${theme.textButton} ${theme.bgButton} rounded-lg transition`}
-              >
-                <Plus className="w-4 h-4" />
-                Add Court
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {session.courts.map((court) => (
-                <CourtView key={court.id} court={court} />
-              ))}
-            </div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            <PlayerQueue />
-            <PlayerList />
-            <ActivityLog />
-          </div>
-        </div>
-      </main>
+    <>
+      <Routes>
+        {/* Admin route */}
+        <Route path="/admin" element={<AdminPage onBack={() => window.history.back()} />} />
+        
+        {/* Create session route */}
+        <Route path="/create-session" element={<SessionSetupPage />} />
+        
+        {/* Active session route */}
+        <Route path="/session" element={<SessionViewPage onAdminClick={() => window.location.href = '/admin'} />} />
+        
+        {/* Default route - redirect based on session state */}
+        <Route path="/" element={
+          session ? <Navigate to="/session" replace /> : <Navigate to="/create-session" replace />
+        } />
+      </Routes>
 
       {/* Session Transferred Modal */}
       {sessionTransferred && (
@@ -236,7 +217,7 @@ function App() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }
 
