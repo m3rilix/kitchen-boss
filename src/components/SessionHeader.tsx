@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import { useAuthStore } from '@/store/authStore';
-import { LogOut, Users, Clock, Shield, QrCode, RotateCcw, Pencil, Check, X } from 'lucide-react';
+import { LogOut, Users, Clock, Shield, Share2, RotateCcw, Pencil, Check, X, XCircle } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { ShareSessionModal } from './ShareSessionModal';
@@ -156,7 +156,7 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
               className={`p-2 ${theme.bgButton} rounded-lg transition`}
               title="Share Session"
             >
-              <QrCode className={`w-4 h-4 ${theme.text}`} />
+              <Share2 className={`w-4 h-4 ${theme.text}`} />
             </button>
 
             {/* Admin */}
@@ -200,7 +200,7 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition"
               title="End Session"
             >
-              <LogOut className="w-4 h-4" />
+              <XCircle className="w-4 h-4" />
               <span className="hidden lg:inline">End</span>
             </button>
           </div>

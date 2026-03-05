@@ -268,16 +268,17 @@ export const useAuthStore = create<AuthStore>()(
           return false;
         }
 
-        // Create new user with 30-day trial
+        // Create new user with 24-hour trial
         const now = new Date();
+        const endDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
         const newUser: User = {
           id: generateId(),
           email: email.toLowerCase(),
           name,
           role: 'user',
-          accessTier: '30_days',
+          accessTier: '30_days', // Keep tier name for compatibility
           accessStartDate: now.toISOString(),
-          accessEndDate: calculateEndDate('30_days', now),
+          accessEndDate: endDate.toISOString(),
           createdAt: now.toISOString(),
           lastLoginAt: now.toISOString(),
           isActive: true,

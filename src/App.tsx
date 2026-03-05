@@ -136,21 +136,21 @@ function App() {
     );
   }
 
-  // Show session transferred modal (before login check)
-  if (sessionTransferred) {
-    return (
-      <SessionTransferredModal
-        onClose={async () => {
-          setSessionTransferred(false);
-          await logout();
-        }}
-      />
-    );
-  }
-
   // Show login if not authenticated
   if (!isAuthenticated) {
-    return <LoginPage />;
+    return (
+      <>
+        <LoginPage />
+        {/* Only show transfer modal if user is not authenticated AND session was transferred */}
+        {sessionTransferred && (
+          <SessionTransferredModal
+            onClose={() => {
+              setSessionTransferred(false);
+            }}
+          />
+        )}
+      </>
+    );
   }
 
   // Show session expired message
