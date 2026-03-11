@@ -124,15 +124,18 @@ export function PlayerList() {
           break;
         case 'waitTime':
           // Only compare waiting times for players actually waiting (waitingSince > 0)
-          // Players in game (waitingSince = 0) should be considered as not waiting at all
-          if (a.waitingSince === 0 && b.waitingSince === 0) {
-            result = 0;
-          } else if (a.waitingSince === 0) {
-            result = 1; // a is in game, b is waiting
-          } else if (b.waitingSince === 0) {
-            result = -1; // b is in game, a is waiting
+          // Players in game (waitingSince = 0) or removed (waitingSince < 0) go to the end
+          const aNotWaiting = a.waitingSince <= 0;
+          const bNotWaiting = b.waitingSince <= 0;
+          if (aNotWaiting && bNotWaiting) {
+            // Both not waiting - removed players (-1) go after in-game players (0)
+            result = a.waitingSince - b.waitingSince;
+          } else if (aNotWaiting) {
+            result = 1; // a is not waiting, b is waiting - b comes first
+          } else if (bNotWaiting) {
+            result = -1; // b is not waiting, a is waiting - a comes first
           } else {
-            // Lower waitingSince = waiting longer
+            // Both waiting - lower waitingSince = waiting longer = higher priority
             result = a.waitingSince - b.waitingSince;
           }
           break;
@@ -154,7 +157,7 @@ export function PlayerList() {
 
   // Check if player is waiting significantly longer than average (10+ minutes above average)
   const isWaitingTooLong = (_playerId: string, waitingSince: number): boolean => {
-    if (waitingSince === 0) return false; // In game
+    if (waitingSince <= 0) return false; // In game (0) or removed from queue (-1)
     if (waitingPlayers.length <= 1) return false; // Not enough players to compare
     
     // Player is waiting 10+ minutes longer than average

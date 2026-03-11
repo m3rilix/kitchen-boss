@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
-import { X, Search, Trophy, TrendingDown, Layers, ChevronsUp, ChevronsDown, GripVertical, Star, Users, Zap, Rocket, Play } from 'lucide-react';
+import { X, Search, Trophy, TrendingDown, Layers, ChevronsUp, ChevronsDown, GripVertical, Star, Users, Zap, Rocket, Play, Shuffle, Plus, Check, Trash2 } from 'lucide-react';
 import type { Player } from '@/types';
 
-type StackType = 'ready' | 'forming-winners' | 'forming-losers' | 'forming-free' | 'winners' | 'losers';
+type StackType = 'ready' | 'forming-winners' | 'forming-losers' | 'forming-free' | 'winners' | 'losers' | 'custom';
 
 interface StackGroup {
   id: string;
@@ -12,14 +12,17 @@ interface StackGroup {
   type: StackType;
   label: string;
   isForming: boolean;
+  customIndex?: number; // For custom stacks
 }
 
 export function PlayerQueue() {
-  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, nextStackPlayerIds, setNextStackPlayerIds, startGame } = useSessionStore();
+  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, nextStackPlayerIds, setNextStackPlayerIds, startGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime } = useSessionStore();
   const theme = useThemeClasses();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set(['forming-winners', 'forming-losers', 'forming-free', 'forming-mixed']));
   const [draggedPlayerId, setDraggedPlayerId] = useState<string | null>(null);
+  const [isCreatingCustomStack, setIsCreatingCustomStack] = useState(false);
+  const [customStackSelection, setCustomStackSelection] = useState<string[]>([]);
 
   if (!session) return null;
 
@@ -181,8 +184,21 @@ export function PlayerQueue() {
       stack.label = `Stack ${stackNum}`;
     });
     
-    return [...readyStacks, ...formingStacksList];
-  }, [session.players, session.winnerStack, session.loserStack, session.waitingStack, stackCounter]);
+    // Build custom stacks from session
+    const customStackGroups: StackGroup[] = (session.customStacks || []).map((playerIds, idx) => ({
+      id: `custom-${idx}`,
+      players: playerIds
+        .map(id => session.players.find(p => p.id === id))
+        .filter((p): p is Player => p !== undefined),
+      type: 'custom' as StackType,
+      label: `Custom ${idx + 1}`,
+      isForming: false,
+      customIndex: idx,
+    })).filter(stack => stack.players.length === 4);
+    
+    // Custom stacks go first (highest priority), then ready stacks, then forming
+    return [...customStackGroups, ...readyStacks, ...formingStacksList];
+  }, [session.players, session.winnerStack, session.loserStack, session.waitingStack, session.customStacks, stackCounter]);
 
   // Filter stacks by search query
   const filteredStacks = useMemo(() => {
@@ -212,6 +228,7 @@ export function PlayerQueue() {
       case 'forming-losers': return 'border-orange-300 bg-orange-50/50 dark:bg-orange-900/10 border-dashed';
       case 'ready': return 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'; // Blue for starting/free ready stacks
       case 'forming-free': return 'border-slate-300 bg-slate-50 dark:bg-slate-700/50 border-dashed'; // Gray for mixed forming
+      case 'custom': return 'border-purple-400 bg-purple-50 dark:bg-purple-900/20'; // Purple for custom stacks
       default: return `${theme.border} ${theme.bg100}`;
     }
   };
@@ -228,6 +245,8 @@ export function PlayerQueue() {
         return <Zap className="w-4 h-4 text-blue-600" />; // Blue zap for ready stacks
       case 'forming-free': 
         return <Users className="w-4 h-4 text-slate-400" />; // Gray users for mixed forming
+      case 'custom':
+        return <Star className="w-4 h-4 text-purple-600" />; // Purple star for custom stacks
       default: 
         return <Layers className={`w-4 h-4 ${theme.text}`} />;
     }
@@ -366,22 +385,81 @@ export function PlayerQueue() {
                 </button>
               )}
             </div>
-            {/* Expand/Collapse buttons */}
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={expandAll}
-                className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1"
-              >
-                <ChevronsDown className="w-3 h-3" />
-                Expand All
-              </button>
-              <button
-                onClick={collapseAll}
-                className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1"
-              >
-                <ChevronsUp className="w-3 h-3" />
-                Collapse All
-              </button>
+            {/* Action buttons */}
+            <div className="flex justify-between items-center">
+              <div className="flex gap-2">
+                {/* Reshuffle by waiting time */}
+                <button
+                  onClick={reshuffleByWaitingTime}
+                  className="text-xs text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/20 rounded hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
+                  title="Reshuffle all stacks by waiting time"
+                >
+                  <Shuffle className="w-3 h-3" />
+                  Reshuffle
+                </button>
+                {/* Create custom stack */}
+                {!isCreatingCustomStack ? (
+                  <button
+                    onClick={() => setIsCreatingCustomStack(true)}
+                    className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1 px-2 py-1 bg-purple-50 dark:bg-purple-900/20 rounded hover:bg-purple-100 dark:hover:bg-purple-900/30 transition"
+                    title="Create a custom stack of 4 players"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Custom Stack
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-purple-600 dark:text-purple-400">
+                      Select {4 - customStackSelection.length} more
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (customStackSelection.length === 4) {
+                          createCustomStack(customStackSelection);
+                          setCustomStackSelection([]);
+                          setIsCreatingCustomStack(false);
+                        }
+                      }}
+                      disabled={customStackSelection.length !== 4}
+                      className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition ${
+                        customStackSelection.length === 4
+                          ? 'text-green-600 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:bg-green-900/20'
+                          : 'text-slate-400 bg-slate-100 cursor-not-allowed'
+                      }`}
+                    >
+                      <Check className="w-3 h-3" />
+                      Create
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCustomStackSelection([]);
+                        setIsCreatingCustomStack(false);
+                      }}
+                      className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 flex items-center gap-1 px-2 py-1 bg-red-50 dark:bg-red-900/20 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition"
+                    >
+                      <X className="w-3 h-3" />
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* Expand/Collapse buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={expandAll}
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1"
+                >
+                  <ChevronsDown className="w-3 h-3" />
+                  Expand
+                </button>
+                <button
+                  onClick={collapseAll}
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1"
+                >
+                  <ChevronsUp className="w-3 h-3" />
+                  Collapse
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -521,6 +599,19 @@ export function PlayerQueue() {
                       />
                     ))
                   )}
+                  {/* Delete button for custom stacks */}
+                  {stack.type === 'custom' && stack.customIndex !== undefined && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeCustomStack(stack.customIndex!);
+                      }}
+                      className="ml-1 p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remove custom stack"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                   {/* Play button for ready stacks when court is available */}
                   {!stack.isForming && stack.players.length === 4 && (() => {
                     const availableCourt = session.courts.find(c => c.status === 'available');
@@ -594,12 +685,35 @@ export function PlayerQueue() {
                           }
                           setDraggedPlayerId(null);
                         }}
-                        className={`flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-grab active:cursor-grabbing ${
-                          draggedPlayerId === player.id ? 'opacity-50' : ''
+                        onClick={() => {
+                          if (isCreatingCustomStack) {
+                            if (customStackSelection.includes(player.id)) {
+                              // Always allow deselection
+                              setCustomStackSelection(customStackSelection.filter(id => id !== player.id));
+                            } else if (customStackSelection.length < 4) {
+                              // Only add if less than 4 selected
+                              setCustomStackSelection([...customStackSelection, player.id]);
+                            }
+                          }
+                        }}
+                        className={`flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 ${
+                          isCreatingCustomStack ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+                        } ${draggedPlayerId === player.id ? 'opacity-50' : ''} ${
+                          customStackSelection.includes(player.id) ? 'bg-purple-100 dark:bg-purple-900/30 ring-2 ring-purple-400' : ''
                         }`}
                       >
-                        {/* Drag Handle */}
-                        <GripVertical className="w-4 h-4 text-slate-300 dark:text-slate-500 flex-shrink-0" />
+                        {/* Selection indicator or Drag Handle */}
+                        {isCreatingCustomStack ? (
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                            customStackSelection.includes(player.id)
+                              ? 'bg-purple-500 border-purple-500 text-white'
+                              : 'border-slate-300 dark:border-slate-500'
+                          }`}>
+                            {customStackSelection.includes(player.id) && <Check className="w-3 h-3" />}
+                          </div>
+                        ) : (
+                          <GripVertical className="w-4 h-4 text-slate-300 dark:text-slate-500 flex-shrink-0" />
+                        )}
                         
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                           getPlayerStatus(player.id) === 'winner' 

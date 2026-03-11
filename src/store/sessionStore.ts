@@ -61,6 +61,11 @@ interface SessionState {
   nextStackPlayerIds: string[] | null;
   setNextStackPlayerIds: (playerIds: string[] | null) => void;
   
+  // Custom stack management
+  createCustomStack: (playerIds: string[]) => void;
+  removeCustomStack: (index: number) => void;
+  reshuffleByWaitingTime: () => void;
+  
   // Validation
   isNameDuplicate: (name: string) => boolean;
   
@@ -611,6 +616,113 @@ export const useSessionStore = create<SessionState>()(
         return state.session.players.some(
           (p) => p.name.trim().toLowerCase() === normalizedName
         );
+      },
+
+      createCustomStack: (playerIds) => {
+        set((state) => {
+          if (!state.session) return state;
+          if (playerIds.length !== 4) return state;
+          
+          // Remove players from their current stacks
+          const newWinnerStack = state.session.winnerStack.filter(id => !playerIds.includes(id));
+          const newLoserStack = state.session.loserStack.filter(id => !playerIds.includes(id));
+          const newWaitingStack = state.session.waitingStack.filter(id => !playerIds.includes(id));
+          
+          // Add to custom stacks
+          const newCustomStacks = [...(state.session.customStacks || []), playerIds];
+          
+          // Get player names for log
+          const playerNames = playerIds
+            .map(id => state.session?.players.find(p => p.id === id)?.name || 'Unknown')
+            .join(', ');
+          
+          return {
+            session: {
+              ...state.session,
+              winnerStack: newWinnerStack,
+              loserStack: newLoserStack,
+              waitingStack: newWaitingStack,
+              customStacks: newCustomStacks,
+              activityLog: [
+                createLogEntry(
+                  'stack_moved',
+                  `Custom stack created: ${playerNames}`,
+                  { playerNames: playerNames.split(', ') }
+                ),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      removeCustomStack: (index) => {
+        set((state) => {
+          if (!state.session) return state;
+          if (!state.session.customStacks || index >= state.session.customStacks.length) return state;
+          
+          const stackToRemove = state.session.customStacks[index];
+          const newCustomStacks = state.session.customStacks.filter((_, i) => i !== index);
+          
+          // Add players back to waiting stack
+          const newWaitingStack = [...state.session.waitingStack, ...stackToRemove];
+          
+          return {
+            session: {
+              ...state.session,
+              customStacks: newCustomStacks,
+              waitingStack: newWaitingStack,
+              activityLog: [
+                createLogEntry(
+                  'stack_moved',
+                  `Custom stack removed, players returned to queue`,
+                  {}
+                ),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      reshuffleByWaitingTime: () => {
+        set((state) => {
+          if (!state.session) return state;
+          
+          // Get all players currently in stacks (not in game)
+          const allStackPlayers = [
+            ...state.session.winnerStack,
+            ...state.session.loserStack,
+            ...state.session.waitingStack,
+          ];
+          
+          // Get player objects and sort by waiting time (longest first)
+          const sortedPlayers = allStackPlayers
+            .map(id => state.session?.players.find(p => p.id === id))
+            .filter((p): p is Player => p !== undefined && p.waitingSince > 0)
+            .sort((a, b) => a.waitingSince - b.waitingSince); // Lower timestamp = waiting longer
+          
+          // Redistribute into stacks based on waiting time
+          // All go to waiting stack, sorted by wait time
+          const newWaitingStack = sortedPlayers.map(p => p.id);
+          
+          return {
+            session: {
+              ...state.session,
+              winnerStack: [],
+              loserStack: [],
+              waitingStack: newWaitingStack,
+              activityLog: [
+                createLogEntry(
+                  'stack_moved',
+                  `Stacks reshuffled by waiting time (${sortedPlayers.length} players)`,
+                  {}
+                ),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
       },
 
       startGame: (courtId, team1, team2, skippedQueue = false) => {
