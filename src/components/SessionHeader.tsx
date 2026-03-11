@@ -6,6 +6,7 @@ import { LogOut, Users, Clock, Shield, Share2, RotateCcw, Pencil, Check, X, XCir
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { ShareSessionModal } from './ShareSessionModal';
+import { BetaBanner } from './BetaBanner';
 
 interface SessionHeaderProps {
   onAdminClick?: () => void;
@@ -45,8 +46,10 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
   };
 
   return (
-    <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 transition-colors">
-      <div className="container mx-auto px-4 py-3">
+    <>
+      <BetaBanner />
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky z-10 transition-colors" style={{ top: timeRemaining ? '28px' : '0' }}>
+        <div className="container mx-auto px-4 py-3">
         {/* Main Row */}
         <div className="flex items-center justify-between gap-4">
           {/* Left: Logo + Title */}
@@ -300,6 +303,7 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
           </div>
         </div>
       )}
-    </header>
+      </header>
+    </>
   );
 }

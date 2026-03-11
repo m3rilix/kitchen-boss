@@ -288,15 +288,15 @@ export function PlayerQueue() {
     setDraggedPlayerId(null);
   };
 
-  // Handle drop on a stack container (for moving players between stacks - forming only)
+  // Handle drop on a stack container (for moving players between stacks)
   const handleStackDrop = (e: React.DragEvent, stack: StackGroup) => {
     e.preventDefault();
     e.currentTarget.classList.remove('ring-2', 'ring-blue-400');
     
     if (!draggedPlayerId) return;
     
-    // Only allow dropping on forming stacks
-    if (!stack.isForming) {
+    // Don't allow dropping on full stacks (4 players)
+    if (stack.players.length >= 4) {
       setDraggedPlayerId(null);
       return;
     }
@@ -392,7 +392,8 @@ export function PlayerQueue() {
               className={`rounded-lg border-2 overflow-hidden transition-all group ${getStackColor(stack.type)}`}
               onDragOver={(e) => {
                 e.preventDefault();
-                if (stack.isForming) {
+                // Show drop indicator if stack has less than 4 players
+                if (stack.players.length < 4 && draggedPlayerId) {
                   e.currentTarget.classList.add('ring-2', 'ring-blue-400');
                 }
               }}

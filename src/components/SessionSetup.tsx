@@ -6,6 +6,7 @@ import type { RotationMode } from '@/types';
 import { Users, RotateCcw, MapPin, Calendar, Clock, Shield, LogOut, ChevronDown, Lock } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
+import { BetaBanner } from './BetaBanner';
 
 interface SessionSetupProps {
   onAdminClick?: () => void;
@@ -90,8 +91,11 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex items-center justify-center p-4 transition-colors">
+      {/* Beta Banner */}
+      <BetaBanner />
+      
       {/* Top Bar */}
-      <div className="fixed top-0 left-0 right-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3">
+      <div className="fixed left-0 right-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3 z-40" style={{ top: timeRemaining ? '28px' : '0' }}>
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img 
