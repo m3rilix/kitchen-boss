@@ -23,6 +23,9 @@ interface RotationModeOption {
   subModes?: { value: SubMode; label: string; description: string; disabled?: boolean }[];
 }
 
+// Check if we're in dev mode
+const isDev = import.meta.env.DEV;
+
 const rotationModes: RotationModeOption[] = [
   {
     value: 'full_rotation',
@@ -39,7 +42,7 @@ const rotationModes: RotationModeOption[] = [
         value: 'full_rotation',
         label: 'Round Robin',
         description: 'Everyone plays with everyone (balanced rotation)',
-        disabled: true,
+        disabled: !isDev, // Enable in dev mode only
       },
     ],
   },

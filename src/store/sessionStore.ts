@@ -124,6 +124,9 @@ export const useSessionStore = create<SessionState>()(
             waitingStack: [],
             useSmartQueue: true, // Enable smart queue by default
             stackCounter: 0, // Tracks total stacks played
+            // Round Robin tracking
+            matchHistory: [],
+            customStacks: [],
           },
         });
       },

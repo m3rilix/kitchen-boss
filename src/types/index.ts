@@ -1,4 +1,4 @@
-export type RotationMode = 'winners_stay' | 'full_rotation' | 'king_of_court' | 'skill_based';
+export type RotationMode = 'winners_stay' | 'full_rotation' | 'round_robin' | 'king_of_court' | 'skill_based';
 
 export interface Player {
   id: string;
@@ -64,6 +64,14 @@ export interface ActivityLogEntry {
   };
 }
 
+// Match history entry for Round Robin tracking
+export interface MatchHistoryEntry {
+  team1: [string, string]; // Player IDs
+  team2: [string, string]; // Player IDs
+  timestamp: number;
+  courtId: string;
+}
+
 export interface Session {
   id: string;
   name: string;
@@ -79,12 +87,15 @@ export interface Session {
   createdAt: Date;
   isActive: boolean;
   shareCode?: string; // For session sharing
-  // Smart queue stacks
+  // Smart queue stacks (Win-Lose Stack mode)
   winnerStack: string[];   // Players who won their last game
   loserStack: string[];    // Players who lost their last game
   waitingStack: string[];  // New players or overflow
   useSmartQueue: boolean;  // Toggle between FIFO and smart queue
   stackCounter: number;    // Increments each time a stack is played (for naming)
+  // Round Robin tracking
+  matchHistory: MatchHistoryEntry[]; // All past matchups for variety tracking
+  customStacks: string[][];          // Manager-created custom stacks (array of player ID arrays)
 }
 
 export interface SessionConfig {
