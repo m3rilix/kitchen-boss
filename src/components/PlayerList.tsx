@@ -6,7 +6,8 @@ import { PickleballIcon } from './PickleballIcon';
 
 // Format waiting time - only show "Just joined" for players with 0 games
 const formatWaitTime = (waitingSince: number, gamesPlayed: number = 0): string => {
-  if (waitingSince === 0) return '';
+  if (waitingSince === 0) return ''; // In game
+  if (waitingSince < 0) return 'Not in queue'; // Removed from queue
   const now = Date.now();
   const waitMs = now - waitingSince;
   const minutes = Math.floor(waitMs / 60000);

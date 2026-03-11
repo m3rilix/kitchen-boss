@@ -87,10 +87,12 @@ export function PlayerQueue() {
     
     // For losers + free: combine them and sort by wait time (matches game selection logic)
     // This ensures the UI shows exactly what the game selection will pick
+    // waitingSince values: -1 = removed from queue, 0 = in game, >0 = waiting timestamp
     const allLosersAndFree = [...losers, ...free].sort((a, b) => {
-      if (a.waitingSince === 0 && b.waitingSince === 0) return 0;
-      if (a.waitingSince === 0) return 1;
-      if (b.waitingSince === 0) return -1;
+      // Players not in queue or in game go to the end
+      if (a.waitingSince <= 0 && b.waitingSince <= 0) return 0;
+      if (a.waitingSince <= 0) return 1;
+      if (b.waitingSince <= 0) return -1;
       return a.waitingSince - b.waitingSince;
     });
     
@@ -274,8 +276,17 @@ export function PlayerQueue() {
     
     if (!draggedPlayerId) return;
     
-    // Don't add if stack already has 4 players
-    if (stack.players.length >= 4) {
+    // Check if player is already in this stack
+    const isAlreadyInStack = stack.players.some(p => p.id === draggedPlayerId);
+    
+    // Don't add if stack already has 4 players (unless player is already in this stack)
+    if (stack.players.length >= 4 && !isAlreadyInStack) {
+      setDraggedPlayerId(null);
+      return;
+    }
+    
+    // Don't move if player is already in this stack
+    if (isAlreadyInStack) {
       setDraggedPlayerId(null);
       return;
     }
@@ -295,8 +306,17 @@ export function PlayerQueue() {
     
     if (!draggedPlayerId) return;
     
-    // Don't allow dropping on full stacks (4 players)
-    if (stack.players.length >= 4) {
+    // Check if player is already in this stack
+    const isAlreadyInStack = stack.players.some(p => p.id === draggedPlayerId);
+    
+    // Don't allow dropping on full stacks (4 players) unless player is already in this stack
+    if (stack.players.length >= 4 && !isAlreadyInStack) {
+      setDraggedPlayerId(null);
+      return;
+    }
+    
+    // Don't move if player is already in this stack
+    if (isAlreadyInStack) {
       setDraggedPlayerId(null);
       return;
     }

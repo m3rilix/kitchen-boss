@@ -365,6 +365,13 @@ export const useSessionStore = create<SessionState>()(
       removeFromQueue: (playerId) => {
         set((state) => {
           if (!state.session) return state;
+          
+          // Set waitingSince to -1 to indicate player was removed from queue
+          // This helps distinguish "not waiting" from "in game" (which is 0)
+          const updatedPlayers = state.session.players.map(p =>
+            p.id === playerId ? { ...p, waitingSince: -1 } : p
+          );
+          
           return {
             session: {
               ...state.session,
@@ -373,6 +380,7 @@ export const useSessionStore = create<SessionState>()(
               winnerStack: state.session.winnerStack.filter((id) => id !== playerId),
               loserStack: state.session.loserStack.filter((id) => id !== playerId),
               waitingStack: state.session.waitingStack.filter((id) => id !== playerId),
+              players: updatedPlayers,
             },
           };
         });
@@ -1132,12 +1140,17 @@ export const useSessionStore = create<SessionState>()(
           const updatedQueue = [...newQueue, oldPlayerId];
 
           // Update waitingSince for both players
+          // For swapped-out player: preserve their original waiting time from the new player
+          // This ensures they don't lose their queue position unfairly
+          const newPlayerWaitingSince = newPlayer.waitingSince;
           const updatedPlayers = state.session.players.map(p => {
             if (p.id === newPlayerId) {
               return { ...p, waitingSince: 0 }; // In game now
             }
             if (p.id === oldPlayerId) {
-              return { ...p, waitingSince: Date.now() }; // Back in queue
+              // Inherit the waiting time from the player who replaced them
+              // This is fair because the swapped-out player was already playing
+              return { ...p, waitingSince: newPlayerWaitingSince || Date.now() };
             }
             return p;
           });
