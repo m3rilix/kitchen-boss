@@ -12,7 +12,7 @@ interface SessionSetupProps {
   onAdminClick?: () => void;
 }
 
-type SubMode = 'win_lose_stack' | 'full_rotation';
+type SubMode = 'win_lose_stack' | 'full_rotation' | 'round_robin';
 
 interface RotationModeOption {
   value: RotationMode;
@@ -39,7 +39,7 @@ const rotationModes: RotationModeOption[] = [
         description: 'Winners play winners, losers play losers',
       },
       {
-        value: 'full_rotation',
+        value: 'round_robin',
         label: 'Round Robin',
         description: 'Everyone plays with everyone (balanced rotation)',
         disabled: !isDev, // Enable in dev mode only
@@ -87,7 +87,10 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createSession({ name, location, date, time, courtCount, rotationMode });
+    // Use subMode if parent mode has subModes, otherwise use rotationMode
+    const selectedMode = rotationModes.find(m => m.value === rotationMode);
+    const effectiveMode = selectedMode?.hasSubModes ? subMode : rotationMode;
+    createSession({ name, location, date, time, courtCount, rotationMode: effectiveMode as RotationMode });
   };
 
   const timeRemaining = getTimeRemaining();
