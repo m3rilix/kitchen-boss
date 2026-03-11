@@ -664,8 +664,18 @@ export const useSessionStore = create<SessionState>()(
           const stackToRemove = state.session.customStacks[index];
           const newCustomStacks = state.session.customStacks.filter((_, i) => i !== index);
           
-          // Add players back to waiting stack
-          const newWaitingStack = [...state.session.waitingStack, ...stackToRemove];
+          // Get players currently in a game
+          const playersInGame = new Set<string>();
+          state.session.courts.forEach((court) => {
+            if (court.currentGame) {
+              court.currentGame.team1.forEach((id) => playersInGame.add(id));
+              court.currentGame.team2.forEach((id) => playersInGame.add(id));
+            }
+          });
+          
+          // Only add players back to waiting stack if they're not in a game
+          const playersToReturn = stackToRemove.filter(id => !playersInGame.has(id));
+          const newWaitingStack = [...state.session.waitingStack, ...playersToReturn];
           
           return {
             session: {
@@ -675,7 +685,7 @@ export const useSessionStore = create<SessionState>()(
               activityLog: [
                 createLogEntry(
                   'stack_moved',
-                  `Custom stack removed, players returned to queue`,
+                  `Custom stack removed, ${playersToReturn.length} players returned to queue`,
                   {}
                 ),
                 ...state.session.activityLog,

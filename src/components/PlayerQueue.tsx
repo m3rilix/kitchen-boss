@@ -16,7 +16,7 @@ interface StackGroup {
 }
 
 export function PlayerQueue() {
-  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, nextStackPlayerIds, setNextStackPlayerIds, startGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime } = useSessionStore();
+  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, startGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime } = useSessionStore();
   const theme = useThemeClasses();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set(['forming-winners', 'forming-losers', 'forming-free', 'forming-mixed']));
@@ -27,6 +27,18 @@ export function PlayerQueue() {
   if (!session) return null;
 
   const queuedPlayers = getPlayersInQueue();
+
+  // Get players currently in a game
+  const playersInGame = useMemo(() => {
+    const inGame = new Set<string>();
+    session.courts.forEach((court) => {
+      if (court.currentGame) {
+        court.currentGame.team1.forEach((id) => inGame.add(id));
+        court.currentGame.team2.forEach((id) => inGame.add(id));
+      }
+    });
+    return inGame;
+  }, [session.courts]);
 
   // Stack counter from session (tracks total stacks played)
   const stackCounter = session.stackCounter ?? 0;
@@ -544,58 +556,45 @@ export function PlayerQueue() {
                       Drop to add
                     </span>
                   )}
-                  {/* Show "Next" badge on the selected stack or first ready stack */}
-                  {!stack.isForming && !draggedPlayerId && stack.players.length === 4 && (() => {
-                    // Check if this specific stack is selected (by comparing player IDs)
-                    const stackPlayerIds = stack.players.map(p => p.id);
-                    const isSelected = nextStackPlayerIds && 
-                      nextStackPlayerIds.length === 4 &&
-                      stackPlayerIds.every(id => nextStackPlayerIds.includes(id));
+                  {/* Show "Next" badge on first ready stack (marker only, not for custom stacks) */}
+                  {!stack.isForming && !draggedPlayerId && stack.players.length === 4 && stack.type !== 'custom' && (() => {
+                    // Get non-custom ready stacks only
+                    const readyStacksOnly = filteredStacks.filter(s => !s.isForming && s.players.length === 4 && s.type !== 'custom');
+                    const isFirstReadyStack = readyStacksOnly.length > 0 && readyStacksOnly[0].id === stack.id;
                     
-                    // Check if stored selection is still valid (matches any ready stack)
-                    const readyStacksOnly = filteredStacks.filter(s => !s.isForming && s.players.length === 4);
-                    const selectionStillValid = nextStackPlayerIds && readyStacksOnly.some(s => 
-                      s.players.map(p => p.id).every(id => nextStackPlayerIds.includes(id))
-                    );
+                    // Check if any player in this stack is in game
+                    const hasPlayerInGame = stack.players.some(p => playersInGame.has(p.id));
                     
-                    // Show "Next" on first stack if no selection or selection is invalid
-                    const isFirstAndNoValidSelection = (!nextStackPlayerIds || !selectionStillValid) && stackIdx === 0;
-                    
-                    return (isSelected || isFirstAndNoValidSelection) ? (
+                    // Only show "Next" on first non-custom ready stack without players in game
+                    return isFirstReadyStack && !hasPlayerInGame ? (
                       <span className={`text-xs px-1.5 py-0.5 rounded ${theme.bg600} text-white flex items-center gap-1`}>
                         <Star className="w-3 h-3" />
                         Next
                       </span>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNextStackPlayerIds(stackPlayerIds);
-                        }}
-                        className="p-1 text-slate-400 hover:text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Set as next stack"
-                      >
-                        <Star className="w-4 h-4" />
-                      </button>
-                    );
+                    ) : null;
                   })()}
                 </div>
                 <div className="flex items-center gap-1">
-                  {stack.players.slice(0, 4).map((p) => (
-                    <div
-                      key={p.id}
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        getPlayerStatus(p.id) === 'winner' 
-                          ? 'bg-green-200 text-green-700'
-                          : getPlayerStatus(p.id) === 'loser'
-                            ? 'bg-orange-200 text-orange-700'
-                            : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
-                      }`}
-                      title={p.name}
-                    >
-                      {p.name.charAt(0).toUpperCase()}
-                    </div>
-                  ))}
+                  {stack.players.slice(0, 4).map((p) => {
+                    const isInGame = playersInGame.has(p.id);
+                    return (
+                      <div
+                        key={p.id}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          isInGame 
+                            ? 'bg-blue-200 text-blue-700 opacity-50'
+                            : getPlayerStatus(p.id) === 'winner' 
+                              ? 'bg-green-200 text-green-700'
+                              : getPlayerStatus(p.id) === 'loser'
+                                ? 'bg-orange-200 text-orange-700'
+                                : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                        }`}
+                        title={isInGame ? `${p.name} (Playing)` : p.name}
+                      >
+                        {p.name.charAt(0).toUpperCase()}
+                      </div>
+                    );
+                  })}
                   {stack.players.length < 4 && (
                     Array.from({ length: 4 - stack.players.length }).map((_, i) => (
                       <div
@@ -623,6 +622,10 @@ export function PlayerQueue() {
                     if (!availableCourt) return null;
                     
                     const players = stack.players;
+                    // Check if any player in this stack is already in a game
+                    const hasPlayerInGame = players.some(p => playersInGame.has(p.id));
+                    if (hasPlayerInGame) return null; // Don't show play button if any player is in game
+                    
                     // Check if this is not the first ready stack (skipping the queue)
                     const readyStacksOnly = filteredStacks.filter(s => !s.isForming && s.players.length === 4);
                     const isFirstReadyStack = readyStacksOnly.length > 0 && readyStacksOnly[0].id === stack.id;
@@ -655,17 +658,22 @@ export function PlayerQueue() {
                 </div>
               </div>
 
-              {/* Expanded Player List - first ready stack is always expanded */}
+              {/* Expanded Player List - first ready stack is always expanded, custom stacks can be expanded */}
               {(expandedStacks.has(stack.id) || (!stack.isForming && stack.players.length === 4 && stackIdx === 0)) && (
                 <div className="border-t border-slate-200 dark:border-slate-600 bg-white/50 dark:bg-slate-800/50">
                   {stack.players.map((player) => {
                     const globalIdx = getGlobalIndex(player.id);
+                    const isPlayerInGame = playersInGame.has(player.id);
                     
                     return (
                       <div
                         key={player.id}
-                        draggable
+                        draggable={!isPlayerInGame}
                         onDragStart={(e) => {
+                          if (isPlayerInGame) {
+                            e.preventDefault();
+                            return;
+                          }
                           setDraggedPlayerId(player.id);
                           // Set drag data for court drops
                           e.dataTransfer.setData('application/json', JSON.stringify({
@@ -691,7 +699,7 @@ export function PlayerQueue() {
                           setDraggedPlayerId(null);
                         }}
                         onClick={() => {
-                          if (isCreatingCustomStack) {
+                          if (isCreatingCustomStack && !isPlayerInGame) {
                             if (customStackSelection.includes(player.id)) {
                               // Always allow deselection
                               setCustomStackSelection(customStackSelection.filter(id => id !== player.id));
@@ -702,42 +710,51 @@ export function PlayerQueue() {
                           }
                         }}
                         className={`flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/30 ${
-                          isCreatingCustomStack ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+                          isCreatingCustomStack && !isPlayerInGame ? 'cursor-pointer' : isPlayerInGame ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
                         } ${draggedPlayerId === player.id ? 'opacity-50' : ''} ${
                           customStackSelection.includes(player.id) ? 'bg-purple-100 dark:bg-purple-900/30 ring-2 ring-purple-400' : ''
-                        }`}
+                        } ${isPlayerInGame ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                       >
                         {/* Selection indicator or Drag Handle */}
                         {isCreatingCustomStack ? (
                           <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            customStackSelection.includes(player.id)
-                              ? 'bg-purple-500 border-purple-500 text-white'
-                              : 'border-slate-300 dark:border-slate-500'
+                            isPlayerInGame
+                              ? 'border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-700'
+                              : customStackSelection.includes(player.id)
+                                ? 'bg-purple-500 border-purple-500 text-white'
+                                : 'border-slate-300 dark:border-slate-500'
                           }`}>
-                            {customStackSelection.includes(player.id) && <Check className="w-3 h-3" />}
+                            {customStackSelection.includes(player.id) && !isPlayerInGame && <Check className="w-3 h-3" />}
                           </div>
                         ) : (
-                          <GripVertical className="w-4 h-4 text-slate-300 dark:text-slate-500 flex-shrink-0" />
+                          <GripVertical className={`w-4 h-4 flex-shrink-0 ${isPlayerInGame ? 'text-slate-200 dark:text-slate-600' : 'text-slate-300 dark:text-slate-500'}`} />
                         )}
                         
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          getPlayerStatus(player.id) === 'winner' 
-                            ? 'bg-green-200 text-green-700'
-                            : getPlayerStatus(player.id) === 'loser'
-                              ? 'bg-orange-200 text-orange-700'
-                              : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                          isPlayerInGame
+                            ? 'bg-blue-200 text-blue-700'
+                            : getPlayerStatus(player.id) === 'winner' 
+                              ? 'bg-green-200 text-green-700'
+                              : getPlayerStatus(player.id) === 'loser'
+                                ? 'bg-orange-200 text-orange-700'
+                                : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
                         }`}>
                           {globalIdx + 1}
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className={`flex-1 min-w-0 ${isPlayerInGame ? 'opacity-50' : ''}`}>
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm text-slate-800 dark:text-slate-200 truncate">
+                            <span className={`font-medium text-sm truncate ${isPlayerInGame ? 'text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
                               {player.name}
                             </span>
-                            {getPlayerStatus(player.id) === 'winner' && (
+                            {isPlayerInGame && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
+                                Playing
+                              </span>
+                            )}
+                            {!isPlayerInGame && getPlayerStatus(player.id) === 'winner' && (
                               <Trophy className="w-3 h-3 text-green-600" />
                             )}
-                            {getPlayerStatus(player.id) === 'loser' && (
+                            {!isPlayerInGame && getPlayerStatus(player.id) === 'loser' && (
                               <TrendingDown className="w-3 h-3 text-orange-600" />
                             )}
                           </div>
