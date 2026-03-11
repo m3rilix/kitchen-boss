@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
-import { X, Search, Trophy, TrendingDown, Layers, ChevronsUp, ChevronsDown, GripVertical, Star, Users, Zap, Rocket, Play, Shuffle, Plus, Check, Trash2 } from 'lucide-react';
+import { X, Search, Trophy, TrendingDown, Layers, ChevronsUp, ChevronsDown, GripVertical, Star, Users, Zap, Rocket, Play, Clock, Plus, Check, Trash2 } from 'lucide-react';
 import type { Player } from '@/types';
 
 type StackType = 'ready' | 'forming-winners' | 'forming-losers' | 'forming-free' | 'winners' | 'losers' | 'custom';
@@ -33,9 +33,14 @@ export function PlayerQueue() {
 
   // Build visual stacks - separate forming stacks for winners, losers, and free
   const stacks = useMemo(() => {
+    // Get player IDs already in custom stacks (to exclude from other stacks)
+    const customStackPlayerIds = new Set((session.customStacks || []).flat());
+    
     // Get players in stack order (not queue order) for proper visual display
+    // Exclude players already in custom stacks
     const getPlayersInStackOrder = (stackIds: string[]): Player[] => {
       return stackIds
+        .filter(id => !customStackPlayerIds.has(id))
         .map(id => session.players.find(p => p.id === id))
         .filter((p): p is Player => p !== undefined && p.isActive);
     };
@@ -388,14 +393,14 @@ export function PlayerQueue() {
             {/* Action buttons */}
             <div className="flex justify-between items-center">
               <div className="flex gap-2">
-                {/* Reshuffle by waiting time */}
+                {/* Reorder by waiting time */}
                 <button
                   onClick={reshuffleByWaitingTime}
                   className="text-xs text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/20 rounded hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
-                  title="Reshuffle all stacks by waiting time"
+                  title="Reorder stack by waiting time"
                 >
-                  <Shuffle className="w-3 h-3" />
-                  Reshuffle
+                  <Clock className="w-3 h-3" />
+                  Re-order
                 </button>
                 {/* Create custom stack */}
                 {!isCreatingCustomStack ? (
