@@ -3,24 +3,26 @@
 ## 🐛 Bug Fixes (Priority)
 
 ### 1. Waiting Time Issues
-- [ ] **Player swapped out keeps waiting time**: When a player starts a game but is swapped out, their waiting time should NOT reset
-- [ ] **Removed players negative waiting time**: When a player is removed from queue, show negative waiting time (or exclude from waiting time calculations)
+- [x] **Player swapped out keeps waiting time**: When a player starts a game but is swapped out, their waiting time should NOT reset
+- [x] **Removed players negative waiting time**: When a player is removed from queue, show negative waiting time (or exclude from waiting time calculations)
 
 ### 2. Stack Management Issues
-- [ ] **Swapping player in stack not working**: Fix the ability to swap players who are already in a stack
+- [x] **Swapping player in stack not working**: Fix the ability to swap players who are already in a stack
 
 ---
 
 ## 🚀 Feature Improvements
 
 ### 1. Custom Stack Creation
-- [ ] Ability to manually create a custom stack of 4 players
-- [ ] Custom stack can be placed alongside pre-built stacks
+- [x] Ability to manually create a custom stack of 4 players
+- [x] Custom stack can be placed alongside pre-built stacks
+- [x] Custom stacks show at top with purple styling
+- [x] Players in game shown with [Playing] marker and blur effect
 - [ ] Option to skip next pre-built stack to put custom stack into play immediately
 
 ### 2. Reshuffle Based on Waiting Time
-- [ ] Button to reshuffle stacks based on waiting time
-- [ ] Prioritize players who have been waiting longest
+- [x] Button to re-order stacks based on waiting time (clock icon)
+- [x] Prioritize players who have been waiting longest
 
 ---
 
@@ -44,30 +46,31 @@ Unlike Win-Lose Stack where stacks are pre-built based on queue size, Round Robi
 4. **New opponent combinations** - Maximize opponent variety
 
 ### Core Rules
-- [ ] No win-lose stack separation
-- [ ] Players get to play with everyone
-- [ ] Avoid repeating exact teams consecutively
-- [ ] Avoid repeating exact matchups consecutively
+- [x] No win-lose stack separation
+- [x] Players get to play with everyone
+- [x] Avoid repeating exact teams consecutively
+- [x] Avoid repeating exact matchups consecutively
 - [ ] Maintain balanced play time for all players
 - [ ] Ensure fair wait time distribution
 
 ### Stack Building Logic
-- [ ] Calculate stacks based on number of available courts (not queue size)
-- [ ] While game is in play, prepare next stack of 4 players
-- [ ] Remaining players stay in waiting list
-- [ ] Dynamic update when courts are added/removed
+- [x] Calculate stacks based on number of available courts (not queue size)
+- [x] While game is in play, prepare next stack of 4 players
+- [x] Remaining players stay in waiting list
+- [x] Dynamic update when courts are added/removed
+- [x] Record match history for tracking
 
 ### Manager Controls
-- [ ] Add/remove courts at any time (stacks update dynamically)
-- [ ] Create custom stack alongside pre-built stacks
+- [x] Add/remove courts at any time (stacks update dynamically)
+- [x] Create custom stack alongside pre-built stacks
 - [ ] Skip next pre-built stack to prioritize custom stack
-- [ ] Manual player swapping within stacks
-- [ ] Reshuffle based on waiting time
+- [x] Manual player swapping within stacks
+- [x] Reshuffle based on waiting time
 
 ### Handle Mid-Session Changes
-- [ ] Players joining mid-session
-- [ ] Players leaving mid-session
-- [ ] Court count changes
+- [x] Players joining mid-session
+- [x] Players leaving mid-session
+- [x] Court count changes
 
 ### Constraints
 - Maximize partner and opponent variety
