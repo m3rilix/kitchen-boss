@@ -139,6 +139,18 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
             </button>
           </div>
         </div>
+        
+        {/* Mobile User Info */}
+        <div className="sm:hidden mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+          <div className="container mx-auto px-4 flex items-center justify-between">
+            <div className="text-xs">
+              <p className="font-medium text-slate-800 dark:text-slate-100">{currentUser?.name}</p>
+              <p className="text-slate-500 dark:text-slate-400">
+                {timeRemaining === null ? 'Unlimited access' : `${timeRemaining} remaining`}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8 w-full max-w-lg mt-16">

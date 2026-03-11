@@ -22,6 +22,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
     toggleUserActive, 
     deleteUser,
     extendAccess,
+    setCustomExpiryDate,
     forceLogoutUser,
     currentUser 
   } = useAuthStore();
@@ -29,6 +30,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [showExtendModal, setShowExtendModal] = useState<string | null>(null);
   const [extendDays, setExtendDays] = useState(30);
+  const [useCustomDate, setUseCustomDate] = useState(false);
+  const [customDate, setCustomDate] = useState('');
   const [activeSessions, setActiveSessions] = useState<Record<string, ActiveSession>>({});
 
   const users = getAllUsers();
@@ -124,9 +127,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
   };
 
   const handleExtendAccess = (userId: string) => {
-    extendAccess(userId, extendDays);
+    if (useCustomDate && customDate) {
+      setCustomExpiryDate(userId, customDate);
+    } else {
+      extendAccess(userId, extendDays);
+    }
     setShowExtendModal(null);
     setExtendDays(30);
+    setUseCustomDate(false);
+    setCustomDate('');
   };
 
   return (
@@ -364,23 +373,62 @@ export function AdminPage({ onBack }: AdminPageProps) {
               Extend Access
             </h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Days to add
-                </label>
-                <select
-                  value={extendDays}
-                  onChange={(e) => setExtendDays(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+              {/* Toggle between preset days and custom date */}
+              <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                <button
+                  onClick={() => setUseCustomDate(false)}
+                  className={`flex-1 px-3 py-1.5 text-sm font-medium rounded transition ${
+                    !useCustomDate 
+                      ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' 
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}
                 >
-                  <option value={7}>7 days</option>
-                  <option value={14}>14 days</option>
-                  <option value={30}>30 days</option>
-                  <option value={60}>60 days</option>
-                  <option value={90}>90 days</option>
-                  <option value={365}>1 year</option>
-                </select>
+                  Preset Days
+                </button>
+                <button
+                  onClick={() => setUseCustomDate(true)}
+                  className={`flex-1 px-3 py-1.5 text-sm font-medium rounded transition ${
+                    useCustomDate 
+                      ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' 
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Custom Date
+                </button>
               </div>
+
+              {!useCustomDate ? (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Days to add
+                  </label>
+                  <select
+                    value={extendDays}
+                    onChange={(e) => setExtendDays(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+                  >
+                    <option value={7}>7 days</option>
+                    <option value={14}>14 days</option>
+                    <option value={30}>30 days</option>
+                    <option value={60}>60 days</option>
+                    <option value={90}>90 days</option>
+                    <option value={365}>1 year</option>
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Expiry date
+                  </label>
+                  <input
+                    type="date"
+                    value={customDate}
+                    onChange={(e) => setCustomDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+                  />
+                </div>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowExtendModal(null)}

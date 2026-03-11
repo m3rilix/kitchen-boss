@@ -87,6 +87,7 @@ interface AuthStore {
   toggleUserActive: (userId: string) => void;
   deleteUser: (userId: string) => void;
   extendAccess: (userId: string, days: number) => void;
+  setCustomExpiryDate: (userId: string, date: string) => void;
   forceLogoutUser: (userId: string) => Promise<void>;
   
   // Helpers
@@ -536,6 +537,29 @@ export const useAuthStore = create<AuthStore>()(
         const updatedUsers = users.map(u => 
           u.id === userId 
             ? { ...u, accessEndDate: newEndDate.toISOString() } 
+            : u
+        );
+        set({ users: updatedUsers });
+        
+        const { currentUser } = get();
+        if (currentUser?.id === userId) {
+          const updated = updatedUsers.find(u => u.id === userId);
+          if (updated) set({ currentUser: updated });
+        }
+      },
+
+      setCustomExpiryDate: (userId: string, date: string) => {
+        const { users } = get();
+        const user = users.find(u => u.id === userId);
+        if (!user) return;
+
+        // Convert date string (YYYY-MM-DD) to ISO string with end of day time
+        const expiryDate = new Date(date);
+        expiryDate.setHours(23, 59, 59, 999); // Set to end of day
+
+        const updatedUsers = users.map(u => 
+          u.id === userId 
+            ? { ...u, accessEndDate: expiryDate.toISOString() } 
             : u
         );
         set({ users: updatedUsers });

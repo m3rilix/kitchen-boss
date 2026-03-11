@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import { useAuthStore } from '@/store/authStore';
-import { LogOut, Users, Clock, Shield, Share2, RotateCcw, Pencil, Check, X, XCircle } from 'lucide-react';
+import { LogOut, Users, Clock, Shield, Share2, RotateCcw, Pencil, Check, X, XCircle, User } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { ShareSessionModal } from './ShareSessionModal';
@@ -213,6 +213,19 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
               <XCircle className="w-4 h-4" />
               <span className="hidden lg:inline">End</span>
             </button>
+          </div>
+        </div>
+
+        {/* Mobile User Info Row */}
+        <div className="flex lg:hidden items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+          <div className="flex items-center gap-2">
+            <User className={`w-4 h-4 ${theme.text}`} />
+            <div className="text-xs">
+              <p className="font-medium text-slate-700 dark:text-slate-200">{currentUser?.name}</p>
+              <p className="text-slate-500 dark:text-slate-400">
+                {timeRemaining === null ? 'Unlimited access' : `${timeRemaining} remaining`}
+              </p>
+            </div>
           </div>
         </div>
 
