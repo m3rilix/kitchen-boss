@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
-import { X, Search, Trophy, TrendingDown, Layers, ChevronsUp, ChevronsDown, GripVertical, Star, Users, Zap, Rocket, Play, Clock, Plus, Check, Trash2 } from 'lucide-react';
+import { X, Search, Trophy, TrendingDown, Layers, ChevronsUp, ChevronsDown, GripVertical, Star, Users, Zap, Rocket, Play, Clock, Plus, Check, Trash2, RefreshCw } from 'lucide-react';
 import type { Player } from '@/types';
+import { buildRoundRobinStacks } from '@/lib/roundRobin';
 
-type StackType = 'ready' | 'forming-winners' | 'forming-losers' | 'forming-free' | 'winners' | 'losers' | 'custom';
+type StackType = 'ready' | 'forming-winners' | 'forming-losers' | 'forming-free' | 'winners' | 'losers' | 'custom' | 'round-robin';
 
 interface StackGroup {
   id: string;
@@ -24,12 +25,9 @@ export function PlayerQueue() {
   const [isCreatingCustomStack, setIsCreatingCustomStack] = useState(false);
   const [customStackSelection, setCustomStackSelection] = useState<string[]>([]);
 
-  if (!session) return null;
-
-  const queuedPlayers = getPlayersInQueue();
-
-  // Get players currently in a game
+  // Get players currently in a game (must be before early return to maintain hook order)
   const playersInGame = useMemo(() => {
+    if (!session) return new Set<string>();
     const inGame = new Set<string>();
     session.courts.forEach((court) => {
       if (court.currentGame) {
@@ -38,13 +36,17 @@ export function PlayerQueue() {
       }
     });
     return inGame;
-  }, [session.courts]);
+  }, [session?.courts]);
 
   // Stack counter from session (tracks total stacks played)
-  const stackCounter = session.stackCounter ?? 0;
+  const stackCounter = session?.stackCounter ?? 0;
 
   // Build visual stacks - separate forming stacks for winners, losers, and free
   const stacks = useMemo(() => {
+    if (!session) return [];
+    
+    const isRoundRobin = session.rotationMode === 'round_robin';
+    
     // Get player IDs already in custom stacks (to exclude from other stacks)
     const customStackPlayerIds = new Set((session.customStacks || []).flat());
     
@@ -57,6 +59,64 @@ export function PlayerQueue() {
         .filter((p): p is Player => p !== undefined && p.isActive);
     };
     
+    // For Round Robin mode, use the Round Robin algorithm
+    if (isRoundRobin) {
+      // Get all waiting players (not in game, not in custom stacks)
+      const allWaitingPlayers = session.players.filter(p => 
+        p.isActive && 
+        p.waitingSince > 0 && 
+        !customStackPlayerIds.has(p.id)
+      );
+      
+      // Get available court count
+      const availableCourts = session.courts.filter(c => c.status === 'available').length;
+      
+      // Build Round Robin stacks based on court count
+      const rrStacks = buildRoundRobinStacks(
+        allWaitingPlayers,
+        session.matchHistory || [],
+        Math.max(1, availableCourts) // At least 1 stack
+      );
+      
+      // Convert to StackGroup format
+      const roundRobinStackGroups: StackGroup[] = rrStacks.map((stackIds, idx) => ({
+        id: `rr-${stackIds.join('-').slice(0, 20)}`,
+        players: stackIds
+          .map(id => session.players.find(p => p.id === id))
+          .filter((p): p is Player => p !== undefined),
+        type: 'round-robin' as StackType,
+        label: `Stack ${stackCounter + idx + 1}`,
+        isForming: false,
+      }));
+      
+      // Remaining players go to waiting
+      const usedPlayerIds = new Set(rrStacks.flat());
+      const remainingPlayers = allWaitingPlayers.filter(p => !usedPlayerIds.has(p.id));
+      
+      const formingStack: StackGroup | null = remainingPlayers.length > 0 ? {
+        id: 'rr-forming',
+        players: remainingPlayers,
+        type: 'forming-free' as StackType,
+        label: `Waiting (${remainingPlayers.length})`,
+        isForming: true,
+      } : null;
+      
+      // Build custom stacks
+      const customStackGroups: StackGroup[] = (session.customStacks || []).map((playerIds, idx) => ({
+        id: `custom-${idx}`,
+        players: playerIds
+          .map(id => session.players.find(p => p.id === id))
+          .filter((p): p is Player => p !== undefined),
+        type: 'custom' as StackType,
+        label: `Custom ${idx + 1}`,
+        isForming: false,
+        customIndex: idx,
+      })).filter(stack => stack.players.length === 4);
+      
+      return [...customStackGroups, ...roundRobinStackGroups, ...(formingStack ? [formingStack] : [])];
+    }
+    
+    // Win-Lose Stack mode (default)
     // Separate players by their stack status, maintaining stack order
     const winners = getPlayersInStackOrder(session.winnerStack ?? []);
     const losers = getPlayersInStackOrder(session.loserStack ?? []);
@@ -215,18 +275,23 @@ export function PlayerQueue() {
     
     // Custom stacks go first (highest priority), then ready stacks, then forming
     return [...customStackGroups, ...readyStacks, ...formingStacksList];
-  }, [session.players, session.winnerStack, session.loserStack, session.waitingStack, session.customStacks, stackCounter]);
+  }, [session?.players, session?.winnerStack, session?.loserStack, session?.waitingStack, session?.customStacks, stackCounter]);
 
   // Filter stacks by search query
   const filteredStacks = useMemo(() => {
     if (!searchQuery.trim()) return stacks;
     return stacks.map(stack => ({
       ...stack,
-      players: stack.players.filter(p => 
+      players: stack.players.filter((p: Player) => 
         p.name.toLowerCase().includes(searchQuery.toLowerCase())
       )
     })).filter(stack => stack.players.length > 0);
   }, [stacks, searchQuery]);
+
+  // Early return after all hooks
+  if (!session) return null;
+
+  const queuedPlayers = getPlayersInQueue();
 
   // Get stack status for a player
   // Get player's visual status based on their last game result (not which stack they're in)
@@ -246,6 +311,7 @@ export function PlayerQueue() {
       case 'ready': return 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'; // Blue for starting/free ready stacks
       case 'forming-free': return 'border-slate-300 bg-slate-50 dark:bg-slate-700/50 border-dashed'; // Gray for mixed forming
       case 'custom': return 'border-purple-400 bg-purple-50 dark:bg-purple-900/20'; // Purple for custom stacks
+      case 'round-robin': return 'border-cyan-400 bg-cyan-50 dark:bg-cyan-900/20'; // Cyan for Round Robin stacks
       default: return `${theme.border} ${theme.bg100}`;
     }
   };
@@ -264,6 +330,8 @@ export function PlayerQueue() {
         return <Users className="w-4 h-4 text-slate-400" />; // Gray users for mixed forming
       case 'custom':
         return <Star className="w-4 h-4 text-purple-600" />; // Purple star for custom stacks
+      case 'round-robin':
+        return <RefreshCw className="w-4 h-4 text-cyan-600" />; // Cyan refresh for Round Robin stacks
       default: 
         return <Layers className={`w-4 h-4 ${theme.text}`} />;
     }

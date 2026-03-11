@@ -788,6 +788,15 @@ export const useSessionStore = create<SessionState>()(
             );
           }
 
+          // Record match history for Round Robin tracking
+          const matchEntry = {
+            team1: team1 as [string, string],
+            team2: team2 as [string, string],
+            timestamp: Date.now(),
+            courtId,
+          };
+          const newMatchHistory = [...(state.session.matchHistory || []), matchEntry];
+
           return {
             session: {
               ...state.session,
@@ -801,6 +810,7 @@ export const useSessionStore = create<SessionState>()(
               winnerStack: newWinnerStack,
               loserStack: newLoserStack,
               waitingStack: newWaitingStack,
+              matchHistory: newMatchHistory,
               stackCounter: (state.session.stackCounter ?? 0) + 1, // Increment stack counter
               activityLog: [
                 ...logEntries,
