@@ -45,6 +45,24 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
     return `${hour12}:${minutes} ${ampm}`;
   };
 
+  // Get rotation mode display name
+  const getRotationModeDisplay = () => {
+    switch (session.rotationMode) {
+      case 'win_lose_stack':
+        return 'Stack Queue - Win/Lose';
+      case 'round_robin':
+        return 'Stack Queue - Round Robin';
+      case 'full_rotation':
+        return 'Stack Queue';
+      case 'king_of_court':
+        return 'King of the Court';
+      case 'skill_based':
+        return 'Skill-Based';
+      default:
+        return 'Stack Queue';
+    }
+  };
+
   return (
     <>
       <BetaBanner />
@@ -116,13 +134,19 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
                   </button>
                 </div>
               )}
-              {(session.location || session.date) && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                  {session.location && <span>{session.location}</span>}
-                  {session.location && session.date && <span> • </span>}
-                  {session.date && <span>{formatDate(session.date)} {formatTime(session.time)}</span>}
+              {/* Desktop: Show rotation mode and date/time below title */}
+              <div className="hidden md:block">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {getRotationModeDisplay()}
                 </p>
-              )}
+                {(session.date || session.location) && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {session.date && <span>{formatDate(session.date)} {formatTime(session.time)}</span>}
+                    {session.location && session.date && <span> • </span>}
+                    {session.location && <span>{session.location}</span>}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 

@@ -17,13 +17,14 @@ interface StackGroup {
 }
 
 export function PlayerQueue() {
-  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, startGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime } = useSessionStore();
+  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, startGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime, reshuffleByGamesPlayed } = useSessionStore();
   const theme = useThemeClasses();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set(['forming-winners', 'forming-losers', 'forming-free', 'forming-mixed']));
   const [draggedPlayerId, setDraggedPlayerId] = useState<string | null>(null);
   const [isCreatingCustomStack, setIsCreatingCustomStack] = useState(false);
   const [customStackSelection, setCustomStackSelection] = useState<string[]>([]);
+  const [showReorderMenu, setShowReorderMenu] = useState(false);
 
   // Get players currently in a game (must be before early return to maintain hook order)
   const playersInGame = useMemo(() => {
@@ -277,7 +278,7 @@ export function PlayerQueue() {
     return [...customStackGroups, ...readyStacks, ...formingStacksList];
   }, [session?.players, session?.winnerStack, session?.loserStack, session?.waitingStack, session?.customStacks, stackCounter]);
 
-  // Filter stacks by search query
+  // Filter stacks by search query (must be before early return to maintain hook order)
   const filteredStacks = useMemo(() => {
     if (!searchQuery.trim()) return stacks;
     return stacks.map(stack => ({
@@ -473,15 +474,42 @@ export function PlayerQueue() {
             {/* Action buttons */}
             <div className="flex justify-between items-center">
               <div className="flex gap-2">
-                {/* Reorder by waiting time */}
-                <button
-                  onClick={reshuffleByWaitingTime}
-                  className="text-xs text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/20 rounded hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
-                  title="Reorder stack by waiting time"
-                >
-                  <Clock className="w-3 h-3" />
-                  Re-order
-                </button>
+                {/* Reorder dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowReorderMenu(!showReorderMenu)}
+                    className="text-xs text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/20 rounded hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
+                    title="Reorder stacks"
+                  >
+                    <Clock className="w-3 h-3" />
+                    Re-order
+                    <ChevronsDown className="w-3 h-3" />
+                  </button>
+                  {showReorderMenu && (
+                    <div className="absolute top-full left-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-50 min-w-[160px]">
+                      <button
+                        onClick={() => {
+                          reshuffleByWaitingTime();
+                          setShowReorderMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 rounded-t-lg"
+                      >
+                        <Clock className="w-3 h-3 text-orange-500" />
+                        By Waiting Time
+                      </button>
+                      <button
+                        onClick={() => {
+                          reshuffleByGamesPlayed();
+                          setShowReorderMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 rounded-b-lg"
+                      >
+                        <Layers className="w-3 h-3 text-blue-500" />
+                        By Least Games
+                      </button>
+                    </div>
+                  )}
+                </div>
                 {/* Create custom stack */}
                 {!isCreatingCustomStack ? (
                   <button

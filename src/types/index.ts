@@ -1,4 +1,4 @@
-export type RotationMode = 'winners_stay' | 'full_rotation' | 'round_robin' | 'king_of_court' | 'skill_based';
+export type RotationMode = 'winners_stay' | 'full_rotation' | 'round_robin' | 'king_of_court' | 'skill_based' | 'win_lose_stack';
 
 export interface Player {
   id: string;

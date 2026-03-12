@@ -65,6 +65,7 @@ interface SessionState {
   createCustomStack: (playerIds: string[]) => void;
   removeCustomStack: (index: number) => void;
   reshuffleByWaitingTime: () => void;
+  reshuffleByGamesPlayed: () => void;
   
   // Validation
   isNameDuplicate: (name: string) => boolean;
@@ -725,7 +726,47 @@ export const useSessionStore = create<SessionState>()(
               activityLog: [
                 createLogEntry(
                   'stack_moved',
-                  `Stacks reshuffled by waiting time (${sortedPlayers.length} players)`,
+                  `Stacks reordered by waiting time (${sortedPlayers.length} players)`,
+                  {}
+                ),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      reshuffleByGamesPlayed: () => {
+        set((state) => {
+          if (!state.session) return state;
+          
+          // Get all players currently in stacks (not in game)
+          const allStackPlayers = [
+            ...state.session.winnerStack,
+            ...state.session.loserStack,
+            ...state.session.waitingStack,
+          ];
+          
+          // Get player objects and sort by games played (least games first)
+          const sortedPlayers = allStackPlayers
+            .map(id => state.session?.players.find(p => p.id === id))
+            .filter((p): p is Player => p !== undefined && p.waitingSince > 0)
+            .sort((a, b) => a.gamesPlayed - b.gamesPlayed); // Fewer games = higher priority
+          
+          // Redistribute into stacks based on games played
+          // All go to waiting stack, sorted by games played
+          const newWaitingStack = sortedPlayers.map(p => p.id);
+          
+          return {
+            session: {
+              ...state.session,
+              winnerStack: [],
+              loserStack: [],
+              waitingStack: newWaitingStack,
+              activityLog: [
+                createLogEntry(
+                  'stack_moved',
+                  `Stacks reordered by games played (${sortedPlayers.length} players)`,
                   {}
                 ),
                 ...state.session.activityLog,

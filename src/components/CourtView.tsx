@@ -174,7 +174,7 @@ export function CourtView({ court }: CourtViewProps) {
       'border-slate-200 dark:border-slate-700'
     }`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-slate-100">
         <div className="flex items-center gap-2">
           {isMaintenance && isEditing ? (
             <div className="flex items-center gap-1">
@@ -270,10 +270,10 @@ export function CourtView({ court }: CourtViewProps) {
             )}
             
             {/* Teams Display */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               {/* Team 1 */}
-              <div className="space-y-1.5">
-                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Team 1</div>
+              <div className="space-y-1">
+                <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Team 1</div>
                 {court.currentGame?.team1.map((playerId, i) => {
                   const player = playerId ? getPlayerById(playerId) : null;
                   const isEmpty = !playerId || playerId === '';
@@ -284,12 +284,12 @@ export function CourtView({ court }: CourtViewProps) {
                     return (
                       <div
                         key={i}
-                        className="relative flex items-center gap-2 p-1.5 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 min-h-[40px]"
+                        className="relative flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 min-h-[34px]"
                       >
                         {availableQueuePlayers.length > 0 ? (
                           <>
-                            <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-400 flex-shrink-0 border-2 border-dashed border-slate-300">
-                              <UserPlus className="w-4 h-4" />
+                            <div className="w-6 h-6 bg-slate-200 rounded-full flex items-center justify-center text-slate-400 flex-shrink-0 border-2 border-dashed border-slate-300">
+                              <UserPlus className="w-3.5 h-3.5" />
                             </div>
                             <button
                               type="button"
@@ -298,7 +298,7 @@ export function CourtView({ court }: CourtViewProps) {
                                 e.stopPropagation();
                                 setShowPlayerDropdown(isDropdownOpen ? null : { team: 'team1', index: i });
                               }}
-                              className="flex-1 flex items-center justify-between text-sm text-blue-600 hover:text-blue-700 font-medium"
+                              className="flex-1 flex items-center justify-between text-xs text-blue-600 hover:text-blue-700 font-medium"
                             >
                               <span>Select player</span>
                               <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
@@ -332,10 +332,10 @@ export function CourtView({ court }: CourtViewProps) {
                           </>
                         ) : (
                           <>
-                            <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-400 flex-shrink-0 border-2 border-dashed border-slate-300">
-                              <UserPlus className="w-4 h-4" />
+                            <div className="w-6 h-6 bg-slate-200 rounded-full flex items-center justify-center text-slate-400 flex-shrink-0 border-2 border-dashed border-slate-300">
+                              <UserPlus className="w-3.5 h-3.5" />
                             </div>
-                            <span className="text-sm text-slate-400">Empty slot</span>
+                            <span className="text-xs text-slate-400">Empty slot</span>
                           </>
                         )}
                       </div>
@@ -350,7 +350,7 @@ export function CourtView({ court }: CourtViewProps) {
                       onDragOver={(e) => handleDragOver(e, 'team1', i)}
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, 'team1', i)}
-                      className={`flex items-center gap-2 p-1.5 bg-blue-50 rounded-lg transition-all ${
+                      className={`flex items-center gap-1.5 p-1 bg-blue-50 rounded-lg transition-all ${
                         maintenanceMode ? '' : 'cursor-grab active:cursor-grabbing'
                       } ${
                         dragOver?.team === 'team1' && dragOver?.index === i
@@ -358,18 +358,18 @@ export function CourtView({ court }: CourtViewProps) {
                           : 'hover:bg-blue-100'
                       }`}
                     >
-                      {!maintenanceMode && <GripVertical className="w-4 h-4 text-blue-300 flex-shrink-0" />}
-                      <div className="w-7 h-7 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 font-semibold text-xs flex-shrink-0">
+                      {!maintenanceMode && <GripVertical className="w-3.5 h-3.5 text-blue-300 flex-shrink-0" />}
+                      <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 font-semibold text-[10px] flex-shrink-0">
                         {player?.name.charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-sm font-medium text-slate-700 truncate flex-1">{player?.name}</span>
+                      <span className="text-xs font-medium text-slate-700 truncate flex-1">{player?.name}</span>
                       {maintenanceMode && (
                         <button
                           onClick={() => removePlayerFromGame(court.id, 'team1', i)}
-                          className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 rounded transition"
+                          className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-100 rounded transition"
                           title="Remove player"
                         >
-                          <UserMinus className="w-4 h-4" />
+                          <UserMinus className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
@@ -378,8 +378,8 @@ export function CourtView({ court }: CourtViewProps) {
               </div>
 
               {/* Team 2 */}
-              <div className="space-y-1.5">
-                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Team 2</div>
+              <div className="space-y-1">
+                <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Team 2</div>
                 {court.currentGame?.team2.map((playerId, i) => {
                   const player = playerId ? getPlayerById(playerId) : null;
                   const isEmpty = !playerId || playerId === '';
@@ -390,12 +390,12 @@ export function CourtView({ court }: CourtViewProps) {
                     return (
                       <div
                         key={i}
-                        className="relative flex items-center gap-2 p-1.5 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 min-h-[40px]"
+                        className="relative flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 min-h-[34px]"
                       >
                         {availableQueuePlayers.length > 0 ? (
                           <>
-                            <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-400 flex-shrink-0 border-2 border-dashed border-slate-300">
-                              <UserPlus className="w-4 h-4" />
+                            <div className="w-6 h-6 bg-slate-200 rounded-full flex items-center justify-center text-slate-400 flex-shrink-0 border-2 border-dashed border-slate-300">
+                              <UserPlus className="w-3.5 h-3.5" />
                             </div>
                             <button
                               type="button"
@@ -404,10 +404,10 @@ export function CourtView({ court }: CourtViewProps) {
                                 e.stopPropagation();
                                 setShowPlayerDropdown(isDropdownOpen ? null : { team: 'team2', index: i });
                               }}
-                              className="flex-1 flex items-center justify-between text-sm text-red-600 hover:text-red-700 font-medium"
+                              className="flex-1 flex items-center justify-between text-xs text-red-600 hover:text-red-700 font-medium"
                             >
                               <span>Select player</span>
-                              <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                             </button>
                             {isDropdownOpen && (
                               <div 
@@ -425,9 +425,9 @@ export function CourtView({ court }: CourtViewProps) {
                                       replacePlayerInGame(court.id, 'team2', i, player.id);
                                       setShowPlayerDropdown(null);
                                     }}
-                                    className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                                    className="w-full px-2 py-1.5 text-left text-xs hover:bg-red-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
                                   >
-                                    <div className="w-8 h-8 bg-red-200 rounded-full flex items-center justify-center text-red-700 font-semibold text-sm">
+                                    <div className="w-6 h-6 bg-red-200 rounded-full flex items-center justify-center text-red-700 font-semibold text-[10px]">
                                       {player.name.charAt(0).toUpperCase()}
                                     </div>
                                     <span className="truncate">{player.name}</span>
@@ -438,10 +438,10 @@ export function CourtView({ court }: CourtViewProps) {
                           </>
                         ) : (
                           <>
-                            <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-400 flex-shrink-0 border-2 border-dashed border-slate-300">
-                              <UserPlus className="w-4 h-4" />
+                            <div className="w-6 h-6 bg-slate-200 rounded-full flex items-center justify-center text-slate-400 flex-shrink-0 border-2 border-dashed border-slate-300">
+                              <UserPlus className="w-3.5 h-3.5" />
                             </div>
-                            <span className="text-sm text-slate-400">Empty slot</span>
+                            <span className="text-xs text-slate-400">Empty slot</span>
                           </>
                         )}
                       </div>
@@ -456,7 +456,7 @@ export function CourtView({ court }: CourtViewProps) {
                       onDragOver={(e) => handleDragOver(e, 'team2', i)}
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, 'team2', i)}
-                      className={`flex items-center gap-2 p-1.5 bg-red-50 rounded-lg transition-all ${
+                      className={`flex items-center gap-1.5 p-1 bg-red-50 rounded-lg transition-all ${
                         maintenanceMode ? '' : 'cursor-grab active:cursor-grabbing'
                       } ${
                         dragOver?.team === 'team2' && dragOver?.index === i
@@ -464,15 +464,15 @@ export function CourtView({ court }: CourtViewProps) {
                           : 'hover:bg-red-100'
                       }`}
                     >
-                      {!maintenanceMode && <GripVertical className="w-4 h-4 text-red-300 flex-shrink-0" />}
-                      <div className="w-7 h-7 bg-red-200 rounded-full flex items-center justify-center text-red-700 font-semibold text-xs flex-shrink-0">
+                      {!maintenanceMode && <GripVertical className="w-3.5 h-3.5 text-red-300 flex-shrink-0" />}
+                      <div className="w-6 h-6 bg-red-200 rounded-full flex items-center justify-center text-red-700 font-semibold text-[10px] flex-shrink-0">
                         {player?.name.charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-sm font-medium text-slate-700 truncate flex-1">{player?.name}</span>
+                      <span className="text-xs font-medium text-slate-700 truncate flex-1">{player?.name}</span>
                       {maintenanceMode && (
                         <button
                           onClick={() => removePlayerFromGame(court.id, 'team2', i)}
-                          className="p-1 text-red-400 hover:text-red-600 hover:bg-red-100 rounded transition"
+                          className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-100 rounded transition"
                           title="Remove player"
                         >
                           <UserMinus className="w-4 h-4" />
