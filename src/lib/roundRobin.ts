@@ -251,13 +251,39 @@ export function findBestOpponents(
 }
 
 /**
+ * Build a simple stack of 4 players - takes first 4 in order
+ * Used when the input is already sorted (e.g., after reorder)
+ */
+export function buildSimpleStack(
+  waitingPlayers: Player[]
+): [string, string, string, string] | null {
+  const validPlayers = waitingPlayers.filter(p => p.waitingSince > 0);
+  if (validPlayers.length < 4) return null;
+  
+  // Just take the first 4 players in order
+  return [
+    validPlayers[0].id,
+    validPlayers[1].id,
+    validPlayers[2].id,
+    validPlayers[3].id,
+  ];
+}
+
+/**
  * Build the next Round Robin stack of 4 players
+ * @param respectOrder - If true, takes first 4 players in order (for reorder). If false, uses scoring algorithm.
  */
 export function buildRoundRobinStack(
   waitingPlayers: Player[],
-  matchHistory: MatchHistoryEntry[]
+  matchHistory: MatchHistoryEntry[],
+  respectOrder: boolean = false
 ): [string, string, string, string] | null {
   if (waitingPlayers.length < 4) return null;
+  
+  // If respectOrder is true, just take the first 4 players
+  if (respectOrder) {
+    return buildSimpleStack(waitingPlayers);
+  }
   
   // Score all waiting players
   const scoredPlayers = waitingPlayers

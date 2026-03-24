@@ -40,12 +40,22 @@ export function PlayerList() {
   const [showDevMenu, setShowDevMenu] = useState(false);
 
   const handleAddTestPlayers = (count: number | 'all') => {
-    const namesToAdd = count === 'all' ? ALL_RADIANTS : ALL_RADIANTS.slice(0, count);
-    namesToAdd.forEach(name => {
-      if (!isNameDuplicate(name)) {
-        addPlayer(name);
-      }
-    });
+    if (!session) return;
+    
+    if (count === 'all') {
+      // Add all Radiants
+      ALL_RADIANTS.forEach(name => {
+        if (!isNameDuplicate(name)) {
+          addPlayer(name);
+        }
+      });
+    } else {
+      // Add the next N players from the list (skip already added players)
+      const existingNames = new Set(session.players.map(p => p.name));
+      const availableNames = ALL_RADIANTS.filter(name => !existingNames.has(name));
+      const namesToAdd = availableNames.slice(0, count);
+      namesToAdd.forEach(name => addPlayer(name));
+    }
     setShowDevMenu(false);
   };
 
@@ -124,7 +134,7 @@ export function PlayerList() {
           break;
         case 'waitTime':
           // Only compare waiting times for players actually waiting (waitingSince > 0)
-          // Players in game (waitingSince = 0) or removed (waitingSince < 0) go to the end
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    // Players in game (waitingSince = 0) or removed (waitingSince < 0) go to the end
           const aNotWaiting = a.waitingSince <= 0;
           const bNotWaiting = b.waitingSince <= 0;
           if (aNotWaiting && bNotWaiting) {
@@ -190,14 +200,14 @@ export function PlayerList() {
                   +Dev
                 </button>
                 {showDevMenu && (
-                  <div className="absolute right-0 mt-1 w-36 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1">
-                    {[4, 8, 9, 10, 11].map(count => (
+                  <div className="absolute right-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1">
+                    {[1, 2, 3, 4].map(count => (
                       <button
                         key={count}
                         onClick={() => handleAddTestPlayers(count)}
                         className="w-full px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-700"
                       >
-                        Add {count}
+                        +{count} Player{count > 1 ? 's' : ''}
                       </button>
                     ))}
                     <hr className="my-1 border-slate-200" />
@@ -205,7 +215,7 @@ export function PlayerList() {
                       onClick={() => handleAddTestPlayers('all')}
                       className="w-full px-3 py-1.5 text-left text-sm text-purple-700 font-medium hover:bg-purple-50"
                     >
-                      All Radiants ({ALL_RADIANTS.length})
+                      Add All Radiants ({ALL_RADIANTS.length})
                     </button>
                   </div>
                 )}

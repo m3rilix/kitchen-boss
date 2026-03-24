@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import type { Court } from '@/types';
-import { Play, Trophy, X, Users, Wrench, GripVertical, Pencil, Check, UserPlus, UserMinus, ChevronDown, Layers } from 'lucide-react';
+import { Play, Trophy, X, Users, Wrench, GripVertical, Pencil, Check, UserPlus, UserMinus, ChevronDown } from 'lucide-react';
 
 interface CourtViewProps {
   court: Court;
@@ -51,7 +51,6 @@ export function CourtView({ court }: CourtViewProps) {
   const [dragOver, setDragOver] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(court.name);
-  const [showStackDropdown, setShowStackDropdown] = useState(false);
   const [courtDragOver, setCourtDragOver] = useState(false);
   const [showPlayerDropdown, setShowPlayerDropdown] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -144,17 +143,27 @@ export function CourtView({ court }: CourtViewProps) {
   const team2Players = court.currentGame?.team2.map(id => getPlayerById(id));
 
   // Check if there's a ready stack (4 players in any stack or combined)
-  // Must match the logic in formBalancedGroup - winners don't mix with losers/waiting
-  const winnersCount = session.winnerStack?.length ?? 0;
-  const losersCount = session.loserStack?.length ?? 0;
-  const waitingCount = session.waitingStack?.length ?? 0;
+  const isRoundRobin = session.rotationMode === 'round_robin';
   
-  const hasReadyStack = 
-    winnersCount >= 4 ||                          // 4+ winners (full winner stack)
-    losersCount >= 4 ||                           // 4+ losers (full loser stack)
-    waitingCount >= 4 ||                          // 4+ waiting (full waiting stack)
-    (losersCount + waitingCount) >= 4;            // losers + waiting combined (mixed stack)
-  // Note: winners do NOT mix with losers/waiting - they form separate stacks
+  let hasReadyStack = false;
+  if (isRoundRobin) {
+    // ROUND ROBIN MODE: Check if there are pre-built stacks
+    const roundRobinStacksCount = session.roundRobinStacks?.length ?? 0;
+    const customStacksCount = session.customStacks?.length ?? 0;
+    hasReadyStack = roundRobinStacksCount > 0 || customStacksCount > 0;
+  } else {
+    // WIN-LOSE MODE: Check legacy stacks
+    const winnersCount = session.winnerStack?.length ?? 0;
+    const losersCount = session.loserStack?.length ?? 0;
+    const waitingCount = session.waitingStack?.length ?? 0;
+    
+    hasReadyStack = 
+      winnersCount >= 4 ||                          // 4+ winners (full winner stack)
+      losersCount >= 4 ||                           // 4+ losers (full loser stack)
+      waitingCount >= 4 ||                          // 4+ waiting (full waiting stack)
+      (losersCount + waitingCount) >= 4;            // losers + waiting combined (mixed stack)
+    // Note: winners do NOT mix with losers/waiting - they form separate stacks
+  }
   
   const canStartGame = hasReadyStack;
 
@@ -675,82 +684,6 @@ export function CourtView({ court }: CourtViewProps) {
                   <Play className="w-5 h-5" />
                   Start Next Game
                 </button>
-                
-                {/* Stack Dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowStackDropdown(!showStackDropdown)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Layers className="w-4 h-4" />
-                      Select Stack...
-                    </span>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${showStackDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-                  
-                  {showStackDropdown && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
-                      {/* Winners Stack */}
-                      {(session.winnerStack?.length ?? 0) >= 4 && (
-                        <button
-                          onClick={() => {
-                            const ids = session.winnerStack!.slice(0, 4);
-                            startGame(court.id, [ids[0], ids[1]], [ids[2], ids[3]]);
-                            setShowStackDropdown(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-green-50 dark:hover:bg-green-900/20 flex items-center gap-2"
-                        >
-                          <Trophy className="w-4 h-4 text-green-600" />
-                          <span>Winners ({session.winnerStack?.length})</span>
-                        </button>
-                      )}
-                      {/* Losers Stack */}
-                      {(session.loserStack?.length ?? 0) >= 4 && (
-                        <button
-                          onClick={() => {
-                            const ids = session.loserStack!.slice(0, 4);
-                            startGame(court.id, [ids[0], ids[1]], [ids[2], ids[3]]);
-                            setShowStackDropdown(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center gap-2"
-                        >
-                          <Users className="w-4 h-4 text-orange-600" />
-                          <span>Losers ({session.loserStack?.length})</span>
-                        </button>
-                      )}
-                      {/* Waiting Stack */}
-                      {(session.waitingStack?.length ?? 0) >= 4 && (
-                        <button
-                          onClick={() => {
-                            const ids = session.waitingStack!.slice(0, 4);
-                            startGame(court.id, [ids[0], ids[1]], [ids[2], ids[3]]);
-                            setShowStackDropdown(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-2"
-                        >
-                          <Play className="w-4 h-4 text-blue-600" />
-                          <span>Free/Waiting ({session.waitingStack?.length})</span>
-                        </button>
-                      )}
-                      {/* Mixed (combined) */}
-                      {(session.loserStack?.length ?? 0) + (session.waitingStack?.length ?? 0) >= 4 && 
-                       (session.loserStack?.length ?? 0) < 4 && (session.waitingStack?.length ?? 0) < 4 && (
-                        <button
-                          onClick={() => {
-                            const combined = [...(session.loserStack ?? []), ...(session.waitingStack ?? [])].slice(0, 4);
-                            startGame(court.id, [combined[0], combined[1]], [combined[2], combined[3]]);
-                            setShowStackDropdown(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
-                        >
-                          <Users className="w-4 h-4 text-slate-500" />
-                          <span>Mixed (Losers + Free)</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
                 
                 {/* Drag hint */}
                 <p className="text-xs text-center text-slate-400">

@@ -88,16 +88,11 @@ export interface Session {
   isActive: boolean;
   shareCode?: string; // For session sharing
   // Smart queue stacks (Win-Lose Stack mode)
-  winnerStack: string[];   // DEPRECATED - kept for backward compatibility
-  loserStack: string[];    // DEPRECATED - kept for backward compatibility
-  waitingStack: string[];  // Players waiting to be assigned to a stack (both modes)
+  winnerStack: string[];   // Players who won their last game
+  loserStack: string[];    // Players who lost their last game
+  waitingStack: string[];  // New players or overflow
   useSmartQueue: boolean;  // Toggle between FIFO and smart queue
   stackCounter: number;    // Increments each time a stack is played (for naming)
-  // Win-Lose Stack mode - Pre-built stacks
-  winnerStacks: string[][]; // Array of winner stacks (ready or forming)
-  loserStacks: string[][];  // Array of loser stacks (ready or forming)
-  waitingStacks: string[][]; // Array of regular stacks (ready or forming) - "waiting" = regular/blue stacks
-  lastStackType?: 'winner' | 'loser' | 'regular'; // Track last played stack type for alternating
   // Round Robin tracking
   matchHistory: MatchHistoryEntry[]; // All past matchups for variety tracking
   customStacks: string[][];          // Manager-created custom stacks (array of player ID arrays)

@@ -114,116 +114,8 @@ export function PlayerQueue() {
       return [...customStackGroups, ...roundRobinStackGroups, ...(formingStack ? [formingStack] : [])];
     }
     
-    // Win-Lose Stack mode - Use pre-built stacks from session
-    if (session.rotationMode === 'win_lose_stack' || session.rotationMode === 'full_rotation') {
-      // Get pre-built stacks from session (labels will be assigned after ordering)
-      const winnerStackGroups: StackGroup[] = (session.winnerStacks || []).map((stackIds, idx) => ({
-        id: `winner-${idx}`,
-        players: stackIds
-          .map(id => session.players.find(p => p.id === id))
-          .filter((p): p is Player => p !== undefined),
-        type: 'winners' as StackType,
-        label: '', // Will be set after ordering
-        isForming: stackIds.length < 4,
-      }));
-      
-      const loserStackGroups: StackGroup[] = (session.loserStacks || []).map((stackIds, idx) => ({
-        id: `loser-${idx}`,
-        players: stackIds
-          .map(id => session.players.find(p => p.id === id))
-          .filter((p): p is Player => p !== undefined),
-        type: 'losers' as StackType,
-        label: '', // Will be set after ordering
-        isForming: stackIds.length < 4,
-      }));
-      
-      // Waiting stacks (Regular/blue stacks)
-      const waitingStackGroups: StackGroup[] = (session.waitingStacks || []).map((stackIds, idx) => ({
-        id: `waiting-${idx}`,
-        players: stackIds
-          .map(id => session.players.find(p => p.id === id))
-          .filter((p): p is Player => p !== undefined),
-        type: stackIds.length === 4 ? 'ready' as StackType : 'forming-free' as StackType,
-        label: '', // Will be set after ordering
-        isForming: stackIds.length < 4,
-      }));
-      
-      // Custom stacks
-      const customStackGroups: StackGroup[] = (session.customStacks || []).map((playerIds, idx) => ({
-        id: `custom-${idx}`,
-        players: playerIds
-          .map(id => session.players.find(p => p.id === id))
-          .filter((p): p is Player => p !== undefined),
-        type: 'custom' as StackType,
-        label: `Custom ${idx + 1}`,
-        isForming: false,
-        customIndex: idx,
-      })).filter(stack => stack.players.length === 4);
-      
-      // Get ready stacks by type - preserve array order (FIFO)
-      const readyRegular = waitingStackGroups.filter(s => !s.isForming);
-      const readyLoser = loserStackGroups.filter(s => !s.isForming);
-      const readyWinner = winnerStackGroups.filter(s => !s.isForming);
-      
-      // Determine alternating order based on lastStackType
-      // This ONLY changes when a game STARTS (not when it ends)
-      // If last was 'loser' or 'regular', winner is next; otherwise loser is next
-      const lastType = session.lastStackType;
-      const tryWinnerFirst = lastType === 'loser' || lastType === 'regular';
-      
-      // Build ordered ready stacks: Regular first, then alternating win/lose
-      // The order is stable - it only changes when lastStackType changes (in startGame)
-      let orderedWinLoseStacks: StackGroup[] = [];
-      if (tryWinnerFirst) {
-        orderedWinLoseStacks = [...readyWinner, ...readyLoser];
-      } else {
-        orderedWinLoseStacks = [...readyLoser, ...readyWinner];
-      }
-      
-      const allReadyStacks = [
-        ...readyRegular,      // Regular always first
-        ...orderedWinLoseStacks,
-      ];
-      
-      const allFormingStacks = [
-        ...waitingStackGroups.filter(s => s.isForming),
-        ...loserStackGroups.filter(s => s.isForming),
-        ...winnerStackGroups.filter(s => s.isForming),
-      ];
-      
-      // Order: Custom → Ready Stacks (priority order) → Forming Stacks
-      const orderedStacks = [
-        ...customStackGroups,
-        ...allReadyStacks,
-        ...allFormingStacks
-      ];
-      
-      // Assign labels based on final display order
-      // stackCounter = number of games played, so next stack is stackCounter + 1
-      let nextStackNumber = stackCounter + 1;
-      orderedStacks.forEach(stack => {
-        if (stack.type === 'custom') {
-          // Custom stacks already have labels
-        } else if (stack.isForming) {
-          // Forming stacks get descriptive labels
-          if (stack.type === 'winners') {
-            stack.label = `Winners Forming (${stack.players.length}/4)`;
-          } else if (stack.type === 'losers') {
-            stack.label = `Losers Forming (${stack.players.length}/4)`;
-          } else {
-            stack.label = `Regular Forming (${stack.players.length}/4)`;
-          }
-        } else {
-          // Ready stacks get incrementing numbers based on games played
-          stack.label = `Stack ${nextStackNumber}`;
-          nextStackNumber++;
-        }
-      });
-      
-      return orderedStacks;
-    }
-    
-    // DEPRECATED: Old Win-Lose Stack mode (fallback for backward compatibility)
+    // Win-Lose Stack mode (default)
+    // Separate players by their stack status, maintaining stack order
     const winners = getPlayersInStackOrder(session.winnerStack ?? []);
     const losers = getPlayersInStackOrder(session.loserStack ?? []);
     const free = getPlayersInStackOrder(session.waitingStack ?? []);
@@ -381,20 +273,7 @@ export function PlayerQueue() {
     
     // Custom stacks go first (highest priority), then ready stacks, then forming
     return [...customStackGroups, ...readyStacks, ...formingStacksList];
-  }, [
-    session?.players, 
-    session?.winnerStack, 
-    session?.loserStack, 
-    session?.waitingStack, 
-    session?.winnerStacks, 
-    session?.loserStacks, 
-    session?.waitingStacks, 
-    session?.lastStackType,  // Visual order ONLY changes when this changes (in startGame)
-    session?.customStacks, 
-    session?.roundRobinStacks, 
-    session?.rotationMode, 
-    stackCounter
-  ]);
+  }, [session?.players, session?.winnerStack, session?.loserStack, session?.waitingStack, session?.customStacks, session?.roundRobinStacks, session?.rotationMode, stackCounter]);
 
   // Filter stacks by search query (must be before early return to maintain hook order)
   const filteredStacks = useMemo(() => {
@@ -780,23 +659,17 @@ export function PlayerQueue() {
                       Drop to add
                     </span>
                   )}
-                  {/* Show "Next" badge on the actual next stack to play (excludes custom stacks) */}
-                  {(() => {
-                    // Only show on ready stacks (not forming, not custom)
-                    if (stack.isForming || stack.type === 'custom' || draggedPlayerId) return null;
+                  {/* Show "Next" badge on first ready stack (marker only, not for custom stacks) */}
+                  {!stack.isForming && !draggedPlayerId && stack.players.length === 4 && stack.type !== 'custom' && (() => {
+                    // Get non-custom ready stacks only
+                    const readyStacksOnly = filteredStacks.filter(s => !s.isForming && s.players.length === 4 && s.type !== 'custom');
+                    const isFirstReadyStack = readyStacksOnly.length > 0 && readyStacksOnly[0].id === stack.id;
                     
-                    // Get all ready stacks (excluding custom) that have all players available
-                    // Custom stacks are NOT auto-selected by autoAssignNextGame
-                    const availableReadyStacks = filteredStacks.filter(s => 
-                      !s.isForming && 
-                      s.type !== 'custom' &&
-                      !s.players.some(p => playersInGame.has(p.id))
-                    );
+                    // Check if any player in this stack is in game
+                    const hasPlayerInGame = stack.players.some(p => playersInGame.has(p.id));
                     
-                    // The first available stack is "Next" (order already matches game selection priority)
-                    const isNextStack = availableReadyStacks.length > 0 && availableReadyStacks[0].id === stack.id;
-                    
-                    return isNextStack ? (
+                    // Only show "Next" on first non-custom ready stack without players in game
+                    return isFirstReadyStack && !hasPlayerInGame ? (
                       <span className={`text-xs px-1.5 py-0.5 rounded ${theme.bg600} text-white flex items-center gap-1`}>
                         <Star className="w-3 h-3" />
                         Next
@@ -848,14 +721,18 @@ export function PlayerQueue() {
                   )}
                   {/* Play button for ready stacks when court is available */}
                   {!stack.isForming && stack.players.length === 4 && (() => {
+                    console.log('[PlayButton CHECK] Evaluating:', stack.label, 'isForming:', stack.isForming, 'players:', stack.players.length);
                     const availableCourt = session.courts.find(c => c.status === 'available');
+                    console.log('[PlayButton] stack:', stack.label, 'isForming:', stack.isForming, 'players:', stack.players.length, 'availableCourt:', availableCourt?.name);
                     if (!availableCourt) {
+                      console.log('[PlayButton] No available court');
                       return null;
                     }
                     
                     const players = stack.players;
                     // Check if any player in this stack is already in a game
                     const hasPlayerInGame = players.some(p => playersInGame.has(p.id));
+                    console.log('[PlayButton] hasPlayerInGame:', hasPlayerInGame, 'playersInGame:', [...playersInGame]);
                     if (hasPlayerInGame) return null; // Don't show play button if any player is in game
                     
                     // Check if this is not the first ready stack (skipping the queue)
@@ -863,10 +740,12 @@ export function PlayerQueue() {
                     const isFirstReadyStack = readyStacksOnly.length > 0 && readyStacksOnly[0].id === stack.id;
                     const skippedQueue = !isFirstReadyStack;
                     
+                    console.log('[PlayButton] RENDERING button for', stack.label);
                     return (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          console.log('[PlayButton] CLICKED for', stack.label, 'customIndex:', stack.customIndex);
                           // Start game with this stack
                           startGame(
                             availableCourt.id,
