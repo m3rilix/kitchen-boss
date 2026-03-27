@@ -2,7 +2,7 @@ import type { Session, Player, Court, ActivityType } from '@/types';
 import { useThemeClasses } from '@/store/themeStore';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers } from 'lucide-react';
 
 interface SharedSessionViewProps {
@@ -84,6 +84,12 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  // Prevent hydration mismatch by only rendering time-based content on client
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Get player by ID
   const getPlayerById = (playerId: string): Player | undefined => {
@@ -557,7 +563,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                           </div>
                           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                             <span>{player.gamesPlayed} games</span>
-                            {player.waitingSince > 0 && (
+                            {isClient && player.waitingSince > 0 && (
                               <>
                                 <span>•</span>
                                 <span className="flex items-center gap-1">
@@ -604,9 +610,11 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                           }`}>
                             {entry.message}
                           </p>
-                          <p className="text-xs text-slate-400 dark:text-slate-500">
-                            {formatActivityTime(entry.timestamp)}
-                          </p>
+                          {isClient && (
+                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                              {formatActivityTime(entry.timestamp)}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
