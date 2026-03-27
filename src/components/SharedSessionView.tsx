@@ -339,7 +339,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                     <span>Live</span>
                   </div>
                 </div>
-                {(session.location || session.date) && (
+                {isClient && (session.location || session.date) && (
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                     {session.location && <span>{session.location}</span>}
                     {session.location && session.date && <span> • </span>}

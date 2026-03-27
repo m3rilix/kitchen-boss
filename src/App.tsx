@@ -121,7 +121,19 @@ function App() {
   }, [session, shareCode, syncToFirebase]);
 
   // If viewing a shared session, show read-only view (bypass login)
-  // Only render after client-side hydration to prevent SSR mismatch
+  // Wait for client-side hydration before checking for share codes
+  if (!isClient && typeof window !== 'undefined' && window.location.search.includes('code=')) {
+    // During SSR or initial render with share code, show loading
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isClient && (sharedSession || viewingShareCode)) {
     if (!sharedSession) {
       // Loading state while fetching from Firebase
