@@ -18,6 +18,7 @@ function App() {
   const [viewingShareCode, setViewingShareCode] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sessionTransferred, setSessionTransferred] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   // Session timeout check and validation - runs every minute
   useEffect(() => {
@@ -92,8 +93,15 @@ function App() {
     };
   }, [isAuthenticated, updateActivity]);
 
+  // Mark as client-side rendered
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   // Check for share code in URL on mount and subscribe to real-time updates
   useEffect(() => {
+    if (!isClient) return;
+    
     const codeFromUrl = getShareCodeFromUrl();
     if (codeFromUrl) {
       setViewingShareCode(codeFromUrl);
@@ -103,7 +111,7 @@ function App() {
       });
       return () => unsubscribe();
     }
-  }, []);
+  }, [isClient]);
 
   // Sync to Firebase whenever session changes (if sharing is active)
   useEffect(() => {
@@ -113,7 +121,8 @@ function App() {
   }, [session, shareCode, syncToFirebase]);
 
   // If viewing a shared session, show read-only view (bypass login)
-  if (sharedSession || viewingShareCode) {
+  // Only render after client-side hydration to prevent SSR mismatch
+  if (isClient && (sharedSession || viewingShareCode)) {
     if (!sharedSession) {
       // Loading state while fetching from Firebase
       return (
