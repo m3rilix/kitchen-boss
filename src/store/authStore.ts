@@ -576,8 +576,7 @@ export const useAuthStore = create<AuthStore>()(
           const { removeActiveSession } = await import('@/lib/firebase');
           await removeActiveSession(userId);
         } catch (error) {
-          console.error('Error force logging out user:', error);
-          throw error;
+          console.warn('Could not force logout user (non-critical):', error);
         }
       },
 

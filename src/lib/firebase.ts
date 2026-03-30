@@ -210,8 +210,7 @@ export async function storeActiveSession(userId: string, sessionData: ActiveSess
   try {
     await set(sessionRef, sessionData);
   } catch (error) {
-    console.error('Firebase storeActiveSession error:', error);
-    throw error;
+    console.warn('Could not store active session (non-critical):', (error as Error).message);
   }
 }
 
@@ -222,7 +221,7 @@ export async function getActiveSession(userId: string): Promise<ActiveSession | 
     const snapshot = await get(sessionRef);
     return snapshot.exists() ? snapshot.val() as ActiveSession : null;
   } catch (error) {
-    console.error('Firebase getActiveSession error:', error);
+    console.warn('Could not get active session (non-critical):', (error as Error).message);
     return null;
   }
 }
@@ -246,7 +245,7 @@ export async function getAllActiveSessions(): Promise<Record<string, ActiveSessi
     const snapshot = await get(sessionsRef);
     return snapshot.exists() ? snapshot.val() : {};
   } catch (error) {
-    console.error('Firebase getAllActiveSessions error:', error);
+    console.warn('Could not get active sessions (non-critical):', (error as Error).message);
     return {};
   }
 }
@@ -257,8 +256,7 @@ export async function updateSessionActivity(userId: string): Promise<void> {
   try {
     await set(sessionRef, Date.now());
   } catch (error) {
-    console.error('Firebase updateSessionActivity error:', error);
-    // Don't throw error for activity updates to avoid disrupting user experience
+    console.warn('Could not update session activity (non-critical):', (error as Error).message);
   }
 }
 
@@ -268,6 +266,8 @@ export function onSessionChange(userId: string, callback: (session: ActiveSessio
   const unsubscribe = onValue(sessionRef, (snapshot) => {
     const session = snapshot.exists() ? snapshot.val() as ActiveSession : null;
     callback(session);
+  }, (error) => {
+    console.warn('Could not listen for session changes (non-critical):', error.message);
   });
   return unsubscribe;
 }
