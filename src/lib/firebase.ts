@@ -62,13 +62,87 @@ export async function updateSharedSession(shareCode: string, session: Session): 
   }
 }
 
+// Firebase Realtime Database can convert arrays to objects with numeric keys.
+// This function recursively converts them back to proper arrays.
+function firebaseToArray(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(firebaseToArray);
+  
+  const keys = Object.keys(obj as Record<string, unknown>);
+  // Check if this object is actually an array (all keys are sequential integers starting from 0)
+  const isArrayLike = keys.length > 0 && keys.every((k, i) => String(i) === k || /^\d+$/.test(k));
+  if (isArrayLike) {
+    // Convert to array, filling gaps with undefined, then filter nulls
+    const maxIndex = Math.max(...keys.map(Number));
+    const arr: unknown[] = [];
+    for (let i = 0; i <= maxIndex; i++) {
+      arr.push(firebaseToArray((obj as Record<string, unknown>)[String(i)]));
+    }
+    return arr.filter(item => item !== undefined && item !== null);
+  }
+  
+  // Regular object - recurse into values
+  const result: Record<string, unknown> = {};
+  for (const key of keys) {
+    result[key] = firebaseToArray((obj as Record<string, unknown>)[key]);
+  }
+  return result;
+}
+
+// Sanitize session data from Firebase to ensure all arrays are proper arrays
+function sanitizeSessionFromFirebase(data: unknown): Session | null {
+  if (!data || typeof data !== 'object') return null;
+  try {
+    const sanitized = firebaseToArray(data) as Session;
+    // Ensure critical array fields are arrays
+    sanitized.players = Array.isArray(sanitized.players) ? sanitized.players : [];
+    sanitized.courts = Array.isArray(sanitized.courts) ? sanitized.courts : [];
+    sanitized.queue = Array.isArray(sanitized.queue) ? sanitized.queue : [];
+    sanitized.activityLog = Array.isArray(sanitized.activityLog) ? sanitized.activityLog : [];
+    sanitized.gamesCompleted = Array.isArray(sanitized.gamesCompleted) ? sanitized.gamesCompleted : [];
+    sanitized.winnerStack = Array.isArray(sanitized.winnerStack) ? sanitized.winnerStack : [];
+    sanitized.loserStack = Array.isArray(sanitized.loserStack) ? sanitized.loserStack : [];
+    sanitized.waitingStack = Array.isArray(sanitized.waitingStack) ? sanitized.waitingStack : [];
+    sanitized.winnerStacks = Array.isArray(sanitized.winnerStacks) ? sanitized.winnerStacks : [];
+    sanitized.loserStacks = Array.isArray(sanitized.loserStacks) ? sanitized.loserStacks : [];
+    sanitized.waitingStacks = Array.isArray(sanitized.waitingStacks) ? sanitized.waitingStacks : [];
+    sanitized.customStacks = Array.isArray(sanitized.customStacks) ? sanitized.customStacks : [];
+    sanitized.roundRobinStacks = Array.isArray(sanitized.roundRobinStacks) ? sanitized.roundRobinStacks : [];
+    sanitized.matchHistory = Array.isArray(sanitized.matchHistory) ? sanitized.matchHistory : [];
+    
+    // Ensure nested arrays in courts (team1/team2) are proper arrays
+    sanitized.courts = sanitized.courts.map(court => {
+      if (court.currentGame) {
+        const t1 = Array.isArray(court.currentGame.team1) ? court.currentGame.team1 : [];
+        const t2 = Array.isArray(court.currentGame.team2) ? court.currentGame.team2 : [];
+        court.currentGame.team1 = [t1[0] || '', t1[1] || ''] as [string, string];
+        court.currentGame.team2 = [t2[0] || '', t2[1] || ''] as [string, string];
+      }
+      return court;
+    });
+    
+    // Ensure nested arrays in players
+    sanitized.players = sanitized.players.map(player => ({
+      ...player,
+      lastPartners: Array.isArray(player.lastPartners) ? player.lastPartners : [],
+      lastOpponents: Array.isArray(player.lastOpponents) ? player.lastOpponents : [],
+    }));
+    
+    return sanitized;
+  } catch (e) {
+    console.error('Error sanitizing session from Firebase:', e);
+    return data as Session;
+  }
+}
+
 // Get session from Firebase by share code
 export async function getSharedSession(shareCode: string): Promise<Session | null> {
   const sessionRef = ref(database, `sessions/${shareCode}`);
   const snapshot = await get(sessionRef);
   
   if (snapshot.exists()) {
-    return snapshot.val() as Session;
+    return sanitizeSessionFromFirebase(snapshot.val());
   }
   return null;
 }
@@ -82,7 +156,7 @@ export function subscribeToSession(
   
   const unsubscribe = onValue(sessionRef, (snapshot) => {
     if (snapshot.exists()) {
-      callback(snapshot.val() as Session);
+      callback(sanitizeSessionFromFirebase(snapshot.val()));
     } else {
       callback(null);
     }
@@ -157,18 +231,11 @@ export async function getActiveSession(userId: string): Promise<ActiveSession | 
 export async function removeActiveSession(userId: string): Promise<void> {
   const sessionRef = ref(database, `activeSessions/${userId}`);
   try {
-    // Use set(null) instead of remove() - works better with Firebase rules
-    await set(sessionRef, null);
-    
-    // Verify removal by checking if it still exists
-    const snapshot = await get(sessionRef);
-    if (snapshot.exists()) {
-      // Try remove() as fallback if set(null) didn't work
-      await remove(sessionRef);
-    }
+    await remove(sessionRef);
   } catch (error) {
-    console.error('Firebase removeActiveSession error:', error);
-    throw error;
+    // Don't throw - this is a cleanup operation that shouldn't break the logout flow
+    // PERMISSION_DENIED is common when Firebase rules restrict access
+    console.warn('Could not remove active session (non-critical):', (error as Error).message);
   }
 }
 

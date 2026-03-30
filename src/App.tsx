@@ -18,7 +18,6 @@ function App() {
   const [viewingShareCode, setViewingShareCode] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sessionTransferred, setSessionTransferred] = useState(false);
-  const [isClient, setIsClient] = useState(false);
 
   // Session timeout check and validation - runs every minute
   useEffect(() => {
@@ -93,15 +92,8 @@ function App() {
     };
   }, [isAuthenticated, updateActivity]);
 
-  // Mark as client-side rendered
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
   // Check for share code in URL on mount and subscribe to real-time updates
   useEffect(() => {
-    if (!isClient) return;
-    
     const codeFromUrl = getShareCodeFromUrl();
     if (codeFromUrl) {
       setViewingShareCode(codeFromUrl);
@@ -111,7 +103,7 @@ function App() {
       });
       return () => unsubscribe();
     }
-  }, [isClient]);
+  }, []);
 
   // Sync to Firebase whenever session changes (if sharing is active)
   useEffect(() => {
@@ -121,20 +113,7 @@ function App() {
   }, [session, shareCode, syncToFirebase]);
 
   // If viewing a shared session, show read-only view (bypass login)
-  // Wait for client-side hydration before checking for share codes
-  if (!isClient && typeof window !== 'undefined' && window.location.search.includes('code=')) {
-    // During SSR or initial render with share code, show loading
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading session...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isClient && (sharedSession || viewingShareCode)) {
+  if (sharedSession || viewingShareCode) {
     if (!sharedSession) {
       // Loading state while fetching from Firebase
       return (
