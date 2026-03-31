@@ -57,8 +57,8 @@ export async function updateSharedSession(shareCode: string, session: Session): 
       lastUpdated: Date.now()
     });
   } catch (error) {
-    console.error('Firebase updateSharedSession error:', error);
-    throw error;
+    // Don't throw - sync failures shouldn't break the app
+    console.warn('Firebase updateSharedSession error (non-critical):', (error as Error).message);
   }
 }
 
@@ -90,45 +90,93 @@ function firebaseToArray(obj: unknown): unknown {
   return result;
 }
 
-// Sanitize session data from Firebase to ensure all arrays are proper arrays
+// Helper: ensure a value is an array, defaulting to []
+function ensureArray<T>(val: unknown): T[] {
+  return Array.isArray(val) ? val : [];
+}
+
+// Helper: ensure a value is a [string, string] tuple
+function ensureTuple(val: unknown): [string, string] {
+  const arr = ensureArray<string>(val);
+  return [arr[0] || '', arr[1] || ''] as [string, string];
+}
+
+// Helper: ensure nested string[][] — each inner element must be an array
+function ensureNestedArrays(val: unknown): string[][] {
+  const outer = ensureArray<unknown>(val);
+  return outer.map(inner => ensureArray<string>(inner));
+}
+
+// Sanitize session data from Firebase to ensure all arrays are proper arrays.
+// Firebase Realtime DB drops empty arrays entirely and converts arrays to
+// objects with numeric keys. This function restores correct types.
 function sanitizeSessionFromFirebase(data: unknown): Session | null {
   if (!data || typeof data !== 'object') return null;
   try {
     const sanitized = firebaseToArray(data) as Session;
-    // Ensure critical array fields are arrays
-    sanitized.players = Array.isArray(sanitized.players) ? sanitized.players : [];
-    sanitized.courts = Array.isArray(sanitized.courts) ? sanitized.courts : [];
-    sanitized.queue = Array.isArray(sanitized.queue) ? sanitized.queue : [];
-    sanitized.activityLog = Array.isArray(sanitized.activityLog) ? sanitized.activityLog : [];
-    sanitized.gamesCompleted = Array.isArray(sanitized.gamesCompleted) ? sanitized.gamesCompleted : [];
-    sanitized.winnerStack = Array.isArray(sanitized.winnerStack) ? sanitized.winnerStack : [];
-    sanitized.loserStack = Array.isArray(sanitized.loserStack) ? sanitized.loserStack : [];
-    sanitized.waitingStack = Array.isArray(sanitized.waitingStack) ? sanitized.waitingStack : [];
-    sanitized.winnerStacks = Array.isArray(sanitized.winnerStacks) ? sanitized.winnerStacks : [];
-    sanitized.loserStacks = Array.isArray(sanitized.loserStacks) ? sanitized.loserStacks : [];
-    sanitized.waitingStacks = Array.isArray(sanitized.waitingStacks) ? sanitized.waitingStacks : [];
-    sanitized.customStacks = Array.isArray(sanitized.customStacks) ? sanitized.customStacks : [];
-    sanitized.roundRobinStacks = Array.isArray(sanitized.roundRobinStacks) ? sanitized.roundRobinStacks : [];
-    sanitized.matchHistory = Array.isArray(sanitized.matchHistory) ? sanitized.matchHistory : [];
-    
-    // Ensure nested arrays in courts (team1/team2) are proper arrays
+
+    // --- Top-level arrays (Firebase drops empty [] so these may be undefined) ---
+    sanitized.players = ensureArray(sanitized.players);
+    sanitized.courts = ensureArray(sanitized.courts);
+    sanitized.queue = ensureArray(sanitized.queue);
+    sanitized.activityLog = ensureArray(sanitized.activityLog);
+    sanitized.gamesCompleted = ensureArray(sanitized.gamesCompleted);
+    sanitized.winnerStack = ensureArray(sanitized.winnerStack);
+    sanitized.loserStack = ensureArray(sanitized.loserStack);
+    sanitized.waitingStack = ensureArray(sanitized.waitingStack);
+    sanitized.matchHistory = ensureArray(sanitized.matchHistory);
+
+    // --- Nested string[][] arrays ---
+    sanitized.winnerStacks = ensureNestedArrays(sanitized.winnerStacks);
+    sanitized.loserStacks = ensureNestedArrays(sanitized.loserStacks);
+    sanitized.waitingStacks = ensureNestedArrays(sanitized.waitingStacks);
+    sanitized.customStacks = ensureNestedArrays(sanitized.customStacks);
+    sanitized.roundRobinStacks = ensureNestedArrays(sanitized.roundRobinStacks);
+
+    // --- Courts: ensure team tuples in currentGame ---
     sanitized.courts = sanitized.courts.map(court => {
       if (court.currentGame) {
-        const t1 = Array.isArray(court.currentGame.team1) ? court.currentGame.team1 : [];
-        const t2 = Array.isArray(court.currentGame.team2) ? court.currentGame.team2 : [];
-        court.currentGame.team1 = [t1[0] || '', t1[1] || ''] as [string, string];
-        court.currentGame.team2 = [t2[0] || '', t2[1] || ''] as [string, string];
+        court.currentGame.team1 = ensureTuple(court.currentGame.team1);
+        court.currentGame.team2 = ensureTuple(court.currentGame.team2);
       }
       return court;
     });
-    
-    // Ensure nested arrays in players
+
+    // --- Games completed: ensure team tuples ---
+    sanitized.gamesCompleted = sanitized.gamesCompleted.map(game => ({
+      ...game,
+      team1: ensureTuple(game.team1),
+      team2: ensureTuple(game.team2),
+    }));
+
+    // --- Players: ensure nested arrays ---
     sanitized.players = sanitized.players.map(player => ({
       ...player,
-      lastPartners: Array.isArray(player.lastPartners) ? player.lastPartners : [],
-      lastOpponents: Array.isArray(player.lastOpponents) ? player.lastOpponents : [],
+      lastPartners: ensureArray<string>(player.lastPartners),
+      lastOpponents: ensureArray<string>(player.lastOpponents),
     }));
-    
+
+    // --- Activity log: ensure details arrays ---
+    sanitized.activityLog = sanitized.activityLog.map(entry => {
+      if (entry.details) {
+        entry.details = {
+          ...entry.details,
+          playerIds: entry.details.playerIds ? ensureArray<string>(entry.details.playerIds) : undefined,
+          playerNames: entry.details.playerNames ? ensureArray<string>(entry.details.playerNames) : undefined,
+          team1Names: entry.details.team1Names ? ensureArray<string>(entry.details.team1Names) : undefined,
+          team2Names: entry.details.team2Names ? ensureArray<string>(entry.details.team2Names) : undefined,
+        };
+      }
+      return entry;
+    });
+
+    // --- Match history: ensure team tuples ---
+    sanitized.matchHistory = sanitized.matchHistory.map(match => ({
+      ...match,
+      team1: ensureTuple(match.team1),
+      team2: ensureTuple(match.team2),
+    }));
+
     return sanitized;
   } catch (e) {
     console.error('Error sanitizing session from Firebase:', e);
