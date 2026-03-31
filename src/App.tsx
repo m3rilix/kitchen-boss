@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component, type ErrorInfo, type ReactNode } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useSessionStore } from '@/store/sessionStore';
 import { useAuthStore } from '@/store/authStore';
@@ -10,6 +10,36 @@ import { SharedSessionView } from '@/components/SharedSessionView';
 import { SessionTransferredModal } from '@/components/SessionTransferModal';
 import { getShareCodeFromUrl, clearShareCodeFromUrl, subscribeToSession, onSessionChange } from '@/lib/firebase';
 import type { Session } from '@/types';
+
+// Error boundary to catch render errors in shared session view
+class ShareViewErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('[SHARE DEBUG] ErrorBoundary caught render error:', error.message);
+    console.error('[SHARE DEBUG] ErrorBoundary component stack:', errorInfo.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md text-center">
+            <h2 className="text-xl font-bold text-red-600 mb-2">Share View Error</h2>
+            <p className="text-slate-600 mb-2">Something went wrong rendering the shared session.</p>
+            <pre className="text-xs text-left bg-slate-100 p-3 rounded overflow-auto max-h-40 mb-4">{this.state.error?.message}</pre>
+            <p className="text-xs text-slate-500">Check browser console for [SHARE DEBUG] logs</p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function App() {
   const { session, shareCode, syncToFirebase } = useSessionStore();
@@ -95,10 +125,12 @@ function App() {
   // Check for share code in URL on mount and subscribe to real-time updates
   useEffect(() => {
     const codeFromUrl = getShareCodeFromUrl();
+    console.log('[SHARE DEBUG] App mount - codeFromUrl:', codeFromUrl);
     if (codeFromUrl) {
       setViewingShareCode(codeFromUrl);
       // Subscribe to real-time updates
       const unsubscribe = subscribeToSession(codeFromUrl, (sessionData) => {
+        console.log('[SHARE DEBUG] subscribeToSession callback - sessionData:', sessionData ? 'received' : 'null', sessionData ? { id: sessionData.id, name: sessionData.name } : null);
         setSharedSession(sessionData);
       });
       return () => unsubscribe();
@@ -114,6 +146,7 @@ function App() {
 
   // If viewing a shared session, show read-only view (bypass login)
   if (sharedSession || viewingShareCode) {
+    console.log('[SHARE DEBUG] Rendering share view - sharedSession:', !!sharedSession, 'viewingShareCode:', viewingShareCode);
     if (!sharedSession) {
       // Loading state while fetching from Firebase
       return (
@@ -126,14 +159,16 @@ function App() {
       );
     }
     return (
-      <SharedSessionView 
-        session={sharedSession} 
-        onExit={() => {
-          setSharedSession(null);
-          setViewingShareCode(null);
-          clearShareCodeFromUrl();
-        }} 
-      />
+      <ShareViewErrorBoundary>
+        <SharedSessionView 
+          session={sharedSession} 
+          onExit={() => {
+            setSharedSession(null);
+            setViewingShareCode(null);
+            clearShareCodeFromUrl();
+          }} 
+        />
+      </ShareViewErrorBoundary>
     );
   }
 

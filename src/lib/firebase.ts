@@ -111,9 +111,17 @@ function ensureNestedArrays(val: unknown): string[][] {
 // Firebase Realtime DB drops empty arrays entirely and converts arrays to
 // objects with numeric keys. This function restores correct types.
 function sanitizeSessionFromFirebase(data: unknown): Session | null {
-  if (!data || typeof data !== 'object') return null;
+  if (!data || typeof data !== 'object') {
+    console.warn('[SHARE DEBUG] sanitize received falsy/non-object data:', typeof data, data);
+    return null;
+  }
   try {
+    console.log('[SHARE DEBUG] Raw Firebase data keys:', Object.keys(data as Record<string, unknown>));
+    console.log('[SHARE DEBUG] Raw Firebase data:', JSON.stringify(data).substring(0, 500));
     const sanitized = firebaseToArray(data) as Session;
+    console.log('[SHARE DEBUG] After firebaseToArray - players type:', typeof sanitized.players, Array.isArray(sanitized.players), 'courts type:', typeof sanitized.courts, Array.isArray(sanitized.courts));
+    console.log('[SHARE DEBUG] After firebaseToArray - queue type:', typeof sanitized.queue, Array.isArray(sanitized.queue));
+    console.log('[SHARE DEBUG] After firebaseToArray - activityLog type:', typeof sanitized.activityLog, Array.isArray(sanitized.activityLog));
 
     // --- Top-level arrays (Firebase drops empty [] so these may be undefined) ---
     sanitized.players = ensureArray(sanitized.players);
@@ -177,9 +185,31 @@ function sanitizeSessionFromFirebase(data: unknown): Session | null {
       team2: ensureTuple(match.team2),
     }));
 
+    console.log('[SHARE DEBUG] Sanitized session summary:', {
+      id: sanitized.id,
+      name: sanitized.name,
+      playersCount: sanitized.players?.length,
+      courtsCount: sanitized.courts?.length,
+      queueCount: sanitized.queue?.length,
+      activityLogCount: sanitized.activityLog?.length,
+      playersIsArray: Array.isArray(sanitized.players),
+      courtsIsArray: Array.isArray(sanitized.courts),
+      queueIsArray: Array.isArray(sanitized.queue),
+      activityLogIsArray: Array.isArray(sanitized.activityLog),
+    });
+    // Log first player to check for object-as-child issues
+    if (sanitized.players?.length > 0) {
+      const p = sanitized.players[0];
+      console.log('[SHARE DEBUG] First player sample:', { name: p.name, id: p.id, checkedInAt: p.checkedInAt, checkedInAtType: typeof p.checkedInAt });
+    }
+    // Log first activity entry
+    if (sanitized.activityLog?.length > 0) {
+      const e = sanitized.activityLog[0];
+      console.log('[SHARE DEBUG] First activity entry:', { id: e.id, type: e.type, message: e.message, messageType: typeof e.message, timestamp: e.timestamp, timestampType: typeof e.timestamp });
+    }
     return sanitized;
   } catch (e) {
-    console.error('Error sanitizing session from Firebase:', e);
+    console.error('[SHARE DEBUG] Error sanitizing session from Firebase:', e);
     return data as Session;
   }
 }
