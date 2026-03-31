@@ -45,7 +45,9 @@ function App() {
   const { session, shareCode, syncToFirebase } = useSessionStore();
   const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout, validateAndCleanupSession, currentUser, sessionId, logout } = useAuthStore();
   const [sharedSession, setSharedSession] = useState<Session | null>(null);
-  const [viewingShareCode, setViewingShareCode] = useState<string | null>(null);
+  // Initialize synchronously so first render already knows we're in share mode
+  // (prevents flash of SessionViewPage with corrupted localStorage data)
+  const [viewingShareCode, setViewingShareCode] = useState<string | null>(() => getShareCodeFromUrl());
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sessionTransferred, setSessionTransferred] = useState(false);
 
@@ -122,20 +124,17 @@ function App() {
     };
   }, [isAuthenticated, updateActivity]);
 
-  // Check for share code in URL on mount and subscribe to real-time updates
+  // Subscribe to real-time updates when viewing a shared session
   useEffect(() => {
-    const codeFromUrl = getShareCodeFromUrl();
-    console.log('[SHARE DEBUG] App mount - codeFromUrl:', codeFromUrl);
-    if (codeFromUrl) {
-      setViewingShareCode(codeFromUrl);
-      // Subscribe to real-time updates
-      const unsubscribe = subscribeToSession(codeFromUrl, (sessionData) => {
+    console.log('[SHARE DEBUG] Share subscription effect - viewingShareCode:', viewingShareCode);
+    if (viewingShareCode) {
+      const unsubscribe = subscribeToSession(viewingShareCode, (sessionData) => {
         console.log('[SHARE DEBUG] subscribeToSession callback - sessionData:', sessionData ? 'received' : 'null', sessionData ? { id: sessionData.id, name: sessionData.name } : null);
         setSharedSession(sessionData);
       });
       return () => unsubscribe();
     }
-  }, []);
+  }, [viewingShareCode]);
 
   // Sync to Firebase whenever session changes (if sharing is active)
   useEffect(() => {
