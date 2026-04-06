@@ -388,8 +388,13 @@ export const useSessionStore = create<SessionState>()(
             },
           };
         });
-        // Add new stacks without touching existing ones
-        get().addNewRoundRobinStacks();
+        // Rebuild stacks based on mode
+        const mode = get().session?.rotationMode;
+        if (mode === 'round_robin') {
+          get().addNewRoundRobinStacks();
+        } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
+          get().addNewWinLoseStacks();
+        }
       },
 
       togglePlayerActive: (playerId) => {
@@ -435,21 +440,18 @@ export const useSessionStore = create<SessionState>()(
             },
           };
         });
-        // Add new stacks without touching existing ones
-        get().addNewRoundRobinStacks();
+        // Build new stacks based on mode
+        const mode = get().session?.rotationMode;
+        if (mode === 'round_robin') {
+          get().addNewRoundRobinStacks();
+        } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
+          get().addNewWinLoseStacks();
+        }
       },
 
       removeFromQueue: (playerId) => {
-        console.log('[removeFromQueue] START - playerId:', playerId);
         set((state) => {
           if (!state.session) return state;
-          
-          const playerName = state.session.players.find(p => p.id === playerId)?.name;
-          console.log('[removeFromQueue] Removing:', playerName, '(', playerId, ')');
-          console.log('[removeFromQueue] BEFORE - queue:', state.session.queue.length, 'waitingStack:', state.session.waitingStack.length);
-          console.log('[removeFromQueue] BEFORE - winnerStacks:', JSON.stringify(state.session.winnerStacks?.map(s => s.length)));
-          console.log('[removeFromQueue] BEFORE - loserStacks:', JSON.stringify(state.session.loserStacks?.map(s => s.length)));
-          console.log('[removeFromQueue] BEFORE - waitingStacks:', JSON.stringify(state.session.waitingStacks?.map(s => s.length)));
           
           // Set waitingSince to -1 to indicate player was removed from queue
           // This helps distinguish "not waiting" from "in game" (which is 0)
@@ -461,25 +463,38 @@ export const useSessionStore = create<SessionState>()(
           const removeFromNestedStacks = (stacks: string[][]) =>
             stacks.map(stack => stack.filter(id => id !== playerId));
           
+          // Consolidate incomplete stacks: flatten all incomplete stacks, re-chunk into groups of 4
+          // This ensures that after removal, e.g. a 3/4 stack + 1/4 stack merge into a 4/4 stack
+          const consolidateStacks = (stacks: string[][]): string[][] => {
+            const complete = stacks.filter(s => s.length >= 4);
+            const incompletePlayers = stacks.filter(s => s.length > 0 && s.length < 4).flat();
+            const rechunked: string[][] = [];
+            for (let i = 0; i < incompletePlayers.length; i += 4) {
+              rechunked.push(incompletePlayers.slice(i, i + 4));
+            }
+            return [...complete, ...rechunked];
+          };
+          
           // Also remove from roundRobinStacks
           const newRoundRobinStacks = removeFromNestedStacks(state.session.roundRobinStacks || [])
             .filter(stack => stack.length === 4); // Remove incomplete stacks
           
-          const newWinnerStacks = removeFromNestedStacks(state.session.winnerStacks || []);
-          const newLoserStacks = removeFromNestedStacks(state.session.loserStacks || []);
-          const newWaitingStacks = removeFromNestedStacks(state.session.waitingStacks || []);
-          const newCustomStacks = removeFromNestedStacks(state.session.customStacks || []);
-          const newQueue = state.session.queue.filter((id) => id !== playerId);
+          const isWinLose = state.session.rotationMode === 'win_lose_stack' || state.session.rotationMode === 'full_rotation';
           
-          console.log('[removeFromQueue] AFTER - queue:', newQueue.length);
-          console.log('[removeFromQueue] AFTER - winnerStacks:', JSON.stringify(newWinnerStacks.map(s => s.length)));
-          console.log('[removeFromQueue] AFTER - loserStacks:', JSON.stringify(newLoserStacks.map(s => s.length)));
-          console.log('[removeFromQueue] AFTER - waitingStacks:', JSON.stringify(newWaitingStacks.map(s => s.length)));
+          const rawWinnerStacks = removeFromNestedStacks(state.session.winnerStacks || []);
+          const rawLoserStacks = removeFromNestedStacks(state.session.loserStacks || []);
+          const rawWaitingStacks = removeFromNestedStacks(state.session.waitingStacks || []);
+          const rawCustomStacks = removeFromNestedStacks(state.session.customStacks || []);
+          
+          // For Win-Lose mode, consolidate incomplete stacks after removal
+          const newWinnerStacks = isWinLose ? consolidateStacks(rawWinnerStacks) : rawWinnerStacks;
+          const newLoserStacks = isWinLose ? consolidateStacks(rawLoserStacks) : rawLoserStacks;
+          const newWaitingStacks = isWinLose ? consolidateStacks(rawWaitingStacks) : rawWaitingStacks;
           
           return {
             session: {
               ...state.session,
-              queue: newQueue,
+              queue: state.session.queue.filter((id) => id !== playerId),
               // Remove from deprecated singular stacks
               winnerStack: state.session.winnerStack.filter((id) => id !== playerId),
               loserStack: state.session.loserStack.filter((id) => id !== playerId),
@@ -488,22 +503,18 @@ export const useSessionStore = create<SessionState>()(
               winnerStacks: newWinnerStacks,
               loserStacks: newLoserStacks,
               waitingStacks: newWaitingStacks,
-              customStacks: newCustomStacks,
+              customStacks: rawCustomStacks,
               roundRobinStacks: newRoundRobinStacks,
               players: updatedPlayers,
             },
           };
         });
-        // Add new stacks without touching existing ones
-        get().addNewRoundRobinStacks();
-        
-        // Debug: verify state after all updates
-        const afterState = get().session;
-        if (afterState) {
-          console.log('[removeFromQueue] FINAL STATE - queue:', afterState.queue.length,
-            'winnerStacks:', afterState.winnerStacks?.map(s => s.length),
-            'loserStacks:', afterState.loserStacks?.map(s => s.length),
-            'waitingStacks:', afterState.waitingStacks?.map(s => s.length));
+        // Rebuild stacks based on mode
+        const mode = get().session?.rotationMode;
+        if (mode === 'round_robin') {
+          get().addNewRoundRobinStacks();
+        } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
+          get().addNewWinLoseStacks();
         }
       },
 
