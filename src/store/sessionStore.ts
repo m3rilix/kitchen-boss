@@ -449,19 +449,27 @@ export const useSessionStore = create<SessionState>()(
             p.id === playerId ? { ...p, waitingSince: -1 } : p
           );
           
+          // Helper to remove player from nested string[][] stacks
+          const removeFromNestedStacks = (stacks: string[][]) =>
+            stacks.map(stack => stack.filter(id => id !== playerId));
+          
           // Also remove from roundRobinStacks
-          const newRoundRobinStacks = (state.session.roundRobinStacks || [])
-            .map(stack => stack.filter(id => id !== playerId))
+          const newRoundRobinStacks = removeFromNestedStacks(state.session.roundRobinStacks || [])
             .filter(stack => stack.length === 4); // Remove incomplete stacks
           
           return {
             session: {
               ...state.session,
               queue: state.session.queue.filter((id) => id !== playerId),
-              // Also remove from all stacks
+              // Remove from deprecated singular stacks
               winnerStack: state.session.winnerStack.filter((id) => id !== playerId),
               loserStack: state.session.loserStack.filter((id) => id !== playerId),
               waitingStack: state.session.waitingStack.filter((id) => id !== playerId),
+              // Remove from active plural stacks (used by Win-Lose UI)
+              winnerStacks: removeFromNestedStacks(state.session.winnerStacks || []),
+              loserStacks: removeFromNestedStacks(state.session.loserStacks || []),
+              waitingStacks: removeFromNestedStacks(state.session.waitingStacks || []),
+              customStacks: removeFromNestedStacks(state.session.customStacks || []),
               roundRobinStacks: newRoundRobinStacks,
               players: updatedPlayers,
             },
