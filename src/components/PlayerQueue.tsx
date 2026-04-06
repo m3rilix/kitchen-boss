@@ -116,6 +116,10 @@ export function PlayerQueue() {
     
     // Win-Lose Stack mode - Use pre-built stacks from session
     if (session.rotationMode === 'win_lose_stack' || session.rotationMode === 'full_rotation') {
+      console.log('[PlayerQueue stacks useMemo] RECOMPUTING Win-Lose stacks',
+        'winnerStacks:', session.winnerStacks?.map(s => s.length),
+        'loserStacks:', session.loserStacks?.map(s => s.length),
+        'waitingStacks:', session.waitingStacks?.map(s => s.length));
       // Get pre-built stacks from session (labels will be assigned after ordering)
       const winnerStackGroups: StackGroup[] = (session.winnerStacks || []).map((stackIds, idx) => ({
         id: `winner-${idx}`,

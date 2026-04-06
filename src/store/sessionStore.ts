@@ -440,8 +440,16 @@ export const useSessionStore = create<SessionState>()(
       },
 
       removeFromQueue: (playerId) => {
+        console.log('[removeFromQueue] START - playerId:', playerId);
         set((state) => {
           if (!state.session) return state;
+          
+          const playerName = state.session.players.find(p => p.id === playerId)?.name;
+          console.log('[removeFromQueue] Removing:', playerName, '(', playerId, ')');
+          console.log('[removeFromQueue] BEFORE - queue:', state.session.queue.length, 'waitingStack:', state.session.waitingStack.length);
+          console.log('[removeFromQueue] BEFORE - winnerStacks:', JSON.stringify(state.session.winnerStacks?.map(s => s.length)));
+          console.log('[removeFromQueue] BEFORE - loserStacks:', JSON.stringify(state.session.loserStacks?.map(s => s.length)));
+          console.log('[removeFromQueue] BEFORE - waitingStacks:', JSON.stringify(state.session.waitingStacks?.map(s => s.length)));
           
           // Set waitingSince to -1 to indicate player was removed from queue
           // This helps distinguish "not waiting" from "in game" (which is 0)
@@ -457,19 +465,30 @@ export const useSessionStore = create<SessionState>()(
           const newRoundRobinStacks = removeFromNestedStacks(state.session.roundRobinStacks || [])
             .filter(stack => stack.length === 4); // Remove incomplete stacks
           
+          const newWinnerStacks = removeFromNestedStacks(state.session.winnerStacks || []);
+          const newLoserStacks = removeFromNestedStacks(state.session.loserStacks || []);
+          const newWaitingStacks = removeFromNestedStacks(state.session.waitingStacks || []);
+          const newCustomStacks = removeFromNestedStacks(state.session.customStacks || []);
+          const newQueue = state.session.queue.filter((id) => id !== playerId);
+          
+          console.log('[removeFromQueue] AFTER - queue:', newQueue.length);
+          console.log('[removeFromQueue] AFTER - winnerStacks:', JSON.stringify(newWinnerStacks.map(s => s.length)));
+          console.log('[removeFromQueue] AFTER - loserStacks:', JSON.stringify(newLoserStacks.map(s => s.length)));
+          console.log('[removeFromQueue] AFTER - waitingStacks:', JSON.stringify(newWaitingStacks.map(s => s.length)));
+          
           return {
             session: {
               ...state.session,
-              queue: state.session.queue.filter((id) => id !== playerId),
+              queue: newQueue,
               // Remove from deprecated singular stacks
               winnerStack: state.session.winnerStack.filter((id) => id !== playerId),
               loserStack: state.session.loserStack.filter((id) => id !== playerId),
               waitingStack: state.session.waitingStack.filter((id) => id !== playerId),
               // Remove from active plural stacks (used by Win-Lose UI)
-              winnerStacks: removeFromNestedStacks(state.session.winnerStacks || []),
-              loserStacks: removeFromNestedStacks(state.session.loserStacks || []),
-              waitingStacks: removeFromNestedStacks(state.session.waitingStacks || []),
-              customStacks: removeFromNestedStacks(state.session.customStacks || []),
+              winnerStacks: newWinnerStacks,
+              loserStacks: newLoserStacks,
+              waitingStacks: newWaitingStacks,
+              customStacks: newCustomStacks,
               roundRobinStacks: newRoundRobinStacks,
               players: updatedPlayers,
             },
@@ -477,6 +496,15 @@ export const useSessionStore = create<SessionState>()(
         });
         // Add new stacks without touching existing ones
         get().addNewRoundRobinStacks();
+        
+        // Debug: verify state after all updates
+        const afterState = get().session;
+        if (afterState) {
+          console.log('[removeFromQueue] FINAL STATE - queue:', afterState.queue.length,
+            'winnerStacks:', afterState.winnerStacks?.map(s => s.length),
+            'loserStacks:', afterState.loserStacks?.map(s => s.length),
+            'waitingStacks:', afterState.waitingStacks?.map(s => s.length));
+        }
       },
 
       moveInQueue: (playerId, direction) => {
