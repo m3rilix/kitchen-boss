@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
-import { useThemeClasses } from '@/store/themeStore';
+import { useThemeClasses, useThemeStore } from '@/store/themeStore';
 import { useAuthStore } from '@/store/authStore';
-import { LogOut, Users, Clock, Shield, Share2, RotateCcw, Pencil, Check, X, XCircle, User } from 'lucide-react';
+import { LogOut, Users, Clock, Shield, Share2, RotateCcw, Pencil, Check, X, XCircle, User, MoreVertical, Palette } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { ShareSessionModal } from './ShareSessionModal';
@@ -16,11 +16,24 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
   const { session, endSession, resetSession, updateSessionName } = useSessionStore();
   const { currentUser, logout, getTimeRemaining, isAdmin } = useAuthStore();
   const theme = useThemeClasses();
+  const { colorTheme, setColorTheme } = useThemeStore();
   const [showShareModal, setShowShareModal] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
   const [showResetModal, setShowResetModal] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
   const timeRemaining = getTimeRemaining();
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+        setShowMobileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   if (!session) return null;
 
@@ -71,7 +84,7 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
         {/* Main Row */}
         <div className="flex items-center justify-between gap-4">
           {/* Left: Logo + Title */}
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <img 
               src="/kitchen-boss-logo.png" 
               alt="Kitchen Boss" 
@@ -134,7 +147,15 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
                   </button>
                 </div>
               )}
-              {/* Desktop: Show rotation mode and date/time below title */}
+              {/* Mobile: compact stats subtitle */}
+              <p className="md:hidden text-xs text-slate-500 dark:text-slate-400 truncate">
+                <span className="font-medium text-slate-700 dark:text-slate-300">{playersInGame}</span> playing
+                {' · '}
+                <span className="font-medium text-slate-700 dark:text-slate-300">{session.queue.length}</span> waiting
+                {' · '}
+                <span className="font-medium text-slate-700 dark:text-slate-300">{session.courts.length}</span> courts
+              </p>
+              {/* Desktop: rotation mode and date/time */}
               <div className="hidden md:block">
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   {getRotationModeDisplay()}
@@ -187,30 +208,26 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
               </button>
             )}
 
-            {/* Share Session */}
+            {/* Desktop: Share + Admin + Settings + User Info */}
             <button
               onClick={() => setShowShareModal(true)}
-              className={`p-2 ${theme.bgButton} rounded-lg transition`}
+              className={`hidden lg:flex p-2 ${theme.bgButton} rounded-lg transition`}
               title="Share Session"
             >
               <Share2 className={`w-4 h-4 ${theme.text}`} />
             </button>
-
-            {/* Admin */}
             {isAdmin() && onAdminClick && (
               <button
                 onClick={onAdminClick}
-                className={`p-2 ${theme.bgButton} rounded-lg transition`}
+                className={`hidden lg:flex p-2 ${theme.bgButton} rounded-lg transition`}
                 title="Admin Panel"
               >
                 <Shield className={`w-4 h-4 ${theme.text}`} />
               </button>
             )}
-
-            {/* Settings */}
-            <SettingsDropdown />
-
-            {/* User Info (desktop) */}
+            <div className="hidden lg:block">
+              <SettingsDropdown />
+            </div>
             <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 rounded-lg">
               <div className="text-right">
                 <p className="text-xs font-medium text-slate-700 dark:text-slate-200">{currentUser?.name}</p>
@@ -227,55 +244,119 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
               </button>
             </div>
 
-            {/* End Session */}
+            {/* Mobile: ⋯ menu — everything */}
+            <div className="relative lg:hidden" ref={mobileMenuRef}>
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className={`p-2 ${theme.bgButton} rounded-lg transition`}
+                title="More options"
+              >
+                <MoreVertical className={`w-4 h-4 ${theme.text}`} />
+              </button>
+              {showMobileMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 z-50 overflow-hidden">
+                  {/* User info */}
+                  <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-700/50">
+                    <div className={`w-8 h-8 rounded-full ${theme.bg100} flex items-center justify-center flex-shrink-0`}>
+                      <User className={`w-4 h-4 ${theme.text}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{currentUser?.name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {timeRemaining === null ? 'Unlimited access' : `${timeRemaining} remaining`}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Actions */}
+                  <div className="border-t border-slate-100 dark:border-slate-700">
+                    <button
+                      onClick={() => { setShowShareModal(true); setShowMobileMenu(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                    >
+                      <Share2 className={`w-4 h-4 ${theme.text}`} />
+                      Share Session
+                    </button>
+                    {isAdmin() && onAdminClick && (
+                      <button
+                        onClick={() => { onAdminClick(); setShowMobileMenu(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                      >
+                        <Shield className={`w-4 h-4 ${theme.text}`} />
+                        Admin Panel
+                      </button>
+                    )}
+                  </div>
+                  {/* Theme */}
+                  <div className="border-t border-slate-100 dark:border-slate-700 px-4 py-3">
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <Palette className="w-3 h-3" />
+                      Theme
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setColorTheme('blue')}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                          colorTheme === 'blue'
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        <span className="w-3 h-3 rounded-full bg-blue-500 border border-white/50" />
+                        Blue
+                      </button>
+                      <button
+                        onClick={() => setColorTheme('green')}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                          colorTheme === 'green'
+                            ? 'bg-green-500 text-white'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        <span className="w-3 h-3 rounded-full bg-green-500 border border-white/50" />
+                        Green
+                      </button>
+                    </div>
+                  </div>
+                  {/* End session + Sign out */}
+                  <div className="border-t border-slate-100 dark:border-slate-700">
+                    <button
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        if (confirm('End this session? All data will be lost.')) endSession();
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      End Session
+                    </button>
+                    <button
+                      onClick={async () => { await logout(); setShowMobileMenu(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition border-t border-slate-100 dark:border-slate-700"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* End Session (desktop only) */}
             <button
               onClick={() => {
                 if (confirm('End this session? All data will be lost.')) {
                   endSession();
                 }
               }}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition"
+              className="hidden lg:flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition"
               title="End Session"
             >
               <XCircle className="w-4 h-4" />
-              <span className="hidden lg:inline">End</span>
+              End
             </button>
           </div>
         </div>
 
-        {/* Mobile User Info Row */}
-        <div className="flex lg:hidden items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-          <div className="flex items-center gap-2">
-            <User className={`w-4 h-4 ${theme.text}`} />
-            <div className="text-xs">
-              <p className="font-medium text-slate-700 dark:text-slate-200">{currentUser?.name}</p>
-              <p className="text-slate-500 dark:text-slate-400">
-                {timeRemaining === null ? 'Unlimited access' : `${timeRemaining} remaining`}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile Stats Row */}
-        <div className="flex md:hidden items-center justify-around mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-          <div className="flex items-center gap-2 text-sm">
-            <Users className={`w-4 h-4 ${theme.text}`} />
-            <span className="text-slate-600 dark:text-slate-400">
-              <span className="font-semibold text-slate-800 dark:text-slate-100">{playersInGame}</span> playing
-            </span>
-          </div>
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-600" />
-          <div className="flex items-center gap-2 text-sm">
-            <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            <span className="text-slate-600 dark:text-slate-400">
-              <span className="font-semibold text-slate-800 dark:text-slate-100">{session.queue.length}</span> waiting
-            </span>
-          </div>
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-600" />
-          <div className="text-sm text-slate-600 dark:text-slate-400">
-            <span className="font-semibold text-slate-800 dark:text-slate-100">{session.courts.length}</span> courts
-          </div>
-        </div>
       </div>
 
       {/* Share Modal */}

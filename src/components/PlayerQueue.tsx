@@ -596,7 +596,7 @@ export function PlayerQueue() {
                 <div className="relative">
                   <button
                     onClick={() => setShowReorderMenu(!showReorderMenu)}
-                    className="text-xs text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/20 rounded hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
+                    className="text-xs text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 flex items-center gap-1 px-2 py-1 bg-orange-50 dark:bg-orange-900/20 rounded hover:bg-orange-100 dark:hover:bg-orange-900/30 transition whitespace-nowrap"
                     title="Reorder stacks"
                   >
                     <Clock className="w-3 h-3" />
@@ -642,11 +642,12 @@ export function PlayerQueue() {
                 {!isCreatingCustomStack ? (
                   <button
                     onClick={() => setIsCreatingCustomStack(true)}
-                    className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1 px-2 py-1 bg-purple-50 dark:bg-purple-900/20 rounded hover:bg-purple-100 dark:hover:bg-purple-900/30 transition"
+                    className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1 px-2 py-1 bg-purple-50 dark:bg-purple-900/20 rounded hover:bg-purple-100 dark:hover:bg-purple-900/30 transition whitespace-nowrap"
                     title="Create a custom stack of 4 players"
                   >
                     <Plus className="w-3 h-3" />
-                    Custom Stack
+                    <span className="hidden sm:inline">Custom Stack</span>
+                    <span className="sm:hidden">Custom</span>
                   </button>
                 ) : (
                   <div className="flex items-center gap-1">
@@ -685,17 +686,17 @@ export function PlayerQueue() {
                 )}
               </div>
               {/* Expand/Collapse buttons */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-shrink-0">
                 <button
                   onClick={expandAll}
-                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1"
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1 whitespace-nowrap"
                 >
                   <ChevronsDown className="w-3 h-3" />
                   Expand
                 </button>
                 <button
                   onClick={collapseAll}
-                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1"
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1 whitespace-nowrap"
                 >
                   <ChevronsUp className="w-3 h-3" />
                   Collapse
@@ -804,35 +805,38 @@ export function PlayerQueue() {
                     ) : null;
                   })()}
                 </div>
-                <div className="flex items-center gap-1">
-                  {stack.players.slice(0, 4).map((p) => {
-                    const isInGame = playersInGame.has(p.id);
-                    return (
-                      <div
-                        key={p.id}
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          isInGame 
-                            ? 'bg-blue-200 text-blue-700 opacity-50'
-                            : getPlayerStatus(p.id) === 'winner' 
-                              ? 'bg-green-200 text-green-700'
-                              : getPlayerStatus(p.id) === 'loser'
-                                ? 'bg-orange-200 text-orange-700'
-                                : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
-                        }`}
-                        title={isInGame ? `${p.name} (Playing)` : p.name}
-                      >
-                        {p.name.charAt(0).toUpperCase()}
-                      </div>
-                    );
-                  })}
-                  {stack.players.length < 4 && (
-                    Array.from({ length: 4 - stack.players.length }).map((_, i) => (
-                      <div
-                        key={`empty-${i}`}
-                        className="w-6 h-6 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-500"
-                      />
-                    ))
-                  )}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Avatar strip — hidden on mobile to prevent overflow */}
+                  <div className="hidden sm:flex items-center gap-1">
+                    {stack.players.slice(0, 4).map((p) => {
+                      const isInGame = playersInGame.has(p.id);
+                      return (
+                        <div
+                          key={p.id}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            isInGame
+                              ? 'bg-blue-200 text-blue-700 opacity-50'
+                              : getPlayerStatus(p.id) === 'winner'
+                                ? 'bg-green-200 text-green-700'
+                                : getPlayerStatus(p.id) === 'loser'
+                                  ? 'bg-orange-200 text-orange-700'
+                                  : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                          }`}
+                          title={isInGame ? `${p.name} (Playing)` : p.name}
+                        >
+                          {p.name.charAt(0).toUpperCase()}
+                        </div>
+                      );
+                    })}
+                    {stack.players.length < 4 && (
+                      Array.from({ length: 4 - stack.players.length }).map((_, i) => (
+                        <div
+                          key={`empty-${i}`}
+                          className="w-6 h-6 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-500"
+                        />
+                      ))
+                    )}
+                  </div>
                   {/* Delete button for custom stacks */}
                   {stack.type === 'custom' && stack.customIndex !== undefined && (
                     <button
@@ -840,58 +844,35 @@ export function PlayerQueue() {
                         e.stopPropagation();
                         removeCustomStack(stack.customIndex!);
                       }}
-                      className="ml-1 p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                       title="Remove custom stack"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
-                  {/* Play button for ready stacks when court is available */}
+                  {/* Play / Skip button */}
                   {!stack.isForming && stack.players.length === 4 && (() => {
                     const availableCourt = session.courts.find(c => c.status === 'available');
-                    if (!availableCourt) {
-                      return null;
-                    }
-                    
+                    if (!availableCourt) return null;
                     const players = stack.players;
-                    // Check if any player in this stack is already in a game
-                    const hasPlayerInGame = players.some(p => playersInGame.has(p.id));
-                    if (hasPlayerInGame) return null; // Don't show play button if any player is in game
-                    
-                    // Check if this is not the first ready stack (skipping the queue)
+                    if (players.some(p => playersInGame.has(p.id))) return null;
                     const readyStacksOnly = filteredStacks.filter(s => !s.isForming && s.players.length === 4);
-                    const isFirstReadyStack = readyStacksOnly.length > 0 && readyStacksOnly[0].id === stack.id;
-                    const skippedQueue = !isFirstReadyStack;
-                    
+                    const skippedQueue = readyStacksOnly.length > 0 && readyStacksOnly[0].id !== stack.id;
                     return (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Start game with this stack
                           startGame(
                             availableCourt.id,
                             [players[0].id, players[1].id],
                             [players[2].id, players[3].id],
                             skippedQueue,
-                            stack.customIndex // Pass custom stack index if this is a custom stack
+                            stack.customIndex
                           );
                         }}
-                        style={{
-                          marginLeft: '12px',
-                          padding: '8px 16px',
-                          fontSize: '14px',
-                          fontWeight: 'bold',
-                          color: 'white',
-                          backgroundColor: skippedQueue ? '#9333ea' : '#16a34a',
-                          borderRadius: '8px',
-                          border: '2px solid white',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          minWidth: '80px',
-                          zIndex: 1000
-                        }}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white flex-shrink-0 ${
+                          skippedQueue ? 'bg-purple-600 hover:bg-purple-700' : 'bg-green-600 hover:bg-green-700'
+                        }`}
                         title={skippedQueue ? `Skip queue and play on ${availableCourt.name}` : `Start game on ${availableCourt.name}`}
                       >
                         {skippedQueue ? <Rocket className="w-4 h-4" /> : <Play className="w-4 h-4" />}

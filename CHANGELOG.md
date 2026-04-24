@@ -5,6 +5,26 @@ All notable changes to Kitchen Boss will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Bottom tab navigation bar on mobile (Courts / Queue / Players / Log) — one tap to jump between sections
+- `⋯` overflow menu on mobile header consolidating Share, Admin Panel, Theme picker, End Session, Sign Out, and user account info
+
+### Changed
+- Mobile header reduced to a single row: logo + session name + `⋯` — no separate stats or user info rows
+- Session name given full flex space on mobile (no longer truncated to 2–3 characters)
+- Compact stats subtitle (X playing · Y waiting · Z courts) displayed inline under session name on mobile
+- Play/Skip button in stack cards converted from inline styles to Tailwind classes; avatar strip hidden on mobile to prevent overflow
+- Stack action toolbar buttons (`Re-order`, `Custom`/`Custom Stack`, `Expand`, `Collapse`) use `whitespace-nowrap` to prevent wrapping
+
+### Fixed
+- Play/Skip button clipping outside stack card boundaries on mobile
+- Stack action toolbar "Custom Stack" label wrapping to two lines on narrow screens
+- User account info and logout inaccessible on mobile (now in `⋯` menu)
+
+---
+
+## [Unreleased — previous]
+
+### Added
 - Session transfer notification system with 10-second countdown
 - React Router with dedicated URLs (`/admin`, `/create-session`, `/session`)
 - Session transfer confirmation dialog showing device info

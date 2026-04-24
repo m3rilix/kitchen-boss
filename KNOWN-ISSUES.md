@@ -2,17 +2,7 @@
 
 ## 🐛 Active Bugs
 
-### 1. Player Drag-and-Drop in Lowest Stack
-**Status**: Open  
-**Severity**: Medium  
-**Description**: Players in the lowest queue stack cannot be moved to other stacks or the player list. Only players in stacks above can be dragged.
-
-**Scenario**:
-- 2 courts, 8 players
-- After playing 1 game: 2 winners, 2 losers
-- Players in loser stack sometimes cannot be dragged to player list or other stacks
-
-**Workaround**: Move players from higher stacks first, or manually edit the queue order.
+*(No active bugs — see Recently Fixed below)*
 
 ---
 
@@ -63,15 +53,27 @@ Session sharing works correctly. Session transfer only transfers authentication,
 
 ## 📱 Mobile Limitations
 
-### 1. User Info Hidden on Mobile
-**Status**: Fixed (pending)  
-**Description**: Account name and expiration date are hidden on mobile devices.
-
-**Fix**: Moving to a smaller section below the header on mobile.
+*(No known mobile limitations — see Recently Fixed below)*
 
 ---
 
 ## 🔄 Recently Fixed
+
+### ✅ Mobile UI Overhaul
+**Fixed**: 2026-04-25
+**Description**: Multiple mobile UX issues — crowded header, hidden user info, clipped Play/Skip buttons, no section navigation.
+**Solution**:
+- All header actions consolidated into a `⋯` menu (Share, Admin, Theme, End Session, Sign Out with user info)
+- Session name given full flex space — no longer truncated to initials
+- Compact stats subtitle (X playing · Y waiting · Z courts) replaces separate stats row, saving ~50px of header height
+- Play/Skip button overflow fixed — avatar strip hidden on mobile, button uses proper Tailwind sizing
+- Stack toolbar wrapping fixed (`whitespace-nowrap`, "Custom" shorthand on mobile)
+- Sticky bottom tab bar added (Courts / Queue / Players / Log) for one-tap section navigation
+
+### ✅ Player Drag-and-Drop in Lowest Stack
+**Fixed**: 2026-04  
+**Description**: Players in the lowest queue stack couldn't be dragged to other stacks or the player list.  
+**Solution**: Fixed for both Win-Lose and Round Robin modes.
 
 ### ✅ Admin Button Visible to Demo Users
 **Fixed**: 2026-03-06  
