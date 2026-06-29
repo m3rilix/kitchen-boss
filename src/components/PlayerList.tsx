@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
-import { UserPlus, Trash2, RotateCcw, Users, AlertCircle, FlaskConical, Search, ArrowUpDown, AlertTriangle, ArrowUp, ArrowDown, Clock } from 'lucide-react';
+import { UserPlus, Trash2, RotateCcw, Users, AlertCircle, FlaskConical, Search, ArrowUpDown, AlertTriangle, ArrowUp, ArrowDown, Clock, Link2, Link2Off, BanIcon, Plus, Check, X, UserCheck } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
+import { pairDisplayName } from '@/lib/doubles';
+import type { Pair } from '@/types';
 
 // Format waiting time - only show "Just joined" for players with 0 games
 const formatWaitTime = (waitingSince: number, gamesPlayed: number = 0): string => {
@@ -18,7 +20,7 @@ const formatWaitTime = (waitingSince: number, gamesPlayed: number = 0): string =
 };
 
 export function PlayerList() {
-  const { session, addPlayer, removePlayer, addToQueue, isNameDuplicate } = useSessionStore();
+  const { session, addPlayer, removePlayer, addToQueue, isNameDuplicate, addPair, removePair, addPairToQueue, setPlayerUnavailable, checkInPlayer, checkInPair } = useSessionStore();
   const theme = useThemeClasses();
   const [playerNames, setPlayerNames] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -27,6 +29,11 @@ export function PlayerList() {
   const [sortBy, setSortBy] = useState<'name' | 'games' | 'wins' | 'losses' | 'waitTime'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
+
+  // Doubles mode — pair creation modal
+  const [showPairModal, setShowPairModal] = useState(false);
+  const [selectedForPair, setSelectedForPair] = useState<string | null>(null);
+  const [pairModalSearch, setPairModalSearch] = useState('');
 
   // Test players for dev mode (All Radiants)
   const ALL_RADIANTS = [
@@ -41,20 +48,23 @@ export function PlayerList() {
 
   const handleAddTestPlayers = (count: number | 'all') => {
     if (!session) return;
-    
+
+    const addAndCheckIn = (name: string) => {
+      addPlayer(name);
+      // Auto check-in in dev mode — find player by name right after add (zustand is sync)
+      const state = useSessionStore.getState();
+      const player = state.session?.players.find(p => p.name === name && !p.checkedInAt);
+      if (player) checkInPlayer(player.id);
+    };
+
     if (count === 'all') {
-      // Add all Radiants
       ALL_RADIANTS.forEach(name => {
-        if (!isNameDuplicate(name)) {
-          addPlayer(name);
-        }
+        if (!isNameDuplicate(name)) addAndCheckIn(name);
       });
     } else {
-      // Add the next N players from the list (skip already added players)
       const existingNames = new Set(session.players.map(p => p.name));
       const availableNames = ALL_RADIANTS.filter(name => !existingNames.has(name));
-      const namesToAdd = availableNames.slice(0, count);
-      namesToAdd.forEach(name => addPlayer(name));
+      availableNames.slice(0, count).forEach(addAndCheckIn);
     }
     setShowDevMenu(false);
   };
@@ -117,8 +127,20 @@ export function PlayerList() {
     }
   });
 
-  // Filter and sort players
-  const filteredAndSortedPlayers = session.players
+  // Set of player IDs already in a pair
+  const pairedPlayerIds = new Set(
+    (session.pairs ?? []).flatMap(p => [p.player1Id, p.player2Id])
+  );
+
+  // Available players for pair modal: active and unpaired
+  const availableForPairing = session.players.filter(
+    p => p.isActive && !pairedPlayerIds.has(p.id)
+  );
+
+  // Filter and sort players — always show all players (no pairing mode filter)
+  const basePlayerList = session.players;
+
+  const filteredAndSortedPlayers = basePlayerList
     .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
       let result = 0;
@@ -184,10 +206,185 @@ export function PlayerList() {
   ] as const;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="p-4 border-b border-slate-100 bg-slate-50">
+    <>
+    {showPairModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+          {/* Modal header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+            <div>
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-base">Create New Pair</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {selectedForPair
+                  ? `Selected: ${session.players.find(p => p.id === selectedForPair)?.name} — now pick a partner`
+                  : 'Select the first player'}
+              </p>
+            </div>
+            <button
+              onClick={() => { setShowPairModal(false); setSelectedForPair(null); setPairModalSearch(''); }}
+              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          {/* Search bar */}
+          <div className="px-4 pt-3 pb-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                autoFocus
+                type="text"
+                value={pairModalSearch}
+                onChange={e => setPairModalSearch(e.target.value)}
+                placeholder="Search players…"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-400"
+              />
+            </div>
+          </div>
+          {/* Player grid */}
+          <div className="overflow-y-auto p-4 pt-3 flex-1">
+            {availableForPairing.length === 0 ? (
+              <p className="text-center text-sm text-slate-400 py-8">No unpaired players available.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {availableForPairing.filter(p => p.name.toLowerCase().includes(pairModalSearch.toLowerCase())).map(player => {
+                  const isSelected = selectedForPair === player.id;
+                  return (
+                    <button
+                      key={player.id}
+                      onClick={() => {
+                        if (!selectedForPair) {
+                          setSelectedForPair(player.id);
+                        } else if (selectedForPair !== player.id) {
+                          addPair(selectedForPair, player.id);
+                          setShowPairModal(false);
+                          setSelectedForPair(null);
+                        }
+                      }}
+                      className={`flex items-center gap-2.5 p-3 rounded-xl border-2 text-left transition ${
+                        isSelected
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/30'
+                          : 'border-slate-200 dark:border-slate-600 hover:border-green-300 hover:bg-green-50/50 dark:hover:bg-green-900/10'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 ${
+                        isSelected ? 'bg-green-500 text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200'
+                      }`}>
+                        {player.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{player.name}</p>
+                        <p className="text-xs text-slate-500">{player.gamesWon}W–{player.gamesPlayed - player.gamesWon}L</p>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-green-600 ml-auto flex-shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    <div className="space-y-4">
+
+    {/* ── TEAMS / PAIRS TABLE (doubles only) ─────────────────────────────── */}
+    {session.rotationMode === 'doubles' && (
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
+        <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <Link2 className="w-4 h-4 text-green-600" />
+          Teams ({(session.pairs ?? []).length})
+        </h3>
+        <button
+          onClick={() => { setShowPairModal(true); setPairModalSearch(''); setSelectedForPair(null); }}
+          className="flex items-center gap-1 px-2 py-1 text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50 rounded-lg transition"
+          title="Pair two players together"
+        >
+          <Plus className="w-4 h-4" />
+          New Pair
+        </button>
+      </div>
+
+      {(session.pairs ?? []).length === 0 ? (
+        <div className="px-4 py-6 text-center text-sm text-slate-400 dark:text-slate-500">
+          No teams yet. Click "New Pair" to create one.
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100 dark:divide-slate-700">
+          {(session.pairs ?? []).map((pair: Pair) => {
+            const p1 = session.players.find(p => p.id === pair.player1Id);
+            const p2 = session.players.find(p => p.id === pair.player2Id);
+            const inGame = playersInGame.has(pair.player1Id) || playersInGame.has(pair.player2Id);
+            const inQueue = [
+              ...(session.doublesWinnerQueue ?? []),
+              ...(session.doublesLoserQueue  ?? []),
+              ...(session.doublesWaitingQueue ?? []),
+            ].includes(pair.id);
+            const isPairPending = !p1?.checkedInAt || !p2?.checkedInAt;
+            const losses = pair.gamesPlayed - pair.gamesWon;
+            return (
+              <div key={pair.id} className={`flex items-center gap-3 px-4 py-3 ${inGame ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
+                  <Link2 className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-slate-800 dark:text-slate-100 truncate text-sm">
+                      {pairDisplayName(pair, session.players)}
+                    </p>
+                    {inGame && <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded">Playing</span>}
+                    {inQueue && !inGame && <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 rounded">Queued</span>}
+                    {isPairPending && !inGame && !inQueue && <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded">Pending</span>}
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{pair.gamesWon}W–{losses}L</span>
+                    <span className="text-slate-400">{p1?.name} &amp; {p2?.name}</span>
+                    {(p1?.unavailable || p2?.unavailable) && (
+                      <span className="text-red-500">{p1?.unavailable ? p1.name : p2?.name} unavailable</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  {!inGame && !inQueue && isPairPending && (
+                    <button
+                      onClick={() => checkInPair(pair.id)}
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg transition"
+                      title="Check in pair"
+                    >
+                      <UserCheck className="w-3.5 h-3.5" />
+                      Check-in
+                    </button>
+                  )}
+                  {!inGame && !inQueue && !isPairPending && (
+                    <button onClick={() => addPairToQueue(pair.id)} className="p-1.5 text-slate-400 hover:text-green-600 transition" title="Add to queue">
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { if (confirm(`Dissolve ${pairDisplayName(pair, session.players)}?`)) removePair(pair.id); }}
+                    className="p-1.5 text-slate-400 hover:text-red-500 transition"
+                    title="Dissolve pair"
+                  >
+                    <Link2Off className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+    )}
+
+    {/* ── PLAYERS TABLE ────────────────────────────────────────────────────── */}
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-slate-800">All Players ({session.players.length})</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <Users className="w-4 h-4 text-blue-500" />
+            Players ({session.players.filter(p => p.isActive).length})
+          </h3>
           <div className="flex items-center gap-2">
             {isDev && (
               <div className="relative">
@@ -394,30 +591,58 @@ export function PlayerList() {
             const isInGame = playersInGame.has(player.id);
             const isInQueue = session.queue.includes(player.id);
             const waitingTooLong = isWaitingTooLong(player.id, player.waitingSince);
+            const isDoubles = session.rotationMode === 'doubles';
+            const isPending = !player.checkedInAt;
+
+            // Doubles: check if player already has a pair
+            const hasPair = isDoubles && (session.pairs ?? []).some(
+              p => p.player1Id === player.id || p.player2Id === player.id
+            );
 
             return (
               <div
                 key={player.id}
-                className={`flex items-center gap-3 p-3 ${
+                className={`flex items-center gap-3 p-3 transition ${
                   isInGame ? 'bg-blue-50' : ''
                 }`}
               >
                 {/* Avatar */}
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm ${
-                  isInGame 
-                    ? 'bg-blue-200 text-blue-700' 
-                    : 'bg-slate-200 text-slate-600'
+                  isInGame
+                    ? 'bg-blue-200 text-blue-700'
+                    : player.unavailable
+                      ? 'bg-red-100 text-red-500'
+                      : 'bg-slate-200 text-slate-600'
                 }`}>
-                  {player.name.charAt(0).toUpperCase()}
+                  {player.unavailable
+                    ? <BanIcon className="w-4 h-4" />
+                    : player.name.charAt(0).toUpperCase()}
                 </div>
 
                 {/* Player Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-medium text-slate-800 truncate">{player.name}</p>
+                    <p className={`font-medium truncate ${player.unavailable ? 'text-red-500 line-through' : 'text-slate-800'}`}>
+                      {player.name}
+                    </p>
                     {isInGame && (
                       <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
                         Playing
+                      </span>
+                    )}
+                    {player.unavailable && !isInGame && (
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded">
+                        Unavailable
+                      </span>
+                    )}
+                    {isDoubles && hasPair && (
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded flex items-center gap-0.5">
+                        <Link2 className="w-2.5 h-2.5" /> Paired
+                      </span>
+                    )}
+                    {isPending && !isInGame && (
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded">
+                        Pending
                       </span>
                     )}
                     {waitingTooLong && !isInGame && (
@@ -445,27 +670,69 @@ export function PlayerList() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1">
-                  {!isInGame && !isInQueue && (
-                    <button
-                      onClick={() => addToQueue(player.id)}
-                      className="p-1.5 text-slate-400 hover:text-blue-600 transition"
-                      title="Add to queue"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                    </button>
-                  )}
-                  {!isInGame && (
-                    <button
-                      onClick={() => {
-                        if (confirm(`Remove ${player.name}?`)) {
-                          removePlayer(player.id);
-                        }
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-red-500 transition"
-                      title="Remove player"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  {isDoubles ? (
+                    /* Doubles actions: unavailable toggle + pair button + remove */
+                    <>
+                      {/* Unavailable toggle */}
+                      {!isInGame && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setPlayerUnavailable(player.id, !player.unavailable); }}
+                          className={`p-1.5 transition ${player.unavailable ? 'text-red-500 hover:text-slate-400' : 'text-slate-400 hover:text-red-500'}`}
+                          title={player.unavailable ? 'Mark available' : 'Mark unavailable (sits out)'}
+                        >
+                          <BanIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                      {/* Remove player */}
+                      {!isInGame && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Remove ${player.name}?`)) removePlayer(player.id);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-500 transition"
+                          title="Remove player"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    /* Non-doubles actions */
+                    <>
+                      {!isInGame && isPending && (
+                        <button
+                          onClick={() => checkInPlayer(player.id)}
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg transition"
+                          title="Check in player"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          Check-in
+                        </button>
+                      )}
+                      {!isInGame && !isInQueue && !isPending && (
+                        <button
+                          onClick={() => addToQueue(player.id)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 transition"
+                          title="Add to queue"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                      )}
+                      {!isInGame && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Remove ${player.name}?`)) {
+                              removePlayer(player.id);
+                            }
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-500 transition"
+                          title="Remove player"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -476,10 +743,13 @@ export function PlayerList() {
 
       {/* Stats Footer */}
       {session.players.length > 0 && (
-        <div className="p-3 bg-slate-50 border-t border-slate-100 text-xs text-slate-500 text-center">
+        <div className="p-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 text-center">
           {session.gamesCompleted.length} games completed this session
         </div>
       )}
     </div>
+
+    </div>
+    </>
   );
 }

@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses, useThemeStore } from '@/store/themeStore';
 import { useAuthStore } from '@/store/authStore';
-import { LogOut, Users, Clock, Shield, Share2, RotateCcw, Pencil, Check, X, XCircle, User, MoreVertical, Palette } from 'lucide-react';
+import { LogOut, Users, Clock, Shield, Share2, RotateCcw, Pencil, Check, X, XCircle, User, MoreVertical, Palette, Trophy } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { ShareSessionModal } from './ShareSessionModal';
 import { BetaBanner } from './BetaBanner';
+import { SessionReport } from './SessionReport';
 
 interface SessionHeaderProps {
   onAdminClick?: () => void;
@@ -22,6 +23,8 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
   const [editName, setEditName] = useState('');
   const [showResetModal, setShowResetModal] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [reportIsEndFlow, setReportIsEndFlow] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const timeRemaining = getTimeRemaining();
 
@@ -67,6 +70,8 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
         return 'Stack Queue - Round Robin';
       case 'full_rotation':
         return 'Stack Queue';
+      case 'doubles':
+        return 'Doubles';
       case 'king_of_court':
         return 'King of the Court';
       case 'skill_based':
@@ -208,6 +213,15 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
               </button>
             )}
 
+            {/* Desktop: Stats/Leaderboard button */}
+            <button
+              onClick={() => { setReportIsEndFlow(false); setShowReport(true); }}
+              className={`hidden lg:flex p-2 ${theme.bgButton} rounded-lg transition`}
+              title="Leaderboard / Stats"
+            >
+              <Trophy className={`w-4 h-4 ${theme.text}`} />
+            </button>
+
             {/* Desktop: Share + Admin + Settings + User Info */}
             <button
               onClick={() => setShowShareModal(true)}
@@ -317,13 +331,17 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
                       </button>
                     </div>
                   </div>
-                  {/* End session + Sign out */}
+                  {/* Leaderboard + End session + Sign out */}
                   <div className="border-t border-slate-100 dark:border-slate-700">
                     <button
-                      onClick={() => {
-                        setShowMobileMenu(false);
-                        if (confirm('End this session? All data will be lost.')) endSession();
-                      }}
+                      onClick={() => { setShowMobileMenu(false); setReportIsEndFlow(false); setShowReport(true); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                    >
+                      <Trophy className="w-4 h-4 text-yellow-500" />
+                      Leaderboard
+                    </button>
+                    <button
+                      onClick={() => { setShowMobileMenu(false); setReportIsEndFlow(true); setShowReport(true); }}
                       className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
                     >
                       <XCircle className="w-4 h-4" />
@@ -343,11 +361,7 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
 
             {/* End Session (desktop only) */}
             <button
-              onClick={() => {
-                if (confirm('End this session? All data will be lost.')) {
-                  endSession();
-                }
-              }}
+              onClick={() => { setReportIsEndFlow(true); setShowReport(true); }}
               className="hidden lg:flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition"
               title="End Session"
             >
@@ -360,10 +374,19 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
       </div>
 
       {/* Share Modal */}
-      <ShareSessionModal 
-        isOpen={showShareModal} 
-        onClose={() => setShowShareModal(false)} 
+      <ShareSessionModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
       />
+
+      {/* Session Report / Leaderboard */}
+      {showReport && (
+        <SessionReport
+          isEndOfSession={reportIsEndFlow}
+          onClose={() => setShowReport(false)}
+          onEndSession={() => { setShowReport(false); endSession(); }}
+        />
+      )}
 
       {/* Reset Modal */}
       {showResetModal && (

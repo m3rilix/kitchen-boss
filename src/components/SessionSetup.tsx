@@ -12,7 +12,7 @@ interface SessionSetupProps {
   onAdminClick?: () => void;
 }
 
-type SubMode = 'win_lose_stack' | 'full_rotation' | 'round_robin';
+type SubMode = 'win_lose_stack' | 'full_rotation' | 'round_robin' | 'doubles';
 
 interface RotationModeOption {
   value: RotationMode;
@@ -39,6 +39,11 @@ const rotationModes: RotationModeOption[] = [
         value: 'round_robin',
         label: 'Round Robin',
         description: 'Everyone plays with everyone (balanced rotation)',
+      },
+      {
+        value: 'doubles',
+        label: 'Doubles',
+        description: 'Permanent pairs rotate with win-lose queue logic',
       },
     ],
   },

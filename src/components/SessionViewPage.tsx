@@ -5,6 +5,7 @@ import { useThemeClasses } from '@/store/themeStore';
 import { SessionHeader } from './SessionHeader';
 import { CourtView } from './CourtView';
 import { PlayerQueue } from './PlayerQueue';
+import { DoublesQueue } from './DoublesQueue';
 import { PlayerList } from './PlayerList';
 import { ActivityLog } from './ActivityLog';
 import { Plus, Layers, Users, LayoutGrid, ScrollText } from 'lucide-react';
@@ -43,7 +44,7 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
       <main className="container mx-auto px-4 py-6 pb-24 lg:pb-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Courts Section */}
-          <div id="section-courts" className="lg:col-span-2 space-y-4 scroll-mt-4">
+          <div id="section-courts" className="lg:col-span-2 space-y-4 scroll-mt-20">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Courts</h2>
               <button
@@ -63,9 +64,11 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <div id="section-queue" className="scroll-mt-4"><PlayerQueue /></div>
-            <div id="section-players" className="scroll-mt-4"><PlayerList /></div>
-            <div id="section-log" className="scroll-mt-4"><ActivityLog /></div>
+            <div id="section-queue" className="scroll-mt-20">
+              {session.rotationMode === 'doubles' ? <DoublesQueue /> : <PlayerQueue />}
+            </div>
+            <div id="section-players" className="scroll-mt-20"><PlayerList /></div>
+            <div id="section-log" className="scroll-mt-20"><ActivityLog /></div>
           </div>
         </div>
       </main>

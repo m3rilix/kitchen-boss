@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType } from '@/types';
+import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType, Pair } from '@/types';
 import { updateSharedSession } from '@/lib/firebase';
 import { getNextGamePlayers } from '@/lib/smartQueue';
 import { buildRoundRobinStack } from '@/lib/roundRobin';
+import { buildDoublesMatchup, processDoublesGameEnd, processDoublesCancelGame, pairDisplayName } from '@/lib/doubles';
 
 // Helper to generate share code
 const generateShareCode = () => {
@@ -48,6 +49,8 @@ interface SessionState {
   addPlayer: (name: string, skillLevel?: number, moveToFront?: boolean) => void;
   removePlayer: (playerId: string) => void;
   togglePlayerActive: (playerId: string) => void;
+  checkInPlayer: (playerId: string) => void;
+  checkInPair: (pairId: string) => void;
   
   // Queue actions
   addToQueue: (playerId: string) => void;
@@ -73,7 +76,16 @@ interface SessionState {
   // Win-Lose Stack functions
   buildWinLoseStacks: () => void;
   addNewWinLoseStacks: () => void;
-  
+
+  // Doubles mode — pair management
+  addPair: (player1Id: string, player2Id: string, name?: string) => void;
+  removePair: (pairId: string) => void;
+  renamePair: (pairId: string, name: string) => void;
+  addPairToQueue: (pairId: string) => void;
+  removePairFromQueue: (pairId: string) => void;
+  promotePairToLoserQueue: (pairId: string) => void;
+  setPlayerUnavailable: (playerId: string, unavailable: boolean) => void;
+
   // Validation
   isNameDuplicate: (name: string) => boolean;
   
@@ -145,12 +157,24 @@ export const useSessionStore = create<SessionState>()(
             matchHistory: [],
             customStacks: [],
             roundRobinStacks: [], // Pre-built stacks for Round Robin mode
+            // Doubles mode
+            pairs: [],
+            doublesWinnerQueue: [],
+            doublesLoserQueue: [],
+            doublesWaitingQueue: [],
+            doublesLastMatchType: null,
           },
         });
       },
 
       endSession: () => {
-        set({ session: null });
+        const state = get();
+        // Push isActive:false to Firebase before clearing local state so share-link viewers see the ended scoreboard
+        if (state.shareCode && state.session) {
+          updateSharedSession(state.shareCode, { ...state.session, isActive: false }).catch(() => {});
+        }
+        // Clear shareCode so a new session doesn't overwrite this Firebase record
+        set({ session: null, shareCode: null });
       },
 
       updateSessionName: (name) => {
@@ -295,7 +319,7 @@ export const useSessionStore = create<SessionState>()(
         });
       },
 
-      addPlayer: (name, skillLevel, moveToFront = false) => {
+      addPlayer: (name, skillLevel, _moveToFront = false) => {
         set((state) => {
           if (!state.session) return state;
           const newPlayer: Player = {
@@ -304,52 +328,28 @@ export const useSessionStore = create<SessionState>()(
             skillLevel,
             gamesPlayed: 0,
             gamesWon: 0,
-            checkedInAt: new Date(),
+            checkedInAt: undefined as Date | undefined,
             isActive: true,
             // Smart queue fields
             winStreak: 0,
             loseStreak: 0,
             lastPartners: [],
             lastOpponents: [],
-            waitingSince: Date.now(),
+            waitingSince: -1,
           };
-          
-          // Legacy FIFO queue
-          const newQueue = moveToFront 
-            ? [newPlayer.id, ...state.session.queue]
-            : [...state.session.queue, newPlayer.id];
-          
-          // Smart queue: new players go to waiting stack (with defensive check)
-          const currentWaitingStack = state.session.waitingStack ?? [];
-          const newWaitingStack = moveToFront
-            ? [newPlayer.id, ...currentWaitingStack]
-            : [...currentWaitingStack, newPlayer.id];
-          
-          const logMessage = moveToFront 
-            ? `${name} added and moved to front of queue`
-            : `${name} joined the session`;
-          
+
+          // DO NOT add to queue or stacks — player must check-in explicitly
           return {
             session: {
               ...state.session,
               players: [...state.session.players, newPlayer],
-              queue: newQueue,
-              waitingStack: newWaitingStack,
-              // DO NOT clear roundRobinStacks - existing stacks should be preserved
               activityLog: [
-                createLogEntry('player_added', logMessage, { playerNames: [name] }),
+                createLogEntry('player_added', `${name} joined the session`, { playerNames: [name] }),
                 ...state.session.activityLog,
               ],
             },
           };
         });
-        // Build new stacks based on mode
-        const mode = get().session?.rotationMode;
-        if (mode === 'round_robin') {
-          get().addNewRoundRobinStacks();
-        } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
-          get().addNewWinLoseStacks();
-        }
       },
 
       removePlayer: (playerId) => {
@@ -369,7 +369,18 @@ export const useSessionStore = create<SessionState>()(
           const newLoserStacks = removeFromStacks(state.session.loserStacks || []);
           const newWaitingStacks = removeFromStacks(state.session.waitingStacks || []);
           const newCustomStacks = removeFromStacks(state.session.customStacks || []);
-          
+
+          // Remove any pairs that include this player from doubles queues and pairs array
+          const newPairs = (state.session.pairs ?? []).filter(
+            p => p.player1Id !== playerId && p.player2Id !== playerId
+          );
+          const removedPairIds = new Set(
+            (state.session.pairs ?? [])
+              .filter(p => p.player1Id === playerId || p.player2Id === playerId)
+              .map(p => p.id)
+          );
+          const filterPairIds = (q: string[]) => q.filter(id => !removedPairIds.has(id));
+
           return {
             session: {
               ...state.session,
@@ -385,6 +396,11 @@ export const useSessionStore = create<SessionState>()(
               loserStacks: newLoserStacks,
               waitingStacks: newWaitingStacks,
               customStacks: newCustomStacks,
+              // Remove from doubles
+              pairs: newPairs,
+              doublesWinnerQueue:  filterPairIds(state.session.doublesWinnerQueue  ?? []),
+              doublesLoserQueue:   filterPairIds(state.session.doublesLoserQueue   ?? []),
+              doublesWaitingQueue: filterPairIds(state.session.doublesWaitingQueue ?? []),
             },
           };
         });
@@ -395,6 +411,79 @@ export const useSessionStore = create<SessionState>()(
         } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
           get().addNewWinLoseStacks();
         }
+      },
+
+      checkInPlayer: (playerId) => {
+        set((state) => {
+          if (!state.session) return state;
+          const player = state.session.players.find(p => p.id === playerId);
+          if (!player || player.checkedInAt) return state; // already checked in
+
+          const now = Date.now();
+          const updatedPlayer = { ...player, checkedInAt: new Date(), waitingSince: now };
+          const newQueue = [...state.session.queue, playerId];
+          const newWaitingStack = [...(state.session.waitingStack ?? []), playerId];
+
+          return {
+            session: {
+              ...state.session,
+              players: state.session.players.map(p => p.id === playerId ? updatedPlayer : p),
+              queue: newQueue,
+              waitingStack: newWaitingStack,
+              activityLog: [
+                createLogEntry('player_queued', `${player.name} checked in`, { playerNames: [player.name] }),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+        // Build stacks for the current mode
+        const mode = get().session?.rotationMode;
+        if (mode === 'round_robin') {
+          get().addNewRoundRobinStacks();
+        } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
+          get().addNewWinLoseStacks();
+        }
+      },
+
+      checkInPair: (pairId) => {
+        set((state) => {
+          if (!state.session) return state;
+          const pair = (state.session.pairs ?? []).find(p => p.id === pairId);
+          if (!pair) return state;
+
+          // Already in a queue — nothing to do
+          const allQueues = [
+            ...(state.session.doublesWinnerQueue ?? []),
+            ...(state.session.doublesLoserQueue ?? []),
+            ...(state.session.doublesWaitingQueue ?? []),
+          ];
+          if (allQueues.includes(pairId)) return state;
+
+          const now = Date.now();
+          const p1Name = state.session.players.find(p => p.id === pair.player1Id)?.name ?? '';
+          const p2Name = state.session.players.find(p => p.id === pair.player2Id)?.name ?? '';
+
+          return {
+            session: {
+              ...state.session,
+              players: state.session.players.map(p => {
+                if (p.id === pair.player1Id || p.id === pair.player2Id) {
+                  return { ...p, checkedInAt: p.checkedInAt ?? new Date(), waitingSince: now };
+                }
+                return p;
+              }),
+              pairs: (state.session.pairs ?? []).map(p =>
+                p.id === pairId ? { ...p, waitingSince: now } : p
+              ),
+              doublesWaitingQueue: [...(state.session.doublesWaitingQueue ?? []), pairId],
+              activityLog: [
+                createLogEntry('player_queued', `${p1Name} & ${p2Name} checked in`, { playerNames: [p1Name, p2Name] }),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
       },
 
       togglePlayerActive: (playerId) => {
@@ -764,6 +853,191 @@ export const useSessionStore = create<SessionState>()(
                 ),
                 ...state.session.activityLog,
               ],
+            },
+          };
+        });
+      },
+
+      // ============================================
+      // DOUBLES MODE — PAIR MANAGEMENT
+      // ============================================
+
+      addPair: (player1Id, player2Id, name) => {
+        set((state) => {
+          if (!state.session) return state;
+          const p1 = state.session.players.find(p => p.id === player1Id);
+          const p2 = state.session.players.find(p => p.id === player2Id);
+          if (!p1 || !p2) return state;
+          const autoName = name || `${p1.name} & ${p2.name}`;
+          const newPair: Pair = {
+            id: uuidv4(),
+            player1Id,
+            player2Id,
+            name: autoName,
+            gamesPlayed: 0,
+            gamesWon: 0,
+            waitingSince: 0,
+          };
+          return {
+            session: {
+              ...state.session,
+              pairs: [...(state.session.pairs ?? []), newPair],
+              activityLog: [
+                createLogEntry('player_added', `Pair created: ${autoName}`),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      removePair: (pairId) => {
+        set((state) => {
+          if (!state.session) return state;
+          const pair = state.session.pairs?.find(p => p.id === pairId);
+          const displayName = pair ? pairDisplayName(pair, state.session.players) : pairId;
+          return {
+            session: {
+              ...state.session,
+              pairs: (state.session.pairs ?? []).filter(p => p.id !== pairId),
+              doublesWinnerQueue:  (state.session.doublesWinnerQueue  ?? []).filter(id => id !== pairId),
+              doublesLoserQueue:   (state.session.doublesLoserQueue   ?? []).filter(id => id !== pairId),
+              doublesWaitingQueue: (state.session.doublesWaitingQueue ?? []).filter(id => id !== pairId),
+              activityLog: [
+                createLogEntry('player_removed', `Pair dissolved: ${displayName}`),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      renamePair: (pairId, name) => {
+        set((state) => {
+          if (!state.session) return state;
+          return {
+            session: {
+              ...state.session,
+              pairs: (state.session.pairs ?? []).map(p =>
+                p.id === pairId ? { ...p, name } : p
+              ),
+            },
+          };
+        });
+      },
+
+      addPairToQueue: (pairId) => {
+        set((state) => {
+          if (!state.session) return state;
+          const pair = state.session.pairs?.find(p => p.id === pairId);
+          if (!pair) return state;
+          // Don't add if already in any queue
+          const allQueues = [
+            ...(state.session.doublesWinnerQueue  ?? []),
+            ...(state.session.doublesLoserQueue   ?? []),
+            ...(state.session.doublesWaitingQueue ?? []),
+          ];
+          if (allQueues.includes(pairId)) return state;
+          // Check both players are available
+          const p1 = state.session.players.find(p => p.id === pair.player1Id);
+          const p2 = state.session.players.find(p => p.id === pair.player2Id);
+          if (!p1 || !p2 || p1.unavailable || p2.unavailable) return state;
+
+          const name = pairDisplayName(pair, state.session.players);
+          return {
+            session: {
+              ...state.session,
+              pairs: (state.session.pairs ?? []).map(p =>
+                p.id === pairId ? { ...p, waitingSince: Date.now() } : p
+              ),
+              doublesWaitingQueue: [...(state.session.doublesWaitingQueue ?? []), pairId],
+              activityLog: [
+                createLogEntry('player_queued', `${name} joined the queue`),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      removePairFromQueue: (pairId) => {
+        set((state) => {
+          if (!state.session) return state;
+          const pair = state.session.pairs?.find(p => p.id === pairId);
+          const name = pair ? pairDisplayName(pair, state.session.players) : pairId;
+          return {
+            session: {
+              ...state.session,
+              pairs: (state.session.pairs ?? []).map(p =>
+                p.id === pairId ? { ...p, waitingSince: 0 } : p
+              ),
+              doublesWinnerQueue:  (state.session.doublesWinnerQueue  ?? []).filter(id => id !== pairId),
+              doublesLoserQueue:   (state.session.doublesLoserQueue   ?? []).filter(id => id !== pairId),
+              doublesWaitingQueue: (state.session.doublesWaitingQueue ?? []).filter(id => id !== pairId),
+              activityLog: [
+                createLogEntry('player_removed', `${name} left the queue`),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      promotePairToLoserQueue: (pairId) => {
+        set((state) => {
+          if (!state.session) return state;
+          const pair = state.session.pairs?.find(p => p.id === pairId);
+          if (!pair) return state;
+          const name = pairDisplayName(pair, state.session.players);
+          return {
+            session: {
+              ...state.session,
+              doublesWinnerQueue:  (state.session.doublesWinnerQueue  ?? []).filter(id => id !== pairId),
+              doublesLoserQueue:   [...(state.session.doublesLoserQueue ?? []), pairId],
+              doublesWaitingQueue: (state.session.doublesWaitingQueue ?? []).filter(id => id !== pairId),
+              activityLog: [
+                createLogEntry('player_queued', `${name} moved to loser queue`),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      setPlayerUnavailable: (playerId, unavailable) => {
+        set((state) => {
+          if (!state.session) return state;
+          const player = state.session.players.find(p => p.id === playerId);
+          if (!player) return state;
+
+          // If marking unavailable, also remove their pair from queues
+          let newPairs = state.session.pairs ?? [];
+          let newWinnerQ  = state.session.doublesWinnerQueue  ?? [];
+          let newLoserQ   = state.session.doublesLoserQueue   ?? [];
+          let newWaitingQ = state.session.doublesWaitingQueue ?? [];
+
+          if (unavailable) {
+            const affectedPair = newPairs.find(
+              p => p.player1Id === playerId || p.player2Id === playerId
+            );
+            if (affectedPair) {
+              newPairs   = newPairs.map(p => p.id === affectedPair.id ? { ...p, waitingSince: 0 } : p);
+              newWinnerQ  = newWinnerQ.filter(id => id !== affectedPair.id);
+              newLoserQ   = newLoserQ.filter(id => id !== affectedPair.id);
+              newWaitingQ = newWaitingQ.filter(id => id !== affectedPair.id);
+            }
+          }
+
+          return {
+            session: {
+              ...state.session,
+              players: state.session.players.map(p =>
+                p.id === playerId ? { ...p, unavailable } : p
+              ),
+              pairs: newPairs,
+              doublesWinnerQueue:  newWinnerQ,
+              doublesLoserQueue:   newLoserQ,
+              doublesWaitingQueue: newWaitingQ,
             },
           };
         });
@@ -1268,8 +1542,8 @@ export const useSessionStore = create<SessionState>()(
           const usedPlayerIds: string[] = [];
           
           for (let i = 0; i < newStacksNeeded && remainingPlayers.length >= 4; i++) {
-            // Use respectOrder: true to simply take first 4 players (they're already in waitingStack order)
-            const stack = buildRoundRobinStack(remainingPlayers, state.session.matchHistory || [], true);
+            // Use respectOrder: false so scoring selects best players by wait time + variety
+            const stack = buildRoundRobinStack(remainingPlayers, state.session.matchHistory || [], false);
             console.log('[addNewRoundRobinStacks] built new stack:', stack);
             if (stack) {
               newStacks.push(stack);
@@ -1855,12 +2129,47 @@ export const useSessionStore = create<SessionState>()(
             },
           };
         });
-        // Add new stacks based on mode
+        // Add new stacks / handle doubles queue routing
         const mode = get().session?.rotationMode;
         if (mode === 'round_robin') {
           get().addNewRoundRobinStacks();
         } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
           get().addNewWinLoseStacks();
+        } else if (mode === 'doubles') {
+          // Route pairs into winner/loser queues after the game.
+          // Player stats (gamesPlayed, gamesWon, streaks) were already updated in the
+          // main set() call above — we only need to update pair stats + queue arrays here.
+          set((state) => {
+            if (!state.session) return state;
+            const lastGame = [...state.session.gamesCompleted].pop();
+            if (!lastGame) return state;
+
+            const winningTeam = lastGame.winner === 'team1' ? lastGame.team1 : lastGame.team2;
+            const losingTeam  = lastGame.winner === 'team1' ? lastGame.team2 : lastGame.team1;
+
+            const winnerPair = state.session.pairs?.find(p =>
+              (p.player1Id === winningTeam[0] && p.player2Id === winningTeam[1]) ||
+              (p.player1Id === winningTeam[1] && p.player2Id === winningTeam[0])
+            );
+            const loserPair = state.session.pairs?.find(p =>
+              (p.player1Id === losingTeam[0] && p.player2Id === losingTeam[1]) ||
+              (p.player1Id === losingTeam[1] && p.player2Id === losingTeam[0])
+            );
+
+            if (!winnerPair || !loserPair) return state;
+
+            const result = processDoublesGameEnd(winnerPair.id, loserPair.id, state.session);
+            // Intentionally omit result.players — player stats already updated above
+            return {
+              session: {
+                ...state.session,
+                pairs:               result.pairs,
+                doublesWinnerQueue:  result.doublesWinnerQueue,
+                doublesLoserQueue:   result.doublesLoserQueue,
+                doublesWaitingQueue: result.doublesWaitingQueue,
+              },
+            };
+          });
         }
       },
 
@@ -1875,16 +2184,52 @@ export const useSessionStore = create<SessionState>()(
           const allPlayerIds = [...court.currentGame.team1, ...court.currentGame.team2];
           const playerNames = allPlayerIds.map(id => state.session!.players.find(p => p.id === id)?.name || '');
 
+          const updatedCourts = state.session.courts.map((c) =>
+            c.id === courtId ? { ...c, status: 'available' as const, currentGame: undefined } : c
+          );
+          const logEntry = createLogEntry(
+            'game_ended',
+            `${court.name}: Game cancelled - ${playerNames.join(', ')} returned to queue`,
+            { courtId, courtName: court.name }
+          );
+
+          // ── Doubles mode: return both pairs to the front of the waiting queue ──
+          if (state.session.rotationMode === 'doubles') {
+            const pairA = state.session.pairs?.find(p =>
+              (p.player1Id === court.currentGame!.team1[0] && p.player2Id === court.currentGame!.team1[1]) ||
+              (p.player1Id === court.currentGame!.team1[1] && p.player2Id === court.currentGame!.team1[0])
+            );
+            const pairB = state.session.pairs?.find(p =>
+              (p.player1Id === court.currentGame!.team2[0] && p.player2Id === court.currentGame!.team2[1]) ||
+              (p.player1Id === court.currentGame!.team2[1] && p.player2Id === court.currentGame!.team2[0])
+            );
+
+            if (pairA && pairB) {
+              const result = processDoublesCancelGame(pairA.id, pairB.id, state.session);
+              return {
+                session: {
+                  ...state.session,
+                  courts: updatedCourts,
+                  players: result.players,
+                  doublesWinnerQueue:  result.doublesWinnerQueue,
+                  doublesLoserQueue:   result.doublesLoserQueue,
+                  doublesWaitingQueue: result.doublesWaitingQueue,
+                  activityLog: [logEntry, ...state.session.activityLog],
+                },
+              };
+            }
+          }
+
+          // ── All other modes ────────────────────────────────────────────────
           // Add players back to front of queue (legacy)
           const newQueue = [...allPlayerIds, ...state.session.queue];
-          
+
           // Add players back to front of waiting stack (smart queue)
-          // They go to waitingStack since the game was cancelled (no win/loss)
           const currentWaitingStack = state.session.waitingStack ?? [];
           const newWaitingStack = [...allPlayerIds, ...currentWaitingStack];
-          
+
           // Update players' waitingSince to now (they're back in queue)
-          const updatedPlayers = state.session.players.map(p => 
+          const updatedPlayers = state.session.players.map(p =>
             allPlayerIds.includes(p.id) ? { ...p, waitingSince: Date.now() } : p
           );
 
@@ -1892,26 +2237,18 @@ export const useSessionStore = create<SessionState>()(
             session: {
               ...state.session,
               players: updatedPlayers,
-              courts: state.session.courts.map((c) =>
-                c.id === courtId
-                  ? { ...c, status: 'available', currentGame: undefined }
-                  : c
-              ),
+              courts: updatedCourts,
               queue: newQueue,
               waitingStack: newWaitingStack,
-              activityLog: [
-                createLogEntry(
-                  'game_ended',
-                  `${court.name}: Game cancelled - ${playerNames.join(', ')} returned to queue`,
-                  { courtId, courtName: court.name }
-                ),
-                ...state.session.activityLog,
-              ],
+              activityLog: [logEntry, ...state.session.activityLog],
             },
           };
         });
         // Add new stacks without touching existing ones (players returned to waiting)
-        get().addNewRoundRobinStacks();
+        const mode = get().session?.rotationMode;
+        if (mode !== 'doubles') {
+          get().addNewRoundRobinStacks();
+        }
       },
 
       autoAssignNextGame: (courtId) => {
@@ -1950,7 +2287,46 @@ export const useSessionStore = create<SessionState>()(
         // If no manual selection, check rotation mode
         if (!team1 || !team2) {
           const rotationMode = state.session.rotationMode;
-          
+
+          // ── Doubles mode ──────────────────────────────────────────────────
+          if (rotationMode === 'doubles') {
+            const matchup = buildDoublesMatchup(state.session);
+            if (matchup) {
+              team1 = [matchup.pairA.player1Id, matchup.pairA.player2Id];
+              team2 = [matchup.pairB.player1Id, matchup.pairB.player2Id];
+              // Remove both pairs from queues (they're now in a game)
+              // Track the match type for Win/Loss alternation (only pure W vs W or L vs L)
+              const newLastMatchType: 'winner' | 'loser' | null =
+                matchup.pairASource === 'winner' && matchup.pairBSource === 'winner' ? 'winner' :
+                matchup.pairASource === 'loser'  && matchup.pairBSource === 'loser'  ? 'loser'  :
+                state.session.doublesLastMatchType ?? null;
+              set((s) => {
+                if (!s.session) return s;
+                const remove = (q: string[]) =>
+                  q.filter(id => id !== matchup.pairA.id && id !== matchup.pairB.id);
+                return {
+                  session: {
+                    ...s.session,
+                    pairs: (s.session.pairs ?? []).map(p =>
+                      p.id === matchup.pairA.id || p.id === matchup.pairB.id
+                        ? { ...p, waitingSince: 0 }
+                        : p
+                    ),
+                    doublesWinnerQueue:  remove(s.session.doublesWinnerQueue  ?? []),
+                    doublesLoserQueue:   remove(s.session.doublesLoserQueue   ?? []),
+                    doublesWaitingQueue: remove(s.session.doublesWaitingQueue ?? []),
+                    doublesLastMatchType: newLastMatchType,
+                  },
+                };
+              });
+            }
+            // In doubles mode, only pairs can start a game — no FIFO fallback
+            if (team1 && team2) {
+              get().startGame(courtId, team1, team2);
+            }
+            return;
+          }
+
           // For Round Robin: IGNORE custom stacks, use pre-built roundRobinStacks
           // For other modes: check custom stacks first
           if (rotationMode === 'round_robin') {

@@ -7,6 +7,7 @@ import { AdminPage } from '@/components/AdminPage';
 import { SessionSetupPage } from '@/components/SessionSetupPage';
 import { SessionViewPage } from '@/components/SessionViewPage';
 import { SharedSessionView } from '@/components/SharedSessionView';
+import { SharedScoreboard } from '@/components/SharedScoreboard';
 import { SessionTransferredModal } from '@/components/SessionTransferModal';
 import { getShareCodeFromUrl, clearShareCodeFromUrl, subscribeToSession, onSessionChange } from '@/lib/firebase';
 import type { Session } from '@/types';
@@ -157,15 +158,24 @@ function App() {
         </div>
       );
     }
+    // Session ended — show scoreboard only
+    if (sharedSession.isActive === false) {
+      return (
+        <ShareViewErrorBoundary>
+          <SharedScoreboard session={sharedSession} />
+        </ShareViewErrorBoundary>
+      );
+    }
+
     return (
       <ShareViewErrorBoundary>
-        <SharedSessionView 
-          session={sharedSession} 
+        <SharedSessionView
+          session={sharedSession}
           onExit={() => {
             setSharedSession(null);
             setViewingShareCode(null);
             clearShareCodeFromUrl();
-          }} 
+          }}
         />
       </ShareViewErrorBoundary>
     );
