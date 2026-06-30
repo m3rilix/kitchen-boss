@@ -7,7 +7,7 @@ import { SettingsDropdown } from './SettingsDropdown';
 import { SessionTransferModal } from './SessionTransferModal';
 
 export function LoginPage() {
-  const { login, register, loginAsGuest, isLoading, error } = useAuthStore();
+  const { login, register, isLoading, error } = useAuthStore();
   const theme = useThemeClasses();
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
