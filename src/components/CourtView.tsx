@@ -23,10 +23,10 @@ interface StackDragData {
 }
 
 export function CourtView({ court }: CourtViewProps) {
-  const { 
-    session, 
-    getPlayerById, 
-    endGame, 
+  const {
+    session,
+    getPlayerById,
+    endGame,
     cancelGame,
     autoAssignNextGame,
     setCourtStatus,
@@ -34,10 +34,12 @@ export function CourtView({ court }: CourtViewProps) {
     renameCourt,
     removePlayerFromGame,
     replacePlayerInGame,
+    swapPlayers,
     startGame
   } = useSessionStore();
   const theme = useThemeClasses();
   
+  const [draggedPlayer, setDraggedPlayer] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
   const [showEndGame, setShowEndGame] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showMaintenanceMenu, setShowMaintenanceMenu] = useState(false);
@@ -344,10 +346,24 @@ export function CourtView({ court }: CourtViewProps) {
                     );
                   }
                   
+                  const isDragTarget = draggedPlayer !== null && !(draggedPlayer.team === 'team1' && draggedPlayer.index === i);
                   return (
                     <div
                       key={i}
-                      className="flex items-center gap-1.5 p-1 bg-blue-50 rounded-lg"
+                      draggable={!isDoubles}
+                      onDragStart={() => !isDoubles && setDraggedPlayer({ team: 'team1', index: i })}
+                      onDragEnd={() => setDraggedPlayer(null)}
+                      onDragOver={(e) => { if (!isDoubles && isDragTarget) e.preventDefault(); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!isDoubles && draggedPlayer) {
+                          swapPlayers(court.id, draggedPlayer.team, draggedPlayer.index, 'team1', i);
+                          setDraggedPlayer(null);
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 p-1 rounded-lg transition-all ${
+                        isDragTarget && draggedPlayer ? 'bg-blue-100 ring-2 ring-blue-300' : 'bg-blue-50'
+                      } ${!isDoubles ? 'cursor-grab active:cursor-grabbing' : ''}`}
                     >
                       <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 font-semibold text-[10px] flex-shrink-0">
                         {player?.name.charAt(0).toUpperCase()}
@@ -438,10 +454,24 @@ export function CourtView({ court }: CourtViewProps) {
                     );
                   }
                   
+                  const isDragTarget = draggedPlayer !== null && !(draggedPlayer.team === 'team2' && draggedPlayer.index === i);
                   return (
                     <div
                       key={i}
-                      className="flex items-center gap-1.5 p-1 bg-red-50 rounded-lg"
+                      draggable={!isDoubles}
+                      onDragStart={() => !isDoubles && setDraggedPlayer({ team: 'team2', index: i })}
+                      onDragEnd={() => setDraggedPlayer(null)}
+                      onDragOver={(e) => { if (!isDoubles && isDragTarget) e.preventDefault(); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!isDoubles && draggedPlayer) {
+                          swapPlayers(court.id, draggedPlayer.team, draggedPlayer.index, 'team2', i);
+                          setDraggedPlayer(null);
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 p-1 rounded-lg transition-all ${
+                        isDragTarget && draggedPlayer ? 'bg-red-100 ring-2 ring-red-300' : 'bg-red-50'
+                      } ${!isDoubles ? 'cursor-grab active:cursor-grabbing' : ''}`}
                     >
                       <div className="w-6 h-6 bg-red-200 rounded-full flex items-center justify-center text-red-700 font-semibold text-[10px] flex-shrink-0">
                         {player?.name.charAt(0).toUpperCase()}

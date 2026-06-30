@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeClasses } from '@/store/themeStore';
 import { PickleballIcon } from './PickleballIcon';
-import { LogIn, UserPlus, Mail, Lock, User, AlertCircle, UserCircle } from 'lucide-react';
+import { LogIn, UserPlus, Mail, Lock, User, AlertCircle } from 'lucide-react';
 import { SettingsDropdown } from './SettingsDropdown';
 import { SessionTransferModal } from './SessionTransferModal';
 
