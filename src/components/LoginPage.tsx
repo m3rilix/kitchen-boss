@@ -179,14 +179,7 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* Guest Button — disabled */}
-          <button
-            disabled
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-slate-100 text-slate-400 font-medium rounded-lg cursor-not-allowed opacity-50"
-          >
-            <UserCircle className="w-5 h-5" />
-            Continue as Guest
-          </button>
+          {/* Guest Button — hidden */}
 
           <div className="mt-4 text-center">
             <button
