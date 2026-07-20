@@ -84,12 +84,14 @@ export function PlayerQueue() {
       
       // Get all waiting players not in pre-built stacks (for the "Waiting" forming stack)
       const usedPlayerIds = new Set(preBuiltStacks.flat());
-      const allWaitingPlayers = session.players.filter(p => 
-        p.isActive && 
-        p.waitingSince > 0 && 
-        !customStackPlayerIds.has(p.id) &&
-        !usedPlayerIds.has(p.id)
-      );
+      const allWaitingPlayers = session.players
+        .filter(p =>
+          p.isActive &&
+          p.waitingSince > 0 &&
+          !customStackPlayerIds.has(p.id) &&
+          !usedPlayerIds.has(p.id)
+        )
+        .sort((a, b) => a.waitingSince - b.waitingSince);
       
       const formingStack: StackGroup | null = allWaitingPlayers.length > 0 ? {
         id: 'rr-forming',

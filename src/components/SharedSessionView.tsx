@@ -294,128 +294,105 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   const stackQueue = useMemo(() => {
     try {
       if (!session?.players) return [];
-      
-      const getPlayersInStackOrder = (stackIds: string[]): Player[] => {
-        try {
-          return (stackIds || [])
-            .map(id => session.players.find(p => p.id === id))
-            .filter((p): p is Player => p !== undefined && p.isActive);
-        } catch (e) {
-          console.error('Error in getPlayersInStackOrder:', e);
-          return [];
-        }
+
+      type StackGroup = {
+        id: string;
+        players: Player[];
+        type: 'winners' | 'mixed' | 'forming';
+        label: string;
+        isReady: boolean;
       };
-    
-    // Get players by stack type
-    const winners = getPlayersInStackOrder(session.winnerStack ?? []);
-    const losers = getPlayersInStackOrder(session.loserStack ?? []);
-    const free = getPlayersInStackOrder(session.waitingStack ?? []);
-    
-    // Combine losers + free and sort by wait time (matches game selection logic)
-    const allLosersAndFree = [...losers, ...free].sort((a, b) => {
-      // Handle undefined/null values
-      const aWait = a?.waitingSince ?? 0;
-      const bWait = b?.waitingSince ?? 0;
-      if (aWait === 0 && bWait === 0) return 0;
-      if (aWait === 0) return 1;
-      if (bWait === 0) return -1;
-      return aWait - bWait;
-    });
-    
-    type StackGroup = {
-      id: string;
-      players: Player[];
-      type: 'winners' | 'mixed' | 'forming';
-      label: string;
-      isReady: boolean;
-    };
-    
-    // Build winner ready stacks
-    const winnerReadyStacks: StackGroup[] = [];
-    const winnerReadyCount = Math.floor(winners.length / 4);
-    for (let i = 0; i < winnerReadyCount; i++) {
-      winnerReadyStacks.push({
-        id: `winners-${i}`,
-        players: winners.slice(i * 4, (i + 1) * 4),
-        type: 'winners',
-        label: '', // Will be numbered later
-        isReady: true,
+
+      // ── Round Robin: read pre-built stacks from session (same source as PlayerQueue) ──
+      if (session.rotationMode === 'round_robin') {
+        const stackCounter = session.stackCounter ?? 0;
+        const preBuiltStacks = session.roundRobinStacks || [];
+
+        const readyStacks: StackGroup[] = preBuiltStacks
+          .map((stackIds, idx) => {
+            const players = stackIds
+              .map(id => session.players.find(p => p.id === id))
+              .filter((p): p is Player => p !== undefined);
+            return {
+              id: `rr-${idx}-${stackIds.slice(0, 2).join('-')}`,
+              players,
+              type: 'mixed' as const,
+              label: `Stack ${stackCounter + idx + 1}`,
+              isReady: true,
+            };
+          })
+          .filter(s => s.players.length === 4);
+
+        // Players not yet assigned to a pre-built stack
+        const usedIds = new Set(preBuiltStacks.flat());
+        const waitingPlayers = session.players
+          .filter(p => p.isActive && p.waitingSince > 0 && !usedIds.has(p.id))
+          .sort((a, b) => a.waitingSince - b.waitingSince);
+
+        const result: StackGroup[] = [...readyStacks];
+        if (waitingPlayers.length > 0) {
+          result.push({
+            id: 'rr-waiting',
+            players: waitingPlayers,
+            type: 'forming',
+            label: `Waiting (${waitingPlayers.length})`,
+            isReady: false,
+          });
+        }
+        return result;
+      }
+
+      // ── Win-Lose / Full Rotation: use pre-built stacks arrays ──
+      const getPlayersInStackOrder = (stackIds: string[]): Player[] => {
+        return (stackIds || [])
+          .map(id => session.players.find(p => p.id === id))
+          .filter((p): p is Player => p !== undefined && p.isActive);
+      };
+
+      const winners = getPlayersInStackOrder(session.winnerStack ?? []);
+      const losers = getPlayersInStackOrder(session.loserStack ?? []);
+      const free = getPlayersInStackOrder(session.waitingStack ?? []);
+
+      const allLosersAndFree = [...losers, ...free].sort((a, b) => {
+        const aWait = a?.waitingSince ?? 0;
+        const bWait = b?.waitingSince ?? 0;
+        if (aWait === 0 && bWait === 0) return 0;
+        if (aWait === 0) return 1;
+        if (bWait === 0) return -1;
+        return aWait - bWait;
       });
-    }
-    
-    // Build mixed ready stacks from losers + free
-    const mixedReadyStacks: StackGroup[] = [];
-    const mixedReadyCount = Math.floor(allLosersAndFree.length / 4);
-    for (let i = 0; i < mixedReadyCount; i++) {
-      mixedReadyStacks.push({
-        id: `mixed-${i}`,
-        players: allLosersAndFree.slice(i * 4, (i + 1) * 4),
-        type: 'mixed',
-        label: '', // Will be numbered later
-        isReady: true,
+
+      const winnerReadyStacks: StackGroup[] = [];
+      const winnerReadyCount = Math.floor(winners.length / 4);
+      for (let i = 0; i < winnerReadyCount; i++) {
+        winnerReadyStacks.push({ id: `winners-${i}`, players: winners.slice(i * 4, (i + 1) * 4), type: 'winners', label: '', isReady: true });
+      }
+
+      const mixedReadyStacks: StackGroup[] = [];
+      const mixedReadyCount = Math.floor(allLosersAndFree.length / 4);
+      for (let i = 0; i < mixedReadyCount; i++) {
+        mixedReadyStacks.push({ id: `mixed-${i}`, players: allLosersAndFree.slice(i * 4, (i + 1) * 4), type: 'mixed', label: '', isReady: true });
+      }
+
+      const allReadyStacks = [...winnerReadyStacks, ...mixedReadyStacks].sort((a, b) => {
+        if (!a.players.length) return 1;
+        if (!b.players.length) return -1;
+        return Math.min(...a.players.map(p => p?.waitingSince ?? Infinity)) - Math.min(...b.players.map(p => p?.waitingSince ?? Infinity));
       });
-    }
-    
-    // Combine ALL ready stacks and sort by longest waiting player (matches Manager View)
-    const allReadyStacks = [...winnerReadyStacks, ...mixedReadyStacks].sort((a, b) => {
-      // Handle empty stacks
-      if (!a.players.length && !b.players.length) return 0;
-      if (!a.players.length) return 1;
-      if (!b.players.length) return -1;
-      
-      const aMinWait = Math.min(...a.players.map(p => p?.waitingSince ?? Infinity));
-      const bMinWait = Math.min(...b.players.map(p => p?.waitingSince ?? Infinity));
-      return aMinWait - bMinWait;
-    });
-    
-    // Number the ready stacks sequentially
-    allReadyStacks.forEach((stack, idx) => {
-      stack.label = `Stack ${idx + 1}`;
-    });
-    
-    // Build forming stacks
-    const formingStacks: StackGroup[] = [];
-    const remainingWinners = winners.slice(winnerReadyCount * 4);
-    const remainingMixed = allLosersAndFree.slice(mixedReadyCount * 4);
-    
-    if (remainingWinners.length > 0) {
-      formingStacks.push({
-        id: 'forming-winners',
-        players: remainingWinners,
-        type: 'forming',
-        label: `Winners Forming (${remainingWinners.length}/4)`,
-        isReady: false,
-      });
-    }
-    
-    if (remainingMixed.length > 0) {
-      formingStacks.push({
-        id: 'forming-mixed',
-        players: remainingMixed,
-        type: 'forming',
-        label: `Forming (${remainingMixed.length}/4)`,
-        isReady: false,
-      });
-    }
-    
-    // Sort forming stacks by longest waiting player too
-    formingStacks.sort((a, b) => {
-      // Handle empty stacks
-      if (!a.players.length && !b.players.length) return 0;
-      if (!a.players.length) return 1;
-      if (!b.players.length) return -1;
-      
-      const aMinWait = Math.min(...a.players.map(p => p?.waitingSince ?? Infinity));
-      const bMinWait = Math.min(...b.players.map(p => p?.waitingSince ?? Infinity));
-      return aMinWait - bMinWait;
-    });
-    
-    return [...allReadyStacks, ...formingStacks];
+      allReadyStacks.forEach((stack, idx) => { stack.label = `Stack ${idx + 1}`; });
+
+      const formingStacks: StackGroup[] = [];
+      const remainingWinners = winners.slice(winnerReadyCount * 4);
+      const remainingMixed = allLosersAndFree.slice(mixedReadyCount * 4);
+      if (remainingWinners.length > 0) formingStacks.push({ id: 'forming-winners', players: remainingWinners, type: 'forming', label: `Winners Forming (${remainingWinners.length}/4)`, isReady: false });
+      if (remainingMixed.length > 0) formingStacks.push({ id: 'forming-mixed', players: remainingMixed, type: 'forming', label: `Forming (${remainingMixed.length}/4)`, isReady: false });
+
+      return [...allReadyStacks, ...formingStacks];
     } catch (e) {
       console.error('Error in stackQueue computation:', e);
       return [];
     }
-  }, [session?.players, session?.winnerStack, session?.loserStack, session?.waitingStack]);
+  }, [session?.players, session?.rotationMode, session?.roundRobinStacks, session?.stackCounter, session?.winnerStack, session?.loserStack, session?.waitingStack]);
 
   // Count players in games
   const playersInGame = session?.courts?.reduce((count, court) => {
@@ -555,7 +532,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                 <Layers className="w-4 h-4 text-amber-500" />
                 {isDoubles
                   ? `Pairs Queue (${totalPairsQueued})`
-                  : `Stack Queue (${session?.queue?.length || 0})`
+                  : `Stack Queue (${stackQueue.filter(s => s.isReady).length} ready · ${stackQueue.reduce((n, s) => n + s.players.length, 0)} players)`
                 }
               </h3>
             </div>
