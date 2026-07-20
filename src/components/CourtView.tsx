@@ -22,6 +22,9 @@ interface StackDragData {
   stackLabel: string;
 }
 
+const MIN_WINNING_SCORE = 11;
+const MIN_WIN_MARGIN = 2;
+
 export function CourtView({ court }: CourtViewProps) {
   const {
     session,
@@ -190,6 +193,16 @@ export function CourtView({ court }: CourtViewProps) {
     }
     if (s1 === s2) {
       setScoreError('Scores cannot be tied');
+      return;
+    }
+    const winningScore = Math.max(s1, s2);
+    const margin = Math.abs(s1 - s2);
+    if (winningScore < MIN_WINNING_SCORE) {
+      setScoreError(`Winning score must be at least ${MIN_WINNING_SCORE}`);
+      return;
+    }
+    if (margin < MIN_WIN_MARGIN) {
+      setScoreError(`Must win by at least ${MIN_WIN_MARGIN} points`);
       return;
     }
     const winner: 'team1' | 'team2' = s1 > s2 ? 'team1' : 'team2';
