@@ -41,6 +41,9 @@ export function CourtView({ court }: CourtViewProps) {
   
   const [draggedPlayer, setDraggedPlayer] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
   const [showEndGame, setShowEndGame] = useState(false);
+  const [team1Score, setTeam1Score] = useState('');
+  const [team2Score, setTeam2Score] = useState('');
+  const [scoreError, setScoreError] = useState('');
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showMaintenanceMenu, setShowMaintenanceMenu] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -160,8 +163,40 @@ export function CourtView({ court }: CourtViewProps) {
     autoAssignNextGame(court.id);
   };
 
-  const handleEndGame = (winner: 'team1' | 'team2') => {
-    endGame(court.id, winner);
+  const handleOpenEndGame = () => {
+    setTeam1Score('');
+    setTeam2Score('');
+    setScoreError('');
+    setShowEndGame(true);
+  };
+
+  const handleCloseEndGame = () => {
+    setTeam1Score('');
+    setTeam2Score('');
+    setScoreError('');
+    setShowEndGame(false);
+  };
+
+  const handleSubmitScore = () => {
+    const s1 = parseInt(team1Score, 10);
+    const s2 = parseInt(team2Score, 10);
+    if (Number.isNaN(s1) || Number.isNaN(s2)) {
+      setScoreError('Enter a score for both teams');
+      return;
+    }
+    if (s1 < 0 || s2 < 0) {
+      setScoreError('Scores cannot be negative');
+      return;
+    }
+    if (s1 === s2) {
+      setScoreError('Scores cannot be tied');
+      return;
+    }
+    const winner: 'team1' | 'team2' = s1 > s2 ? 'team1' : 'team2';
+    endGame(court.id, winner, { team1: s1, team2: s2 });
+    setTeam1Score('');
+    setTeam2Score('');
+    setScoreError('');
     setShowEndGame(false);
   };
 
@@ -496,7 +531,7 @@ export function CourtView({ court }: CourtViewProps) {
             {!showEndGame && !showCancelConfirm && !showMaintenanceMenu ? (
               <div className="flex gap-2">
                 <button
-                  onClick={() => setShowEndGame(true)}
+                  onClick={handleOpenEndGame}
                   className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition"
                 >
                   End Game
@@ -613,25 +648,47 @@ export function CourtView({ court }: CourtViewProps) {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-center text-slate-600">Who won?</p>
+                <p className="text-sm text-center text-slate-600">Enter final score</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleEndGame('team1')}
-                    className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 transition"
-                  >
-                    <Trophy className="w-4 h-4" />
-                    Team 1
-                  </button>
-                  <button
-                    onClick={() => handleEndGame('team2')}
-                    className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition"
-                  >
-                    <Trophy className="w-4 h-4" />
-                    Team 2
-                  </button>
+                  <div className="flex flex-col items-center gap-1">
+                    <label className="text-xs font-medium text-blue-700">Team 1</label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={team1Score}
+                      onChange={(e) => { setTeam1Score(e.target.value); setScoreError(''); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitScore(); }}
+                      placeholder="0"
+                      className="w-full px-2 py-2 text-center text-lg font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <label className="text-xs font-medium text-red-700">Team 2</label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={team2Score}
+                      onChange={(e) => { setTeam2Score(e.target.value); setScoreError(''); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitScore(); }}
+                      placeholder="0"
+                      className="w-full px-2 py-2 text-center text-lg font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+                    />
+                  </div>
                 </div>
+                {scoreError && (
+                  <p className="text-xs text-center text-red-600">{scoreError}</p>
+                )}
                 <button
-                  onClick={() => setShowEndGame(false)}
+                  onClick={handleSubmitScore}
+                  className="flex items-center justify-center gap-2 w-full py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition"
+                >
+                  <Trophy className="w-4 h-4" />
+                  Submit Score
+                </button>
+                <button
+                  onClick={handleCloseEndGame}
                   className="w-full py-1 text-xs text-slate-500 hover:text-slate-700"
                 >
                   Back
