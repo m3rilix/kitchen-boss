@@ -4,9 +4,9 @@ import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { pairDisplayName } from '@/lib/doubles';
 import { rankPlayers, rankPairs, winPct, formatDiff } from '@/lib/leaderboard';
-import { analyzeRotationHealth } from '@/lib/rotationHealth';
+import { analyzeSessionHealth } from '@/lib/sessionHealth';
 import { useState, useMemo, useEffect } from 'react';
-import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, X, GripVertical, Activity, Hourglass, Repeat } from 'lucide-react';
+import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, X, GripVertical, Activity, Hourglass, Repeat, BarChart3 } from 'lucide-react';
 
 /** Format elapsed milliseconds as M:SS */
 function formatElapsed(ms: number): string {
@@ -917,7 +917,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
   const rankedPairs = isDoubles ? rankPairs(session.pairs ?? [], session.gamesCompleted) : [];
   const totalGames = session.gamesCompleted.length;
   const activePlayers = session.players.filter(p => p.isActive);
-  const rotationHealth = analyzeRotationHealth(session.players, session.matchHistory ?? []);
+  const sessionHealth = analyzeSessionHealth(session.players, session.gamesCompleted, session.matchHistory ?? []);
 
   const partnerMap = new Map<string, string>();
   if (isDoubles) {
@@ -1031,62 +1031,25 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                 </>
               )}
 
-              {/* Rotation Health */}
+              {/* Session Health */}
               <div className="px-4 py-2 mt-2 bg-slate-50 dark:bg-slate-700/50 border-y border-slate-100 dark:border-slate-700">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5" />
-                  Rotation Health
+                  Session Health
                 </p>
               </div>
               <div className="px-4 py-3 space-y-4">
-                <div>
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
-                    <Repeat className="w-3.5 h-3.5 text-purple-500" />
-                    Repeat Partners
-                  </p>
-                  {rotationHealth.repeatPartnerships.length === 0 ? (
-                    <p className="text-xs text-slate-400">No repeat partnerships — great variety!</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {rotationHealth.repeatPartnerships.map((rp, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs bg-purple-50 dark:bg-purple-900/10 rounded-lg px-2 py-1.5">
-                          <span className="text-slate-700 dark:text-slate-200 truncate">{rp.playerAName} &amp; {rp.playerBName}</span>
-                          <span className="text-purple-600 dark:text-purple-400 font-semibold shrink-0 ml-2">{rp.count}Ã—</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
-                    <Repeat className="w-3.5 h-3.5 text-orange-500" />
-                    Repeat Matchups
-                  </p>
-                  {rotationHealth.repeatMatchups.length === 0 ? (
-                    <p className="text-xs text-slate-400">No repeat matchups — great variety!</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {rotationHealth.repeatMatchups.map((rm, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs bg-orange-50 dark:bg-orange-900/10 rounded-lg px-2 py-1.5">
-                          <span className="text-slate-700 dark:text-slate-200 truncate">{rm.teamANames.join(' & ')} vs {rm.teamBNames.join(' & ')}</span>
-                          <span className="text-orange-600 dark:text-orange-400 font-semibold shrink-0 ml-2">{rm.count}Ã—</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
+                {/* 1. Longest waiting time */}
                 <div>
                   <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
                     <Hourglass className="w-3.5 h-3.5 text-blue-500" />
                     Longest Waiting
                   </p>
-                  {rotationHealth.longestWaiting.length === 0 ? (
+                  {sessionHealth.longestWaiting.length === 0 ? (
                     <p className="text-xs text-slate-400">No one waiting right now</p>
                   ) : (
                     <div className="space-y-1">
-                      {rotationHealth.longestWaiting.map((w) => (
+                      {sessionHealth.longestWaiting.map((w) => (
                         <div key={w.id} className="flex items-center justify-between text-xs bg-blue-50 dark:bg-blue-900/10 rounded-lg px-2 py-1.5">
                           <span className="text-slate-700 dark:text-slate-200 truncate">{w.name}</span>
                           <span className="text-blue-600 dark:text-blue-400 font-semibold shrink-0 ml-2">{w.waitMinutes}m</span>
@@ -1094,6 +1057,94 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                       ))}
                     </div>
                   )}
+                </div>
+
+                {/* 2. Games played difference */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <BarChart3 className="w-3.5 h-3.5 text-teal-500" />
+                    Games Played Difference
+                  </p>
+                  {sessionHealth.gamesPlayedSpread.most && sessionHealth.gamesPlayedSpread.least ? (
+                    <div className="flex items-center justify-between text-xs bg-teal-50 dark:bg-teal-900/10 rounded-lg px-2 py-1.5">
+                      <span className="text-slate-700 dark:text-slate-200 truncate">
+                        {sessionHealth.gamesPlayedSpread.most.name} ({sessionHealth.gamesPlayedSpread.most.gamesPlayed}) vs {sessionHealth.gamesPlayedSpread.least.name} ({sessionHealth.gamesPlayedSpread.least.gamesPlayed})
+                      </span>
+                      <span className="text-teal-600 dark:text-teal-400 font-semibold shrink-0 ml-2">{sessionHealth.gamesPlayedSpread.diff}</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">No games played yet</p>
+                  )}
+                </div>
+
+                {/* 3. Repeat partner pairs */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Repeat className="w-3.5 h-3.5 text-purple-500" />
+                    Repeat Partner Pairs
+                  </p>
+                  {sessionHealth.repeatPartnerships.length === 0 ? (
+                    <p className="text-xs text-slate-400">No repeat partnerships - great variety!</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {sessionHealth.repeatPartnerships.map((rp, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-purple-50 dark:bg-purple-900/10 rounded-lg px-2 py-1.5">
+                          <span className="text-slate-700 dark:text-slate-200 truncate">{rp.playerAName} &amp; {rp.playerBName}</span>
+                          <span className="text-purple-600 dark:text-purple-400 font-semibold shrink-0 ml-2">{rp.count}x</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Repeat matchups (bonus, alongside repeat partners) */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Repeat className="w-3.5 h-3.5 text-orange-500" />
+                    Repeat Matchups
+                  </p>
+                  {sessionHealth.repeatMatchups.length === 0 ? (
+                    <p className="text-xs text-slate-400">No repeat matchups - great variety!</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {sessionHealth.repeatMatchups.map((rm, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-orange-50 dark:bg-orange-900/10 rounded-lg px-2 py-1.5">
+                          <span className="text-slate-700 dark:text-slate-200 truncate">{rm.teamANames.join(' & ')} vs {rm.teamBNames.join(' & ')}</span>
+                          <span className="text-orange-600 dark:text-orange-400 font-semibold shrink-0 ml-2">{rm.count}x</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Longest match */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Timer className="w-3.5 h-3.5 text-rose-500" />
+                    Longest Match
+                  </p>
+                  {sessionHealth.longestMatch ? (
+                    <div className="flex items-center justify-between text-xs bg-rose-50 dark:bg-rose-900/10 rounded-lg px-2 py-1.5">
+                      <span className="text-slate-700 dark:text-slate-200 truncate">
+                        {sessionHealth.longestMatch.team1Names.join(' & ')} vs {sessionHealth.longestMatch.team2Names.join(' & ')}
+                      </span>
+                      <span className="text-rose-600 dark:text-rose-400 font-semibold shrink-0 ml-2">{sessionHealth.longestMatch.minutes}m</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">No completed matches yet</p>
+                  )}
+                </div>
+
+                {/* 5. Average match per player */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Activity className="w-3.5 h-3.5 text-indigo-500" />
+                    Average Match Per Player
+                  </p>
+                  <div className="flex items-center justify-between text-xs bg-indigo-50 dark:bg-indigo-900/10 rounded-lg px-2 py-1.5">
+                    <span className="text-slate-700 dark:text-slate-200">Across {activePlayers.length} active player{activePlayers.length !== 1 ? 's' : ''}</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-semibold shrink-0 ml-2">{sessionHealth.avgGamesPerPlayer.toFixed(1)}</span>
+                  </div>
                 </div>
               </div>
 
