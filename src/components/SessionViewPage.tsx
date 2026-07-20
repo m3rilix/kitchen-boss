@@ -125,9 +125,12 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
     switch (id) {
       case 'courts':
         return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Courts</h2>
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+              <h2 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <LayoutGrid className="w-4 h-4 text-blue-500" />
+                Courts ({session.courts.length})
+              </h2>
               <button
                 onClick={addCourt}
                 className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium ${theme.textButton} ${theme.bgButton} rounded-lg transition`}
@@ -136,10 +139,12 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
                 Add Court
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {session.courts.map((court) => (
-                <CourtView key={court.id} court={court} />
-              ))}
+            <div className="p-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {session.courts.map((court) => (
+                  <CourtView key={court.id} court={court} />
+                ))}
+              </div>
             </div>
           </div>
         );

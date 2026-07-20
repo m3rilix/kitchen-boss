@@ -1,10 +1,10 @@
-import type { Session, Player, Court, Pair, ActivityType } from '@/types';
+﻿import type { Session, Player, Court, Pair, ActivityType } from '@/types';
 import { useThemeClasses } from '@/store/themeStore';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { pairDisplayName } from '@/lib/doubles';
 import { useState, useMemo, useEffect } from 'react';
-import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, X } from 'lucide-react';
+import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, X, GripVertical } from 'lucide-react';
 
 /** Format elapsed milliseconds as M:SS */
 function formatElapsed(ms: number): string {
@@ -100,7 +100,7 @@ const sortOptions = [
 
 type SortOption = typeof sortOptions[number]['value'];
 
-// ── Leaderboard helpers ───────────────────────────────────────────────────────
+// â”€â”€ Leaderboard helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function rankPlayers(players: Player[]): Player[] {
   return [...players].filter(p => p.isActive).sort((a, b) => {
@@ -123,18 +123,72 @@ function rankPairs(pairs: Pair[]): Pair[] {
 }
 
 function winPct(won: number, played: number): string {
-  if (played === 0) return '–';
+  if (played === 0) return 'â€“';
   return Math.round((won / played) * 100) + '%';
 }
 
 function RankBadge({ rank }: { rank: number }) {
-  if (rank === 1) return <span className="text-base">🥇</span>;
-  if (rank === 2) return <span className="text-base">🥈</span>;
-  if (rank === 3) return <span className="text-base">🥉</span>;
+  if (rank === 1) return <span className="text-base">ðŸ¥‡</span>;
+  if (rank === 2) return <span className="text-base">ðŸ¥ˆ</span>;
+  if (rank === 3) return <span className="text-base">ðŸ¥‰</span>;
   return <span className="text-sm font-semibold text-slate-400 w-6 text-center">{rank}</span>;
 }
 
-// ── Mobile tab config ─────────────────────────────────────────────────────────
+// â”€â”€ Panel drag-reorder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+type PanelId = 'courts' | 'queue' | 'players' | 'log';
+
+interface PanelLayout {
+  main: PanelId[];
+  sidebar: PanelId[];
+}
+
+const DEFAULT_SHARED_LAYOUT: PanelLayout = {
+  main: ['courts'],
+  sidebar: ['queue', 'players', 'log'],
+};
+
+function loadSharedLayout(): PanelLayout {
+  try {
+    const saved = localStorage.getItem('kb-shared-panel-layout');
+    if (!saved) return DEFAULT_SHARED_LAYOUT;
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed.main) || !Array.isArray(parsed.sidebar)) return DEFAULT_SHARED_LAYOUT;
+    const all: PanelId[] = ['courts', 'queue', 'players', 'log'];
+    const found = new Set([...parsed.main, ...parsed.sidebar]);
+    if (!all.every(p => found.has(p))) return DEFAULT_SHARED_LAYOUT;
+    return parsed;
+  } catch {
+    return DEFAULT_SHARED_LAYOUT;
+  }
+}
+
+interface DropZoneProps {
+  col: 'main' | 'sidebar';
+  idx: number;
+  dragging: PanelId | null;
+  dropTarget: { col: 'main' | 'sidebar'; idx: number } | null;
+  setDropTarget: (t: { col: 'main' | 'sidebar'; idx: number } | null) => void;
+  onDrop: (col: 'main' | 'sidebar', idx: number) => void;
+}
+
+function SharedDropZone({ col, idx, dragging, dropTarget, setDropTarget, onDrop }: DropZoneProps) {
+  if (!dragging) return null;
+  const isActive = dropTarget?.col === col && dropTarget?.idx === idx;
+  return (
+    <div
+      className={`rounded-lg transition-all duration-150 ${
+        isActive
+          ? 'h-8 bg-blue-100 dark:bg-blue-900/30 border-2 border-dashed border-blue-400'
+          : 'h-2'
+      }`}
+      onDragOver={(e) => { e.preventDefault(); setDropTarget({ col, idx }); }}
+      onDrop={(e) => { e.preventDefault(); onDrop(col, idx); }}
+    />
+  );
+}
+
+// â”€â”€ Mobile tab config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type MobileSection = 'courts' | 'queue' | 'players' | 'log';
 
@@ -153,6 +207,40 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [activeTab, setActiveTab] = useState<MobileSection>('courts');
+  const [layout, setLayoutState] = useState<PanelLayout>(loadSharedLayout);
+  const [dragging, setDragging] = useState<PanelId | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ col: 'main' | 'sidebar'; idx: number } | null>(null);
+
+  const saveLayout = (l: PanelLayout) => {
+    setLayoutState(l);
+    localStorage.setItem('kb-shared-panel-layout', JSON.stringify(l));
+  };
+
+  const handleDrop = (col: 'main' | 'sidebar', idx: number) => {
+    if (!dragging) return;
+    const newLayout: PanelLayout = {
+      main: layout.main.filter(p => p !== dragging),
+      sidebar: layout.sidebar.filter(p => p !== dragging),
+    };
+    newLayout[col] = [
+      ...newLayout[col].slice(0, idx),
+      dragging,
+      ...newLayout[col].slice(idx),
+    ];
+    saveLayout(newLayout);
+    setDragging(null);
+    setDropTarget(null);
+  };
+
+  const startDrag = (id: PanelId, e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = 'move';
+    setDragging(id);
+  };
+
+  const endDrag = () => {
+    setDragging(null);
+    setDropTarget(null);
+  };
 
   const scrollTo = (id: MobileSection) => {
     setActiveTab(id);
@@ -166,7 +254,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
 
   const isDoubles = session?.rotationMode === 'doubles';
 
-  // ── Doubles queue display ────────────────────────────────────────────────────
+  // â”€â”€ Doubles queue display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const doublesQueueSections = useMemo(() => {
     if (!isDoubles || !session?.pairs) return null;
 
@@ -435,6 +523,316 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
     );
   }
 
+  // â”€â”€ Panel content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const renderPanelContent = (id: PanelId): React.ReactNode => {
+    switch (id) {
+      case 'courts':
+        return (
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <LayoutGrid className="w-4 h-4 text-blue-500" />
+                Courts ({session?.courts?.length || 0})
+              </h3>
+            </div>
+            <div className="p-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(session?.courts || []).map((court) => (
+                  <ReadOnlyCourtView key={court.id} court={court} getPlayerById={getPlayerById} />
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'queue':
+        return (
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-amber-500" />
+                {isDoubles
+                  ? `Pairs Queue (${totalPairsQueued})`
+                  : `Stack Queue (${session?.queue?.length || 0})`
+                }
+              </h3>
+            </div>
+            <div className="p-3 max-h-80 overflow-y-auto">
+              {isDoubles ? (
+                doublesQueueSections && doublesQueueSections.every(s => s.pairs.length === 0) ? (
+                  <p className="text-sm text-slate-500 text-center py-4">No pairs queued</p>
+                ) : (
+                  <div className="space-y-4">
+                    {doublesQueueSections?.map((section) => section.pairs.length === 0 ? null : (
+                      <div key={section.label} className="space-y-1.5">
+                        <div className="flex items-center gap-2 px-1">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            section.color === 'yellow' ? 'bg-amber-400' :
+                            section.color === 'blue'   ? 'bg-blue-400' : 'bg-slate-400'
+                          }`} />
+                          <span className={`text-xs font-semibold ${
+                            section.color === 'yellow' ? 'text-amber-600 dark:text-amber-400' :
+                            section.color === 'blue'   ? 'text-blue-600 dark:text-blue-400' :
+                                                         'text-slate-500 dark:text-slate-400'
+                          }`}>
+                            {section.label} ({section.pairs.length})
+                          </span>
+                        </div>
+                        {section.pairs.map((pair, idx) => {
+                          const p1 = session.players.find(p => p.id === pair.player1Id);
+                          const p2 = session.players.find(p => p.id === pair.player2Id);
+                          const displayName = pairDisplayName(pair, session.players);
+                          const losses = pair.gamesPlayed - pair.gamesWon;
+                          const inGame = (session?.courts || []).some(c =>
+                            c.currentGame &&
+                            (c.currentGame.team1.includes(pair.player1Id) || c.currentGame.team2.includes(pair.player1Id))
+                          );
+                          return (
+                            <div key={pair.id} className={`flex items-center gap-3 p-2 rounded-lg border-l-2 ${
+                              section.color === 'yellow' ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10' :
+                              section.color === 'blue'   ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/10' :
+                                                           'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40'
+                            }`}>
+                              <span className="text-xs font-bold text-slate-400 dark:text-slate-500 w-4 text-center flex-shrink-0">{idx + 1}</span>
+                              <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center flex-shrink-0">
+                                <Link2 className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{displayName}</span>
+                                  {inGame && (
+                                    <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 rounded">In Game</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                  <span>{pair.gamesWon}W â€“ {losses}L</span>
+                                  {p1 && p2 && (<><span>â€¢</span><span className="truncate">{p1.name} &amp; {p2.name}</span></>)}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                stackQueue.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-4">No players waiting</p>
+                ) : (
+                  <div className="space-y-3">
+                    {stackQueue.map((stack) => (
+                      <div key={stack.id} className="space-y-1">
+                        <div className={`flex items-center justify-between px-2 py-1 rounded-lg ${
+                          stack.isReady ? stack.type === 'winners' ? 'bg-green-100 dark:bg-green-900/30' : 'bg-blue-100 dark:bg-blue-900/30' : 'bg-slate-100 dark:bg-slate-700'
+                        }`}>
+                          <span className={`text-xs font-semibold ${
+                            stack.isReady ? stack.type === 'winners' ? 'text-green-700 dark:text-green-300' : 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'
+                          }`}>{stack.label}</span>
+                          {stack.isReady && (
+                            <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                              <Play className="w-3 h-3" />Ready
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1">
+                          {stack.players.map((player) => (
+                            <div key={player.id} className={`flex items-center gap-2 p-1.5 rounded-lg text-xs ${
+                              stack.type === 'winners' ? 'bg-green-50 dark:bg-green-900/20' :
+                              stack.isReady ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-slate-50 dark:bg-slate-700/50'
+                            }`}>
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 ${
+                                stack.type === 'winners' ? 'bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-200' : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                              }`}>{player.name.charAt(0).toUpperCase()}</div>
+                              <span className="truncate text-slate-700 dark:text-slate-200">{player.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        );
+
+      case 'players':
+        return (
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <Users className="w-4 h-4 text-blue-500" />
+                All Players ({session?.players?.filter(p => p.isActive).length || 0})
+              </h3>
+            </div>
+            <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search..."
+                  className="w-full pl-7 pr-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                />
+              </div>
+              <div className="relative flex items-center">
+                <button
+                  onClick={() => setShowSortMenu(!showSortMenu)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-l-lg hover:bg-slate-200 dark:hover:bg-slate-600"
+                >
+                  <ArrowUpDown className="w-3 h-3" />
+                  {sortOptions.find(o => o.value === sortBy)?.label}
+                </button>
+                <button
+                  onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
+                  className="flex items-center px-1.5 py-1 text-xs text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 border border-l-0 border-slate-200 dark:border-slate-600 rounded-r-lg hover:bg-slate-200 dark:hover:bg-slate-600"
+                  title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+                >
+                  {sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                </button>
+                {showSortMenu && (
+                  <div className="absolute right-0 top-full mt-1 w-28 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-50 py-1">
+                    {sortOptions.map(option => (
+                      <button
+                        key={option.value}
+                        onClick={() => { setSortBy(option.value); setShowSortMenu(false); }}
+                        className={`w-full px-3 py-1 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-700 ${
+                          sortBy === option.value ? 'text-blue-600 font-medium' : 'text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="p-3 max-h-64 overflow-y-auto">
+              <div className="space-y-2">
+                {filteredAndSortedPlayers.map((player) => {
+                  const status = getPlayerStatus(player.id);
+                  const pair = isDoubles ? session.pairs?.find(p => p.player1Id === player.id || p.player2Id === player.id) : undefined;
+                  const partnerId = pair ? (pair.player1Id === player.id ? pair.player2Id : pair.player1Id) : undefined;
+                  const partner = partnerId ? session.players.find(p => p.id === partnerId) : undefined;
+                  return (
+                    <div key={player.id} className={`flex items-center gap-3 p-2 rounded-lg ${
+                      status === 'playing'     ? 'bg-red-50 dark:bg-red-900/20' :
+                      status === 'unavailable' ? 'bg-slate-100 dark:bg-slate-700/60 opacity-60' :
+                                                 'hover:bg-slate-50 dark:hover:bg-slate-700'
+                    }`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 ${
+                        status === 'playing'     ? 'bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-200' :
+                        status === 'winner'      ? 'bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-200' :
+                        status === 'loser'       ? 'bg-orange-200 dark:bg-orange-800 text-orange-700 dark:text-orange-200' :
+                        status === 'unavailable' ? 'bg-slate-200 dark:bg-slate-600 text-slate-400 dark:text-slate-500' :
+                                                   'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                      }`}>{player.name.charAt(0).toUpperCase()}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-sm font-medium truncate ${
+                            status === 'unavailable' ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-200'
+                          }`}>{player.name}</span>
+                          {status === 'playing' && (
+                            <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded">Playing</span>
+                          )}
+                          {status === 'unavailable' && (
+                            <span className="px-1.5 py-0.5 text-xs font-medium bg-slate-200 dark:bg-slate-700 text-slate-500 rounded">Unavailable</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+                          <span>{player.gamesPlayed} games</span>
+                          {partner && (<><span>â€¢</span><span className="flex items-center gap-1"><Link2 className="w-3 h-3" />{partner.name}</span></>)}
+                          {player.waitingSince > 0 && !isDoubles && (
+                            <><span>â€¢</span><span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatWaitTime(player.waitingSince, player.gamesPlayed)}</span></>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'log':
+        return (
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <History className="w-4 h-4 text-slate-500" />
+                Recent Activity
+              </h3>
+            </div>
+            <div className="p-4 max-h-48 overflow-y-auto">
+              {(session?.activityLog?.length || 0) === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">No activity yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {(session?.activityLog || []).slice(0, 10).map((entry) => (
+                    <div key={entry.id} className="flex items-start gap-2 py-1">
+                      <div className="flex-shrink-0 mt-0.5">{getActivityIcon(entry.type)}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs ${entry.type === 'stack_skipped' ? 'text-purple-600 dark:text-purple-400 font-medium' : 'text-slate-600 dark:text-slate-400'}`}>
+                          {entry.message}
+                        </p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">{formatActivityTime(entry.timestamp)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+    }
+  };
+
+  const renderColumn = (col: 'main' | 'sidebar', panels: PanelId[]) => {
+    const isEmpty = panels.length === 0;
+    return (
+      <div
+        className={`space-y-1 min-h-16 rounded-xl transition-all ${
+          dragging && isEmpty
+            ? 'border-2 border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/40 p-6 flex items-center justify-center'
+            : ''
+        }`}
+        onDragOver={(e) => { if (dragging && isEmpty) { e.preventDefault(); setDropTarget({ col, idx: 0 }); } }}
+        onDrop={(e) => { if (dragging && isEmpty) { e.preventDefault(); handleDrop(col, 0); } }}
+      >
+        {dragging && isEmpty ? (
+          <p className="text-sm text-slate-400 select-none">Drop panel here</p>
+        ) : (
+          <>
+            <SharedDropZone col={col} idx={0} dragging={dragging} dropTarget={dropTarget} setDropTarget={setDropTarget} onDrop={handleDrop} />
+            {panels.map((panelId, i) => (
+              <div key={panelId}>
+                <div
+                  id={`shared-section-${panelId}`}
+                  className={`scroll-mt-20 transition-opacity duration-150 ${dragging === panelId ? 'opacity-30 pointer-events-none' : ''}`}
+                >
+                  <div
+                    draggable
+                    onDragStart={(e) => startDrag(panelId, e)}
+                    onDragEnd={endDrag}
+                    className="group hidden lg:flex items-center justify-center h-5 mb-1 rounded cursor-grab active:cursor-grabbing hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    title="Drag to reposition panel"
+                  >
+                    <GripVertical className="w-4 h-4 text-slate-200 dark:text-slate-700 group-hover:text-slate-400 dark:group-hover:text-slate-400 transition-colors" />
+                  </div>
+                  {renderPanelContent(panelId)}
+                </div>
+                <SharedDropZone col={col} idx={i + 1} dragging={dragging} dropTarget={dropTarget} setDropTarget={setDropTarget} onDrop={handleDrop} />
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors">
       {/* Header */}
@@ -462,7 +860,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                 {(session.date || session.location) && (
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                     {session.date && <span>{formatDate(session.date)} {formatTime(session.time)}</span>}
-                    {session.date && session.location && <span> • </span>}
+                    {session.date && session.location && <span> â€¢ </span>}
                     {session.location && <span>{session.location}</span>}
                   </p>
                 )}
@@ -519,359 +917,15 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6 pb-24 lg:pb-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Courts Section */}
-          <div id="shared-section-courts" className="lg:col-span-2 space-y-4 scroll-mt-20">
-            <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">
-              Courts ({session?.courts?.length || 0})
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(session?.courts || []).map((court) => (
-                <ReadOnlyCourtView key={court.id} court={court} getPlayerById={getPlayerById} />
-              ))}
-            </div>
+          <div className="lg:col-span-2">
+            {renderColumn('main', layout.main)}
           </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Queue Panel — Stack Queue (non-doubles) or Doubles Queue */}
-            <div id="shared-section-queue" className="scroll-mt-20 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-amber-500" />
-                  {isDoubles
-                    ? `Pairs Queue (${totalPairsQueued})`
-                    : `Stack Queue (${session?.queue?.length || 0})`
-                  }
-                </h3>
-              </div>
-              <div className="p-3 max-h-80 overflow-y-auto">
-                {isDoubles ? (
-                  /* ── Doubles pair queue ── */
-                  doublesQueueSections && doublesQueueSections.every(s => s.pairs.length === 0) ? (
-                    <p className="text-sm text-slate-500 text-center py-4">No pairs queued</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {doublesQueueSections?.map((section) => section.pairs.length === 0 ? null : (
-                        <div key={section.label} className="space-y-1.5">
-                          {/* Section header */}
-                          <div className="flex items-center gap-2 px-1">
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                              section.color === 'yellow' ? 'bg-amber-400' :
-                              section.color === 'blue'   ? 'bg-blue-400' :
-                                                           'bg-slate-400'
-                            }`} />
-                            <span className={`text-xs font-semibold ${
-                              section.color === 'yellow' ? 'text-amber-600 dark:text-amber-400' :
-                              section.color === 'blue'   ? 'text-blue-600 dark:text-blue-400' :
-                                                           'text-slate-500 dark:text-slate-400'
-                            }`}>
-                              {section.label} ({section.pairs.length})
-                            </span>
-                          </div>
-                          {/* Pair cards */}
-                          {section.pairs.map((pair, idx) => {
-                            const p1 = session.players.find(p => p.id === pair.player1Id);
-                            const p2 = session.players.find(p => p.id === pair.player2Id);
-                            const displayName = pairDisplayName(pair, session.players);
-                            const losses = pair.gamesPlayed - pair.gamesWon;
-                            const inGame = (session?.courts || []).some(c =>
-                              c.currentGame &&
-                              (c.currentGame.team1.includes(pair.player1Id) || c.currentGame.team2.includes(pair.player1Id))
-                            );
-                            return (
-                              <div
-                                key={pair.id}
-                                className={`flex items-center gap-3 p-2 rounded-lg border-l-2 ${
-                                  section.color === 'yellow'
-                                    ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10'
-                                    : section.color === 'blue'
-                                      ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/10'
-                                      : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40'
-                                }`}
-                              >
-                                {/* Position badge */}
-                                <span className="text-xs font-bold text-slate-400 dark:text-slate-500 w-4 text-center flex-shrink-0">
-                                  {idx + 1}
-                                </span>
-                                {/* Pair avatar */}
-                                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center flex-shrink-0">
-                                  <Link2 className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                                </div>
-                                {/* Info */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
-                                      {displayName}
-                                    </span>
-                                    {inGame && (
-                                      <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 rounded">
-                                        In Game
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                                    <span>{pair.gamesWon}W – {losses}L</span>
-                                    {p1 && p2 && (
-                                      <>
-                                        <span>•</span>
-                                        <span className="truncate">{p1.name} &amp; {p2.name}</span>
-                                      </>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  )
-                ) : (
-                  /* ── Non-doubles stack queue ── */
-                  stackQueue.length === 0 ? (
-                    <p className="text-sm text-slate-500 text-center py-4">No players waiting</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {stackQueue.map((stack) => (
-                        <div key={stack.id} className="space-y-1">
-                          {/* Stack Header */}
-                          <div className={`flex items-center justify-between px-2 py-1 rounded-lg ${
-                            stack.isReady
-                              ? stack.type === 'winners'
-                                ? 'bg-green-100 dark:bg-green-900/30'
-                                : 'bg-blue-100 dark:bg-blue-900/30'
-                              : 'bg-slate-100 dark:bg-slate-700'
-                          }`}>
-                            <span className={`text-xs font-semibold ${
-                              stack.isReady
-                                ? stack.type === 'winners'
-                                  ? 'text-green-700 dark:text-green-300'
-                                  : 'text-blue-700 dark:text-blue-300'
-                                : 'text-slate-600 dark:text-slate-400'
-                            }`}>
-                              {stack.label}
-                            </span>
-                            {stack.isReady && (
-                              <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                                <Play className="w-3 h-3" />
-                                Ready
-                              </span>
-                            )}
-                          </div>
-                          {/* Stack Players */}
-                          <div className="grid grid-cols-2 gap-1">
-                            {stack.players.map((player) => (
-                              <div
-                                key={player.id}
-                                className={`flex items-center gap-2 p-1.5 rounded-lg text-xs ${
-                                  stack.type === 'winners'
-                                    ? 'bg-green-50 dark:bg-green-900/20'
-                                    : stack.isReady
-                                      ? 'bg-blue-50 dark:bg-blue-900/20'
-                                      : 'bg-slate-50 dark:bg-slate-700/50'
-                                }`}
-                              >
-                                <div className={`w-5 h-5 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 ${
-                                  stack.type === 'winners'
-                                    ? 'bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-200'
-                                    : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
-                                }`}>
-                                  {player.name.charAt(0).toUpperCase()}
-                                </div>
-                                <span className="truncate text-slate-700 dark:text-slate-200">{player.name}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-
-            {/* All Players */}
-            <div id="shared-section-players" className="scroll-mt-20 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <Users className="w-4 h-4 text-blue-500" />
-                  All Players ({session?.players?.filter(p => p.isActive).length || 0})
-                </h3>
-              </div>
-              
-              {/* Search and Sort */}
-              <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search..."
-                    className="w-full pl-7 pr-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200"
-                  />
-                </div>
-                <div className="relative flex items-center">
-                  <button
-                    onClick={() => setShowSortMenu(!showSortMenu)}
-                    className="flex items-center gap-1 px-2 py-1 text-xs text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-l-lg hover:bg-slate-200 dark:hover:bg-slate-600"
-                  >
-                    <ArrowUpDown className="w-3 h-3" />
-                    {sortOptions.find(o => o.value === sortBy)?.label}
-                  </button>
-                  <button
-                    onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
-                    className="flex items-center px-1.5 py-1 text-xs text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 border border-l-0 border-slate-200 dark:border-slate-600 rounded-r-lg hover:bg-slate-200 dark:hover:bg-slate-600"
-                    title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
-                  >
-                    {sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-                  </button>
-                  {showSortMenu && (
-                    <div className="absolute right-0 top-full mt-1 w-28 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-50 py-1">
-                      {sortOptions.map(option => (
-                        <button
-                          key={option.value}
-                          onClick={() => {
-                            setSortBy(option.value);
-                            setShowSortMenu(false);
-                          }}
-                          className={`w-full px-3 py-1 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-700 ${
-                            sortBy === option.value ? 'text-blue-600 font-medium' : 'text-slate-700 dark:text-slate-300'
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="p-3 max-h-64 overflow-y-auto">
-                <div className="space-y-2">
-                  {filteredAndSortedPlayers.map((player) => {
-                    const status = getPlayerStatus(player.id);
-                    // In doubles mode, find this player's partner
-                    const pair = isDoubles
-                      ? session.pairs?.find(p => p.player1Id === player.id || p.player2Id === player.id)
-                      : undefined;
-                    const partnerId = pair
-                      ? (pair.player1Id === player.id ? pair.player2Id : pair.player1Id)
-                      : undefined;
-                    const partner = partnerId ? session.players.find(p => p.id === partnerId) : undefined;
-
-                    return (
-                      <div key={player.id} className={`flex items-center gap-3 p-2 rounded-lg ${
-                        status === 'playing'     ? 'bg-red-50 dark:bg-red-900/20' :
-                        status === 'unavailable' ? 'bg-slate-100 dark:bg-slate-700/60 opacity-60' :
-                                                   'hover:bg-slate-50 dark:hover:bg-slate-700'
-                      }`}>
-                        {/* Avatar with status color */}
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 ${
-                          status === 'playing'
-                            ? 'bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-200'
-                            : status === 'winner'
-                              ? 'bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-200'
-                              : status === 'loser'
-                                ? 'bg-orange-200 dark:bg-orange-800 text-orange-700 dark:text-orange-200'
-                                : status === 'unavailable'
-                                  ? 'bg-slate-200 dark:bg-slate-600 text-slate-400 dark:text-slate-500'
-                                  : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
-                        }`}>
-                          {player.name.charAt(0).toUpperCase()}
-                        </div>
-                        {/* Player info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`text-sm font-medium truncate ${
-                              status === 'unavailable'
-                                ? 'line-through text-slate-400 dark:text-slate-500'
-                                : 'text-slate-700 dark:text-slate-200'
-                            }`}>
-                              {player.name}
-                            </span>
-                            {status === 'playing' && (
-                              <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded">
-                                Playing
-                              </span>
-                            )}
-                            {status === 'unavailable' && (
-                              <span className="px-1.5 py-0.5 text-xs font-medium bg-slate-200 dark:bg-slate-700 text-slate-500 rounded">
-                                Unavailable
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
-                            <span>{player.gamesPlayed} games</span>
-                            {partner && (
-                              <>
-                                <span>•</span>
-                                <span className="flex items-center gap-1">
-                                  <Link2 className="w-3 h-3" />
-                                  {partner.name}
-                                </span>
-                              </>
-                            )}
-                            {player.waitingSince > 0 && !isDoubles && (
-                              <>
-                                <span>•</span>
-                                <span className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  {formatWaitTime(player.waitingSince, player.gamesPlayed)}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Activity Log */}
-            <div id="shared-section-log" className="scroll-mt-20 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <History className="w-4 h-4 text-slate-500" />
-                  Recent Activity
-                </h3>
-              </div>
-              <div className="p-4 max-h-48 overflow-y-auto">
-                {(session?.activityLog?.length || 0) === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-4">No activity yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {(session?.activityLog || []).slice(0, 10).map((entry) => (
-                      <div 
-                        key={entry.id} 
-                        className="flex items-start gap-2 py-1"
-                      >
-                        <div className="flex-shrink-0 mt-0.5">
-                          {getActivityIcon(entry.type)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs ${
-                            entry.type === 'stack_skipped' 
-                              ? 'text-purple-600 dark:text-purple-400 font-medium' 
-                              : 'text-slate-600 dark:text-slate-400'
-                          }`}>
-                            {entry.message}
-                          </p>
-                          <p className="text-xs text-slate-400 dark:text-slate-500">
-                            {formatActivityTime(entry.timestamp)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+          <div>
+            {renderColumn('sidebar', layout.sidebar)}
           </div>
         </div>
       </main>
+
 
       {/* Mobile bottom tab nav */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 z-20">
@@ -899,7 +953,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   );
 }
 
-// ── Leaderboard Modal ─────────────────────────────────────────────────────────
+// â”€â”€ Leaderboard Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function LeaderboardModal({ session, onClose }: { session: Session; onClose: () => void }) {
   const isDoubles = session.rotationMode === 'doubles';
@@ -928,7 +982,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
               Leaderboard
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {session.name} · {totalGames} game{totalGames !== 1 ? 's' : ''} · {activePlayers.length} player{activePlayers.length !== 1 ? 's' : ''}
+              {session.name} Â· {totalGames} game{totalGames !== 1 ? 's' : ''} Â· {activePlayers.length} player{activePlayers.length !== 1 ? 's' : ''}
             </p>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
@@ -1028,7 +1082,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                 </div>
                 <div className="text-center p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
                   <p className="text-xl font-bold text-slate-800 dark:text-slate-100">
-                    {activePlayers.length > 0 ? (totalGames * 4 / activePlayers.length).toFixed(1) : '–'}
+                    {activePlayers.length > 0 ? (totalGames * 4 / activePlayers.length).toFixed(1) : 'â€“'}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">Avg GP</p>
                 </div>
