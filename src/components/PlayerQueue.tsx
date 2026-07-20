@@ -16,7 +16,7 @@ interface StackGroup {
 }
 
 export function PlayerQueue() {
-  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, startGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime, reshuffleByGamesPlayed, smartRebuildStacks } = useSessionStore();
+  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, startGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime, reshuffleByGamesPlayed, smartRebuildStacks, prepareNextRoundRobinStack } = useSessionStore();
   const theme = useThemeClasses();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set(['forming-winners', 'forming-losers', 'forming-free', 'forming-mixed']));
@@ -409,6 +409,12 @@ export function PlayerQueue() {
     })).filter(stack => stack.players.length > 0);
   }, [stacks, searchQuery]);
 
+  const isRoundRobin = session?.rotationMode === 'round_robin';
+  // Count waiting players not yet assigned to a pre-built stack
+  const rrWaitingCount = isRoundRobin
+    ? (stacks.find(s => s.id === 'rr-forming')?.players.length ?? 0)
+    : 0;
+
   // Early return after all hooks
   if (!session) return null;
 
@@ -640,6 +646,29 @@ export function PlayerQueue() {
                     </div>
                   )}
                 </div>
+                {/* Prepare next stack — round robin only */}
+                {isRoundRobin && (
+                  <button
+                    onClick={() => prepareNextRoundRobinStack()}
+                    disabled={rrWaitingCount < 4}
+                    className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition whitespace-nowrap ${
+                      rrWaitingCount >= 4
+                        ? 'text-teal-600 hover:text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-100 dark:hover:bg-teal-900/30'
+                        : 'text-slate-400 bg-slate-100 dark:bg-slate-700 cursor-not-allowed'
+                    }`}
+                    title={
+                      rrWaitingCount >= 4
+                        ? 'Prepare the next stack from waiting players'
+                        : `Need ${4 - rrWaitingCount} more player${4 - rrWaitingCount !== 1 ? 's' : ''} to prepare`
+                    }
+                  >
+                    <Plus className="w-3 h-3" />
+                    Prepare Stack
+                    {rrWaitingCount >= 4 && (
+                      <span className="ml-0.5 opacity-60">({Math.floor(rrWaitingCount / 4)})</span>
+                    )}
+                  </button>
+                )}
                 {/* Create custom stack */}
                 {!isCreatingCustomStack ? (
                   <button

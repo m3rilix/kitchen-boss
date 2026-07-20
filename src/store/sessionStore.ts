@@ -72,6 +72,7 @@ interface SessionState {
   reshuffleByGamesPlayed: () => void;
   rebuildRoundRobinStacks: () => void;
   addNewRoundRobinStacks: () => void;
+  prepareNextRoundRobinStack: () => void;
   smartRebuildStacks: () => void;
   // Win-Lose Stack functions
   buildWinLoseStacks: () => void;
@@ -1569,6 +1570,37 @@ export const useSessionStore = create<SessionState>()(
               ...state.session,
               roundRobinStacks: updatedStacks,
               waitingStack: updatedWaitingStack,
+            },
+          };
+        });
+      },
+
+      // ROUND ROBIN: Manually prepare exactly one more stack — bypasses the court-count cap used by
+      // addNewRoundRobinStacks so the manager can queue up additional stacks ahead of time.
+      prepareNextRoundRobinStack: () => {
+        set((state) => {
+          if (!state.session) return state;
+          if (state.session.rotationMode !== 'round_robin') return state;
+
+          const playersInStacks = new Set((state.session.roundRobinStacks || []).flat());
+          const customStackPlayerIds = new Set((state.session.customStacks || []).flat());
+
+          const availablePlayers = (state.session.waitingStack || [])
+            .filter(id => !playersInStacks.has(id) && !customStackPlayerIds.has(id))
+            .map(id => state.session!.players.find(p => p.id === id))
+            .filter((p): p is Player => p !== undefined && p.isActive && p.waitingSince > 0);
+
+          if (availablePlayers.length < 4) return state;
+
+          const stack = buildRoundRobinStack(availablePlayers, state.session.matchHistory || [], false);
+          if (!stack) return state;
+
+          const usedSet = new Set(stack);
+          return {
+            session: {
+              ...state.session,
+              roundRobinStacks: [...(state.session.roundRobinStacks || []), stack],
+              waitingStack: (state.session.waitingStack || []).filter(id => !usedSet.has(id)),
             },
           };
         });
