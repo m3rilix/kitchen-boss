@@ -3,8 +3,10 @@ import { useThemeClasses } from '@/store/themeStore';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { pairDisplayName } from '@/lib/doubles';
+import { rankPlayers, rankPairs, winPct, formatDiff } from '@/lib/leaderboard';
+import { analyzeRotationHealth } from '@/lib/rotationHealth';
 import { useState, useMemo, useEffect } from 'react';
-import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, X, GripVertical } from 'lucide-react';
+import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, X, GripVertical, Activity, Hourglass, Repeat } from 'lucide-react';
 
 /** Format elapsed milliseconds as M:SS */
 function formatElapsed(ms: number): string {
@@ -100,32 +102,7 @@ const sortOptions = [
 
 type SortOption = typeof sortOptions[number]['value'];
 
-// â”€â”€ Leaderboard helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function rankPlayers(players: Player[]): Player[] {
-  return [...players].filter(p => p.isActive).sort((a, b) => {
-    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
-    const aRate = a.gamesPlayed > 0 ? a.gamesWon / a.gamesPlayed : 0;
-    const bRate = b.gamesPlayed > 0 ? b.gamesWon / b.gamesPlayed : 0;
-    if (bRate !== aRate) return bRate - aRate;
-    return b.gamesPlayed - a.gamesPlayed;
-  });
-}
-
-function rankPairs(pairs: Pair[]): Pair[] {
-  return [...pairs].sort((a, b) => {
-    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
-    const aRate = a.gamesPlayed > 0 ? a.gamesWon / a.gamesPlayed : 0;
-    const bRate = b.gamesPlayed > 0 ? b.gamesWon / b.gamesPlayed : 0;
-    if (bRate !== aRate) return bRate - aRate;
-    return b.gamesPlayed - a.gamesPlayed;
-  });
-}
-
-function winPct(won: number, played: number): string {
-  if (played === 0) return 'â€“';
-  return Math.round((won / played) * 100) + '%';
-}
+// -- Leaderboard helpers (rankPlayers/rankPairs/winPct/formatDiff imported from lib/leaderboard) --
 
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-base">ðŸ¥‡</span>;
@@ -936,10 +913,11 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
 
 function LeaderboardModal({ session, onClose }: { session: Session; onClose: () => void }) {
   const isDoubles = session.rotationMode === 'doubles';
-  const rankedPlayers = rankPlayers(session.players);
-  const rankedPairs = isDoubles ? rankPairs(session.pairs ?? []) : [];
+  const rankedPlayers = rankPlayers(session.players, session.gamesCompleted);
+  const rankedPairs = isDoubles ? rankPairs(session.pairs ?? [], session.gamesCompleted) : [];
   const totalGames = session.gamesCompleted.length;
   const activePlayers = session.players.filter(p => p.isActive);
+  const rotationHealth = analyzeRotationHealth(session.players, session.matchHistory ?? []);
 
   const partnerMap = new Map<string, string>();
   if (isDoubles) {
@@ -985,6 +963,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                   <span className="w-8 text-center">W</span>
                   <span className="w-8 text-center">L</span>
                   <span className="w-10 text-center">Win%</span>
+                  <span className="w-10 text-center">+/-</span>
                   <span className="w-8 text-center">GP</span>
                 </div>
               </div>
@@ -1008,6 +987,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                       <span className="w-8 text-center font-bold text-green-600 dark:text-green-400">{player.gamesWon}</span>
                       <span className="w-8 text-center font-bold text-red-500 dark:text-red-400">{losses}</span>
                       <span className="w-10 text-center font-semibold text-slate-700 dark:text-slate-300">{winPct(player.gamesWon, player.gamesPlayed)}</span>
+                      <span className={`w-10 text-center font-medium ${player.pointDiff > 0 ? 'text-green-600 dark:text-green-400' : player.pointDiff < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>{formatDiff(player.pointDiff)}</span>
                       <span className="w-8 text-center text-slate-500 dark:text-slate-400">{player.gamesPlayed}</span>
                     </div>
                   </div>
@@ -1023,6 +1003,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                       <span className="w-8 text-center">W</span>
                       <span className="w-8 text-center">L</span>
                       <span className="w-10 text-center">Win%</span>
+                      <span className="w-10 text-center">+/-</span>
                       <span className="w-8 text-center">GP</span>
                     </div>
                   </div>
@@ -1041,6 +1022,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                           <span className="w-8 text-center font-bold text-green-600 dark:text-green-400">{pair.gamesWon}</span>
                           <span className="w-8 text-center font-bold text-red-500 dark:text-red-400">{losses}</span>
                           <span className="w-10 text-center font-semibold text-slate-700 dark:text-slate-300">{winPct(pair.gamesWon, pair.gamesPlayed)}</span>
+                          <span className={`w-10 text-center font-medium ${pair.pointDiff > 0 ? 'text-green-600 dark:text-green-400' : pair.pointDiff < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>{formatDiff(pair.pointDiff)}</span>
                           <span className="w-8 text-center text-slate-500 dark:text-slate-400">{pair.gamesPlayed}</span>
                         </div>
                       </div>
@@ -1048,6 +1030,72 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                   })}
                 </>
               )}
+
+              {/* Rotation Health */}
+              <div className="px-4 py-2 mt-2 bg-slate-50 dark:bg-slate-700/50 border-y border-slate-100 dark:border-slate-700">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5" />
+                  Rotation Health
+                </p>
+              </div>
+              <div className="px-4 py-3 space-y-4">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Repeat className="w-3.5 h-3.5 text-purple-500" />
+                    Repeat Partners
+                  </p>
+                  {rotationHealth.repeatPartnerships.length === 0 ? (
+                    <p className="text-xs text-slate-400">No repeat partnerships — great variety!</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {rotationHealth.repeatPartnerships.map((rp, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-purple-50 dark:bg-purple-900/10 rounded-lg px-2 py-1.5">
+                          <span className="text-slate-700 dark:text-slate-200 truncate">{rp.playerAName} &amp; {rp.playerBName}</span>
+                          <span className="text-purple-600 dark:text-purple-400 font-semibold shrink-0 ml-2">{rp.count}Ã—</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Repeat className="w-3.5 h-3.5 text-orange-500" />
+                    Repeat Matchups
+                  </p>
+                  {rotationHealth.repeatMatchups.length === 0 ? (
+                    <p className="text-xs text-slate-400">No repeat matchups — great variety!</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {rotationHealth.repeatMatchups.map((rm, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-orange-50 dark:bg-orange-900/10 rounded-lg px-2 py-1.5">
+                          <span className="text-slate-700 dark:text-slate-200 truncate">{rm.teamANames.join(' & ')} vs {rm.teamBNames.join(' & ')}</span>
+                          <span className="text-orange-600 dark:text-orange-400 font-semibold shrink-0 ml-2">{rm.count}Ã—</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Hourglass className="w-3.5 h-3.5 text-blue-500" />
+                    Longest Waiting
+                  </p>
+                  {rotationHealth.longestWaiting.length === 0 ? (
+                    <p className="text-xs text-slate-400">No one waiting right now</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {rotationHealth.longestWaiting.map((w) => (
+                        <div key={w.id} className="flex items-center justify-between text-xs bg-blue-50 dark:bg-blue-900/10 rounded-lg px-2 py-1.5">
+                          <span className="text-slate-700 dark:text-slate-200 truncate">{w.name}</span>
+                          <span className="text-blue-600 dark:text-blue-400 font-semibold shrink-0 ml-2">{w.waitMinutes}m</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Summary */}
               <div className="px-4 py-4 grid grid-cols-3 gap-3 border-t border-slate-100 dark:border-slate-700 mt-2">
