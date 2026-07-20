@@ -173,17 +173,18 @@ interface DropZoneProps {
 }
 
 function SharedDropZone({ col, idx, dragging, dropTarget, setDropTarget, onDrop }: DropZoneProps) {
-  if (!dragging) return null;
-  const isActive = dropTarget?.col === col && dropTarget?.idx === idx;
+  const isActive = dragging !== null && dropTarget?.col === col && dropTarget?.idx === idx;
   return (
     <div
       className={`rounded-lg transition-all duration-150 ${
-        isActive
+        !dragging
+          ? 'h-0 overflow-hidden'
+          : isActive
           ? 'h-8 bg-blue-100 dark:bg-blue-900/30 border-2 border-dashed border-blue-400'
           : 'h-2'
       }`}
-      onDragOver={(e) => { e.preventDefault(); setDropTarget({ col, idx }); }}
-      onDrop={(e) => { e.preventDefault(); onDrop(col, idx); }}
+      onDragOver={(e) => { if (dragging) { e.preventDefault(); setDropTarget({ col, idx }); } }}
+      onDrop={(e) => { if (dragging) { e.preventDefault(); onDrop(col, idx); } }}
     />
   );
 }
@@ -234,7 +235,8 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
 
   const startDrag = (id: PanelId, e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move';
-    setDragging(id);
+    e.dataTransfer.setData('text/plain', id);
+    setTimeout(() => setDragging(id), 0);
   };
 
   const endDrag = () => {
@@ -817,10 +819,10 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                     draggable
                     onDragStart={(e) => startDrag(panelId, e)}
                     onDragEnd={endDrag}
-                    className="group hidden lg:flex items-center justify-center h-5 mb-1 rounded cursor-grab active:cursor-grabbing hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    className="group hidden lg:flex items-center justify-center h-6 mb-1 rounded cursor-grab active:cursor-grabbing hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                     title="Drag to reposition panel"
                   >
-                    <GripVertical className="w-4 h-4 text-slate-200 dark:text-slate-700 group-hover:text-slate-400 dark:group-hover:text-slate-400 transition-colors" />
+                    <GripVertical className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-300 transition-colors" />
                   </div>
                   {renderPanelContent(panelId)}
                 </div>
