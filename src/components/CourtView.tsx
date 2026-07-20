@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import type { Court } from '@/types';
-import { Play, Trophy, X, Users, Wrench, Pencil, Check, UserPlus, UserMinus, ChevronDown, Timer } from 'lucide-react';
+import { Play, Trophy, X, Users, Wrench, Pencil, Check, UserPlus, UserMinus, ChevronDown, Timer, Shuffle } from 'lucide-react';
 
 /** Format elapsed milliseconds as M:SS */
 function formatElapsed(ms: number): string {
@@ -24,6 +24,7 @@ interface StackDragData {
 
 const MIN_WINNING_SCORE = 11;
 const MIN_WIN_MARGIN = 2;
+const MAX_SCORE = 50;
 
 export function CourtView({ court }: CourtViewProps) {
   const {
@@ -180,33 +181,45 @@ export function CourtView({ court }: CourtViewProps) {
     setShowEndGame(false);
   };
 
+  /** Validates a pair of scores against pickleball win rules. Returns an error message, or null if valid. */
+  const validateScore = (s1: number, s2: number): string | null => {
+    if (Number.isNaN(s1) || Number.isNaN(s2)) return 'Enter a score for both teams';
+    if (s1 < 0 || s2 < 0) return 'Scores cannot be negative';
+    if (s1 > MAX_SCORE || s2 > MAX_SCORE) return `Scores cannot exceed ${MAX_SCORE}`;
+    if (s1 === s2) return 'Scores cannot be tied';
+    const winningScore = Math.max(s1, s2);
+    const margin = Math.abs(s1 - s2);
+    if (winningScore < MIN_WINNING_SCORE) return `Winning score must be at least ${MIN_WINNING_SCORE}`;
+    if (margin < MIN_WIN_MARGIN) return `Must win by at least ${MIN_WIN_MARGIN} points`;
+    return null;
+  };
+
   const handleSubmitScore = () => {
     const s1 = parseInt(team1Score, 10);
     const s2 = parseInt(team2Score, 10);
-    if (Number.isNaN(s1) || Number.isNaN(s2)) {
-      setScoreError('Enter a score for both teams');
-      return;
-    }
-    if (s1 < 0 || s2 < 0) {
-      setScoreError('Scores cannot be negative');
-      return;
-    }
-    if (s1 === s2) {
-      setScoreError('Scores cannot be tied');
-      return;
-    }
-    const winningScore = Math.max(s1, s2);
-    const margin = Math.abs(s1 - s2);
-    if (winningScore < MIN_WINNING_SCORE) {
-      setScoreError(`Winning score must be at least ${MIN_WINNING_SCORE}`);
-      return;
-    }
-    if (margin < MIN_WIN_MARGIN) {
-      setScoreError(`Must win by at least ${MIN_WIN_MARGIN} points`);
+    const error = validateScore(s1, s2);
+    if (error) {
+      setScoreError(error);
       return;
     }
     const winner: 'team1' | 'team2' = s1 > s2 ? 'team1' : 'team2';
     endGame(court.id, winner, { team1: s1, team2: s2 });
+    setTeam1Score('');
+    setTeam2Score('');
+    setScoreError('');
+    setShowEndGame(false);
+  };
+
+  /** Dev-only: ends the game with a random valid win-by-2 score, for fast testing. */
+  const handleRandomScore = () => {
+    const winningScore = MIN_WINNING_SCORE + Math.floor(Math.random() * (MAX_SCORE - MIN_WINNING_SCORE + 1));
+    const maxLosingScore = Math.min(winningScore - MIN_WIN_MARGIN, MAX_SCORE);
+    const losingScore = Math.floor(Math.random() * (maxLosingScore + 1));
+    const winner: 'team1' | 'team2' = Math.random() < 0.5 ? 'team1' : 'team2';
+    const score = winner === 'team1'
+      ? { team1: winningScore, team2: losingScore }
+      : { team1: losingScore, team2: winningScore };
+    endGame(court.id, winner, score);
     setTeam1Score('');
     setTeam2Score('');
     setScoreError('');
@@ -669,6 +682,7 @@ export function CourtView({ court }: CourtViewProps) {
                       type="number"
                       inputMode="numeric"
                       min={0}
+                      max={MAX_SCORE}
                       value={team1Score}
                       onChange={(e) => { setTeam1Score(e.target.value); setScoreError(''); }}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitScore(); }}
@@ -682,6 +696,7 @@ export function CourtView({ court }: CourtViewProps) {
                       type="number"
                       inputMode="numeric"
                       min={0}
+                      max={MAX_SCORE}
                       value={team2Score}
                       onChange={(e) => { setTeam2Score(e.target.value); setScoreError(''); }}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitScore(); }}
@@ -700,6 +715,16 @@ export function CourtView({ court }: CourtViewProps) {
                   <Trophy className="w-4 h-4" />
                   Submit Score
                 </button>
+                {import.meta.env.DEV && (
+                  <button
+                    onClick={handleRandomScore}
+                    className="flex items-center justify-center gap-2 w-full py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200 transition"
+                    title="End with a random valid score (dev only)"
+                  >
+                    <Shuffle className="w-4 h-4" />
+                    Random Score (Dev)
+                  </button>
+                )}
                 <button
                   onClick={handleCloseEndGame}
                   className="w-full py-1 text-xs text-slate-500 hover:text-slate-700"
