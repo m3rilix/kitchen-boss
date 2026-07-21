@@ -303,8 +303,9 @@ function scoreArrangement(
 
 /**
  * Given exactly 4 already-selected players, pick the 2v2 team split that best avoids
- * repeat partners/opponents (same variety scoring used by buildRoundRobinStack). Does
- * NOT change who's in the group of 4 — only which two players end up on the same team.
+ * repeat partnerships. Strategy: prefer splits where both pairs are NEW (zero gravity),
+ * fallback to one repeat pair (one gravity), then fallback to full scoring (both pairs repeat).
+ * Does NOT change who's in the group of 4 — only which two players end up on the same team.
  *
  * Used to port round robin's variety-aware team assignment into modes that select
  * their own group of 4 by other means (e.g. Win-Lose Stack's FIFO stack building) but
@@ -321,6 +322,31 @@ export function pickBestTeamSplit(
     [[p0, p3], [p1, p2]],
   ];
 
+  // Calculate repeat "gravity" (total repeat pairs) for each split
+  // Gravity = 0: both pairs are new
+  // Gravity = 1: one pair repeated, one pair new
+  // Gravity = 2: both pairs repeated
+  const splitGravity = splits.map(([t1, t2]) => {
+    const t1Repeats = getPartnerCount(t1[0].id, t1[1].id, matchHistory) > 0 ? 1 : 0;
+    const t2Repeats = getPartnerCount(t2[0].id, t2[1].id, matchHistory) > 0 ? 1 : 0;
+    return t1Repeats + t2Repeats;
+  });
+
+  // Priority 1: find a split where both pairs are new (gravity = 0)
+  const zeroGravityIdx = splitGravity.findIndex(g => g === 0);
+  if (zeroGravityIdx !== -1) {
+    const split = splits[zeroGravityIdx];
+    return [split[0][0].id, split[0][1].id, split[1][0].id, split[1][1].id];
+  }
+
+  // Priority 2: find a split with only one repeated pair (gravity = 1)
+  const oneGravityIdx = splitGravity.findIndex(g => g === 1);
+  if (oneGravityIdx !== -1) {
+    const split = splits[oneGravityIdx];
+    return [split[0][0].id, split[0][1].id, split[1][0].id, split[1][1].id];
+  }
+
+  // Priority 3: all splits have at least one repeat pair; use full scoring to pick best
   let best = splits[0];
   let bestScore = -Infinity;
   for (const split of splits) {
