@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType, Pair } from '@/types';
+import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType, Pair, MatchHistoryEntry } from '@/types';
 import { updateSharedSession } from '@/lib/firebase';
 import { getNextGamePlayers } from '@/lib/smartQueue';
 import { buildRoundRobinStack, pickBestTeamSplit } from '@/lib/roundRobin';
@@ -219,15 +219,26 @@ export const useSessionStore = create<SessionState>()(
             currentGame: undefined,
           }));
           
-          // Build initial stacks for Win-Lose mode
+          // Build initial stacks for Win-Lose mode with collision-aware pairing
           const rotationMode = state.session.rotationMode;
           let initialWaitingStacks: string[][] = [];
-          
+
           if (rotationMode === 'win_lose_stack' || rotationMode === 'full_rotation') {
-            // Build stacks of 4 from all players
+            // Build stacks of 4 from all players, applying variety-aware team assignment
+            // (matchHistory is empty on reset, so collision scoring won't find repeats yet, but structure is ready)
+            const matchHistory: MatchHistoryEntry[] = [];
             for (let i = 0; i < allPlayerIds.length; i += 4) {
-              const stack = allPlayerIds.slice(i, i + 4);
-              initialWaitingStacks.push(stack);
+              const stackIds = allPlayerIds.slice(i, i + 4);
+              if (stackIds.length === 4) {
+                const stackPlayers = stackIds
+                  .map(id => resetPlayers.find(p => p.id === id) as unknown as Player)
+                  .filter((p): p is Player => p !== undefined);
+                if (stackPlayers.length === 4) {
+                  initialWaitingStacks.push(pickBestTeamSplit(stackPlayers as [Player, Player, Player, Player], matchHistory));
+                  continue;
+                }
+              }
+              initialWaitingStacks.push(stackIds);
             }
           }
           
