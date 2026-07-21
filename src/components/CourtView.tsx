@@ -24,7 +24,7 @@ interface StackDragData {
 
 const MIN_WINNING_SCORE = 11;
 const MIN_WIN_MARGIN = 2;
-const MAX_SCORE = 50;
+const MAX_SCORE = 20;
 
 export function CourtView({ court }: CourtViewProps) {
   const {
@@ -210,11 +210,25 @@ export function CourtView({ court }: CourtViewProps) {
     setShowEndGame(false);
   };
 
-  /** Dev-only: ends the game with a random valid win-by-2 score, for fast testing. */
+  /**
+   * Dev-only: ends the game with a random valid score, for fast testing.
+   * Defaults to a normal 11-point game most of the time; occasionally simulates a
+   * deuce game that went past 11, which must always be won by exactly 2 points.
+   */
   const handleRandomScore = () => {
-    const winningScore = MIN_WINNING_SCORE + Math.floor(Math.random() * (MAX_SCORE - MIN_WINNING_SCORE + 1));
-    const maxLosingScore = Math.min(winningScore - MIN_WIN_MARGIN, MAX_SCORE);
-    const losingScore = Math.floor(Math.random() * (maxLosingScore + 1));
+    const DEUCE_CHANCE = 0.3;
+    const isDeuce = MAX_SCORE > MIN_WINNING_SCORE + 1 && Math.random() < DEUCE_CHANCE;
+    let winningScore: number;
+    let losingScore: number;
+    if (isDeuce) {
+      // Deuce: winning score is anywhere from 12 up to the cap, always won by exactly 2
+      winningScore = (MIN_WINNING_SCORE + 1) + Math.floor(Math.random() * (MAX_SCORE - MIN_WINNING_SCORE));
+      losingScore = winningScore - MIN_WIN_MARGIN;
+    } else {
+      // Normal game: ends right at 11
+      winningScore = MIN_WINNING_SCORE;
+      losingScore = Math.floor(Math.random() * (MIN_WINNING_SCORE - MIN_WIN_MARGIN + 1));
+    }
     const winner: 'team1' | 'team2' = Math.random() < 0.5 ? 'team1' : 'team2';
     const score = winner === 'team1'
       ? { team1: winningScore, team2: losingScore }

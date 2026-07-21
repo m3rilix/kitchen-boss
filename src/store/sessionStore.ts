@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType, Pair } from '@/types';
 import { updateSharedSession } from '@/lib/firebase';
 import { getNextGamePlayers } from '@/lib/smartQueue';
-import { buildRoundRobinStack } from '@/lib/roundRobin';
+import { buildRoundRobinStack, pickBestTeamSplit } from '@/lib/roundRobin';
 import { buildDoublesMatchup, processDoublesGameEnd, processDoublesCancelGame, pairDisplayName } from '@/lib/doubles';
 
 // Helper to generate share code
@@ -554,13 +554,26 @@ export const useSessionStore = create<SessionState>()(
             stacks.map(stack => stack.filter(id => id !== playerId));
           
           // Consolidate incomplete stacks: flatten all incomplete stacks, re-chunk into groups of 4
-          // This ensures that after removal, e.g. a 3/4 stack + 1/4 stack merge into a 4/4 stack
+          // This ensures that after removal, e.g. a 3/4 stack + 1/4 stack merge into a 4/4 stack.
+          // Newly-completed groups get variety-aware team assignment (same as Round Robin)
+          // instead of a raw positional split.
+          const matchHistoryForConsolidate = state.session.matchHistory || [];
           const consolidateStacks = (stacks: string[][]): string[][] => {
             const complete = stacks.filter(s => s.length >= 4);
             const incompletePlayers = stacks.filter(s => s.length > 0 && s.length < 4).flat();
             const rechunked: string[][] = [];
             for (let i = 0; i < incompletePlayers.length; i += 4) {
-              rechunked.push(incompletePlayers.slice(i, i + 4));
+              const chunkIds = incompletePlayers.slice(i, i + 4);
+              if (chunkIds.length === 4) {
+                const chunkPlayers = chunkIds
+                  .map(id => state.session!.players.find(p => p.id === id))
+                  .filter((p): p is Player => p !== undefined);
+                if (chunkPlayers.length === 4) {
+                  rechunked.push(pickBestTeamSplit(chunkPlayers as [Player, Player, Player, Player], matchHistoryForConsolidate));
+                  continue;
+                }
+              }
+              rechunked.push(chunkIds);
             }
             return [...complete, ...rechunked];
           };
@@ -1236,13 +1249,19 @@ export const useSessionStore = create<SessionState>()(
               )
               .sort((a, b) => a.waitingSince - b.waitingSince); // Lower timestamp = waiting longer
             
-            // Build new waiting stacks (all players go to regular stacks after reorder)
+            // Build new waiting stacks (all players go to regular stacks after reorder),
+            // applying variety-aware team assignment to each complete group of 4.
+            const matchHistoryForSplit = state.session.matchHistory || [];
             const newWaitingStacks: string[][] = [];
             for (let i = 0; i < sortedPlayers.length; i += 4) {
-              const stack = sortedPlayers.slice(i, i + 4).map(p => p.id);
-              newWaitingStacks.push(stack);
+              const stackPlayers = sortedPlayers.slice(i, i + 4);
+              if (stackPlayers.length === 4) {
+                newWaitingStacks.push(pickBestTeamSplit(stackPlayers as [Player, Player, Player, Player], matchHistoryForSplit));
+              } else {
+                newWaitingStacks.push(stackPlayers.map(p => p.id));
+              }
             }
-            
+
             return {
               session: {
                 ...state.session,
@@ -1364,13 +1383,19 @@ export const useSessionStore = create<SessionState>()(
               )
               .sort((a, b) => a.gamesPlayed - b.gamesPlayed); // Fewer games = higher priority
             
-            // Build new waiting stacks (all players go to regular stacks after reorder)
+            // Build new waiting stacks (all players go to regular stacks after reorder),
+            // applying variety-aware team assignment to each complete group of 4.
+            const matchHistoryForSplit = state.session.matchHistory || [];
             const newWaitingStacks: string[][] = [];
             for (let i = 0; i < sortedPlayers.length; i += 4) {
-              const stack = sortedPlayers.slice(i, i + 4).map(p => p.id);
-              newWaitingStacks.push(stack);
+              const stackPlayers = sortedPlayers.slice(i, i + 4);
+              if (stackPlayers.length === 4) {
+                newWaitingStacks.push(pickBestTeamSplit(stackPlayers as [Player, Player, Player, Player], matchHistoryForSplit));
+              } else {
+                newWaitingStacks.push(stackPlayers.map(p => p.id));
+              }
             }
-            
+
             return {
               session: {
                 ...state.session,
@@ -1730,14 +1755,26 @@ export const useSessionStore = create<SessionState>()(
           );
           
           
-          // Build stacks of 4
+          // Build stacks of 4, applying variety-aware team assignment (same logic as
+          // Round Robin) to each complete group so partners/opponents aren't repeated
+          // just because of positional [0,1] vs [2,3] splitting.
+          const matchHistory = state.session.matchHistory || [];
           const newWaitingStacks: string[][] = [];
           for (let i = 0; i < availablePlayers.length; i += 4) {
-            const stack = availablePlayers.slice(i, i + 4);
-            newWaitingStacks.push(stack);
+            const stackIds = availablePlayers.slice(i, i + 4);
+            if (stackIds.length === 4) {
+              const stackPlayers = stackIds
+                .map(id => state.session!.players.find(p => p.id === id))
+                .filter((p): p is Player => p !== undefined);
+              if (stackPlayers.length === 4) {
+                newWaitingStacks.push(pickBestTeamSplit(stackPlayers as [Player, Player, Player, Player], matchHistory));
+                continue;
+              }
+            }
+            newWaitingStacks.push(stackIds);
           }
-          
-          
+
+
           return {
             session: {
               ...state.session,
@@ -1786,30 +1823,43 @@ export const useSessionStore = create<SessionState>()(
           let updatedWaitingStacks = [...state.session.waitingStacks];
           let updatedLoserStacks = [...state.session.loserStacks];
           let updatedWinnerStacks = [...state.session.winnerStacks];
-          
+
+          // Once a stack reaches exactly 4, apply the same variety-aware team
+          // assignment Round Robin uses — reorders the 4 IDs into the best-scoring
+          // 2v2 split so partners/opponents aren't repeated by positional chance.
+          const matchHistory = state.session.matchHistory || [];
+          const finalizeIfComplete = (stack: string[]): string[] => {
+            if (stack.length !== 4) return stack;
+            const stackPlayers = stack
+              .map(id => state.session!.players.find(p => p.id === id))
+              .filter((p): p is Player => p !== undefined);
+            if (stackPlayers.length !== 4) return stack;
+            return pickBestTeamSplit(stackPlayers as [Player, Player, Player, Player], matchHistory);
+          };
+
           // Process each player
           for (const playerId of availablePlayers) {
             // Priority 1: Check for Regular forming stack
             const regularFormingIdx = updatedWaitingStacks.findIndex(s => s.length < 4);
             if (regularFormingIdx !== -1) {
-              updatedWaitingStacks[regularFormingIdx] = [...updatedWaitingStacks[regularFormingIdx], playerId];
+              updatedWaitingStacks[regularFormingIdx] = finalizeIfComplete([...updatedWaitingStacks[regularFormingIdx], playerId]);
               continue;
             }
-            
+
             // Priority 2: Check for Loser forming stack
             const loserFormingIdx = updatedLoserStacks.findIndex(s => s.length < 4);
             if (loserFormingIdx !== -1) {
-              updatedLoserStacks[loserFormingIdx] = [...updatedLoserStacks[loserFormingIdx], playerId];
+              updatedLoserStacks[loserFormingIdx] = finalizeIfComplete([...updatedLoserStacks[loserFormingIdx], playerId]);
               continue;
             }
-            
+
             // Priority 3: Check for Winner forming stack
             const winnerFormingIdx = updatedWinnerStacks.findIndex(s => s.length < 4);
             if (winnerFormingIdx !== -1) {
-              updatedWinnerStacks[winnerFormingIdx] = [...updatedWinnerStacks[winnerFormingIdx], playerId];
+              updatedWinnerStacks[winnerFormingIdx] = finalizeIfComplete([...updatedWinnerStacks[winnerFormingIdx], playerId]);
               continue;
             }
-            
+
             // No forming stack exists - create new Regular forming stack
             updatedWaitingStacks.push([playerId]);
           }
@@ -2058,30 +2108,42 @@ export const useSessionStore = create<SessionState>()(
             // Win-Lose Stack: Add losers FIRST, then winners
             // Priority for each player: Same type forming → Any forming → Create new
             
+            // Once a stack reaches exactly 4, apply variety-aware team assignment
+            // (same as Round Robin) instead of leaving the raw push order in place.
+            const matchHistoryForSplit = state.session.matchHistory || [];
+            const finalizeIfComplete = (stack: string[]): string[] => {
+              if (stack.length !== 4) return stack;
+              const stackPlayers = stack
+                .map(id => state.session!.players.find(p => p.id === id))
+                .filter((p): p is Player => p !== undefined);
+              if (stackPlayers.length !== 4) return stack;
+              return pickBestTeamSplit(stackPlayers as [Player, Player, Player, Player], matchHistoryForSplit);
+            };
+
             // Helper function to add player to stacks
             const addPlayerToStacks = (playerId: string, playerType: 'loser' | 'winner') => {
               // Priority 1: Check for forming stack of SAME type
               if (playerType === 'loser') {
                 const loserFormingIdx = newLoserStacks.findIndex(s => s.length < 4);
                 if (loserFormingIdx !== -1) {
-                  newLoserStacks[loserFormingIdx].push(playerId);
+                  newLoserStacks[loserFormingIdx] = finalizeIfComplete([...newLoserStacks[loserFormingIdx], playerId]);
                   return;
                 }
               } else {
                 const winnerFormingIdx = newWinnerStacks.findIndex(s => s.length < 4);
                 if (winnerFormingIdx !== -1) {
-                  newWinnerStacks[winnerFormingIdx].push(playerId);
+                  newWinnerStacks[winnerFormingIdx] = finalizeIfComplete([...newWinnerStacks[winnerFormingIdx], playerId]);
                   return;
                 }
               }
-              
+
               // Priority 2: Check for Regular forming stack (neutral - can mix with anyone)
               const regularFormingIdx = newWaitingStacks.findIndex(s => s.length < 4);
               if (regularFormingIdx !== -1) {
-                newWaitingStacks[regularFormingIdx].push(playerId);
+                newWaitingStacks[regularFormingIdx] = finalizeIfComplete([...newWaitingStacks[regularFormingIdx], playerId]);
                 return;
               }
-              
+
               // Priority 3: Create new forming stack of player's type
               if (playerType === 'loser') {
                 newLoserStacks.push([playerId]);
@@ -2124,6 +2186,9 @@ export const useSessionStore = create<SessionState>()(
           // Get player names for logging
           const winnerNames = winningTeam.map(id => state.session!.players.find(p => p.id === id)?.name || '');
           const loserNames = losingTeam.map(id => state.session!.players.find(p => p.id === id)?.name || '');
+          const winningScore = score ? (winner === 'team1' ? score.team1 : score.team2) : undefined;
+          const losingScore = score ? (winner === 'team1' ? score.team2 : score.team1) : undefined;
+          const scoreSuffix = score ? ` (${winningScore}-${losingScore})` : '';
 
           return {
             session: {
@@ -2147,13 +2212,14 @@ export const useSessionStore = create<SessionState>()(
               activityLog: [
                 createLogEntry(
                   'game_ended',
-                  `${court.name}: ${winnerNames.join(' & ')} defeated ${loserNames.join(' & ')}`,
-                  { 
-                    courtId, 
-                    courtName: court.name, 
+                  `${court.name}: ${winnerNames.join(' & ')} defeated ${loserNames.join(' & ')}${scoreSuffix}`,
+                  {
+                    courtId,
+                    courtName: court.name,
                     winner,
                     team1Names: court.currentGame.team1.map(id => state.session!.players.find(p => p.id === id)?.name || ''),
                     team2Names: court.currentGame.team2.map(id => state.session!.players.find(p => p.id === id)?.name || ''),
+                    score,
                   }
                 ),
                 ...state.session.activityLog,

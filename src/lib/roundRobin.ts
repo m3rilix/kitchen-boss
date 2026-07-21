@@ -302,6 +302,40 @@ function scoreArrangement(
 }
 
 /**
+ * Given exactly 4 already-selected players, pick the 2v2 team split that best avoids
+ * repeat partners/opponents (same variety scoring used by buildRoundRobinStack). Does
+ * NOT change who's in the group of 4 — only which two players end up on the same team.
+ *
+ * Used to port round robin's variety-aware team assignment into modes that select
+ * their own group of 4 by other means (e.g. Win-Lose Stack's FIFO stack building) but
+ * still want the actual team pairing to avoid repeats.
+ */
+export function pickBestTeamSplit(
+  players: [Player, Player, Player, Player],
+  matchHistory: MatchHistoryEntry[]
+): [string, string, string, string] {
+  const [p0, p1, p2, p3] = players;
+  const splits: [[Player, Player], [Player, Player]][] = [
+    [[p0, p1], [p2, p3]],
+    [[p0, p2], [p1, p3]],
+    [[p0, p3], [p1, p2]],
+  ];
+
+  let best = splits[0];
+  let bestScore = -Infinity;
+  for (const split of splits) {
+    const [t1, t2] = split;
+    const s = scoreArrangement(t1, t2, matchHistory);
+    if (s > bestScore) {
+      bestScore = s;
+      best = split;
+    }
+  }
+
+  return [best[0][0].id, best[0][1].id, best[1][0].id, best[1][1].id];
+}
+
+/**
  * Build the next Round Robin stack of 4 players.
  *
  * Strategy: score all waiting players, take the top 8 by priority (wait time +

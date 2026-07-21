@@ -77,6 +77,7 @@ export interface ActivityLogEntry {
     winner?: 'team1' | 'team2';
     team1Names?: string[];
     team2Names?: string[];
+    score?: { team1: number; team2: number };
   };
 }
 
