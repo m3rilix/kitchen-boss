@@ -1,4 +1,4 @@
-export type RotationMode = 'winners_stay' | 'full_rotation' | 'round_robin' | 'king_of_court' | 'skill_based' | 'win_lose_stack';
+export type RotationMode = 'winners_stay' | 'full_rotation' | 'round_robin' | 'king_of_court' | 'skill_based' | 'win_lose_stack' | 'doubles';
 
 export interface Player {
   id: string;
@@ -6,8 +6,9 @@ export interface Player {
   skillLevel?: number; // 1-5 rating
   gamesPlayed: number;
   gamesWon: number;
-  checkedInAt: Date;
+  checkedInAt?: Date;
   isActive: boolean;
+  unavailable?: boolean;    // Temporary "can't play" flag — shown with red marker; pair can't queue
   // Smart queue tracking (Full experience ready)
   winStreak: number;
   loseStreak: number;
@@ -15,6 +16,21 @@ export interface Player {
   lastOpponents: string[];  // Last 2-3 opponent IDs
   waitingSince: number;     // Timestamp when entered queue (0 if in game)
   lastGameResult?: 'won' | 'lost' | null; // Track last game result for visual status
+}
+
+// ── Doubles mode ─────────────────────────────────────────────────────────────
+
+/** A permanent doubles partnership. Always plays as a unit. */
+export interface Pair {
+  id: string;
+  player1Id: string;
+  player2Id: string;
+  /** Display name. Auto-generated as "Player1 & Player2" if not set. */
+  name?: string;
+  gamesPlayed: number;
+  gamesWon: number;
+  /** Timestamp when the pair entered the queue (0 = not queued). */
+  waitingSince: number;
 }
 
 export interface Game {
@@ -102,6 +118,12 @@ export interface Session {
   matchHistory: MatchHistoryEntry[]; // All past matchups for variety tracking
   customStacks: string[][];          // Manager-created custom stacks (array of player ID arrays)
   roundRobinStacks: string[][];      // Pre-built Round Robin stacks (array of 4 player IDs each)
+  // Doubles mode
+  pairs: Pair[];                     // All registered pairs
+  doublesWinnerQueue: string[];      // Pair IDs — pairs who won their last game
+  doublesLoserQueue: string[];       // Pair IDs — pairs who lost their last game
+  doublesWaitingQueue: string[];     // Pair IDs — pairs who haven't played yet this session
+  doublesLastMatchType: 'winner' | 'loser' | null; // Tracks alternation: was last pure match W vs W or L vs L?
 }
 
 export interface SessionConfig {

@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeClasses } from '@/store/themeStore';
 import { PickleballIcon } from './PickleballIcon';
-import { LogIn, UserPlus, Mail, Lock, User, AlertCircle, UserCircle } from 'lucide-react';
+import { LogIn, UserPlus, Mail, Lock, User, AlertCircle } from 'lucide-react';
 import { SettingsDropdown } from './SettingsDropdown';
 import { SessionTransferModal } from './SessionTransferModal';
 
 export function LoginPage() {
-  const { login, register, loginAsGuest, isLoading, error } = useAuthStore();
+  const { login, register, isLoading, error } = useAuthStore();
   const theme = useThemeClasses();
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
@@ -179,14 +179,7 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* Guest Button */}
-          <button
-            onClick={loginAsGuest}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition"
-          >
-            <UserCircle className="w-5 h-5" />
-            Continue as Guest
-          </button>
+          {/* Guest Button — hidden */}
 
           <div className="mt-4 text-center">
             <button

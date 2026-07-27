@@ -3,22 +3,18 @@ import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import type { Court } from '@/types';
 import { splitStackIntoTeams } from '@/lib/smartQueue';
-import { Play, Trophy, X, Users, Wrench, GripVertical, Pencil, Check, UserPlus, UserMinus, ChevronDown } from 'lucide-react';
+import { Play, Trophy, X, Users, Wrench, GripVertical, Pencil, Check, UserPlus, UserMinus, ChevronDown, Timer } from 'lucide-react';
+
+/** Format elapsed milliseconds as M:SS */
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
 
 interface CourtViewProps {
   court: Court;
-}
-
-interface DragData {
-  courtId: string;
-  team: 'team1' | 'team2';
-  index: number;
-  playerId: string;
-}
-
-interface QueueDragData {
-  source: 'queue';
-  playerId: string;
 }
 
 interface StackDragData {
@@ -29,32 +25,33 @@ interface StackDragData {
 }
 
 export function CourtView({ court }: CourtViewProps) {
-  const { 
-    session, 
-    getPlayerById, 
-    endGame, 
+  const {
+    session,
+    getPlayerById,
+    endGame,
     cancelGame,
     autoAssignNextGame,
     setCourtStatus,
     removeCourt,
-    swapPlayers,
     renameCourt,
     removePlayerFromGame,
     replacePlayerInGame,
+    swapPlayers,
     startGame
   } = useSessionStore();
   const theme = useThemeClasses();
   
+  const [draggedPlayer, setDraggedPlayer] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
   const [showEndGame, setShowEndGame] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showMaintenanceMenu, setShowMaintenanceMenu] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [maintenanceMode, _setMaintenanceMode] = useState(false); // Coming soon feature
-  const [dragOver, setDragOver] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(court.name);
   const [courtDragOver, setCourtDragOver] = useState(false);
   const [showPlayerDropdown, setShowPlayerDropdown] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
+  const [elapsedTime, setElapsedTime] = useState('0:00');
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -70,6 +67,19 @@ export function CourtView({ court }: CourtViewProps) {
       inputRef.current.select();
     }
   }, [isEditing]);
+
+  // Live elapsed-time ticker — ticks every second while a game is in progress
+  useEffect(() => {
+    if (!court.currentGame?.startedAt) {
+      setElapsedTime('0:00');
+      return;
+    }
+    const startedAt = new Date(court.currentGame.startedAt).getTime();
+    const tick = () => setElapsedTime(formatElapsed(Date.now() - startedAt));
+    tick(); // immediate first render
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [court.currentGame?.startedAt]);
 
   if (!session) return null;
 
@@ -95,60 +105,39 @@ export function CourtView({ court }: CourtViewProps) {
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, team: 'team1' | 'team2', index: number, playerId: string) => {
-    const dragData: DragData = { courtId: court.id, team, index, playerId };
-    e.dataTransfer.setData('application/json', JSON.stringify(dragData));
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e: React.DragEvent, team: 'team1' | 'team2', index: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOver({ team, index });
-  };
-
-  const handleDragLeave = () => {
-    setDragOver(null);
-  };
-
-  const handleDrop = (e: React.DragEvent, toTeam: 'team1' | 'team2', toIndex: number) => {
-    e.preventDefault();
-    setDragOver(null);
-    
-    try {
-      const rawData = e.dataTransfer.getData('application/json');
-      const data = JSON.parse(rawData);
-      
-      // Check if this is a queue player drop
-      if (data.source === 'queue') {
-        const queueData = data as QueueDragData;
-        replacePlayerInGame(court.id, toTeam, toIndex, queueData.playerId);
-        return;
-      }
-      
-      // Otherwise it's a court swap
-      const dragData = data as DragData;
-      
-      // Only allow swaps within the same court
-      if (dragData.courtId !== court.id) return;
-      
-      // Don't swap with self
-      if (dragData.team === toTeam && dragData.index === toIndex) return;
-      
-      swapPlayers(court.id, dragData.team, dragData.index, toTeam, toIndex);
-    } catch {
-      // Invalid drag data
-    }
-  };
 
   const team1Players = court.currentGame?.team1.map(id => getPlayerById(id));
   const team2Players = court.currentGame?.team2.map(id => getPlayerById(id));
 
   // Check if there's a ready stack (4 players in any stack or combined)
   const isRoundRobin = session.rotationMode === 'round_robin';
-  
+  const isDoubles   = session.rotationMode === 'doubles';
+
   let hasReadyStack = false;
-  if (isRoundRobin) {
+  if (isDoubles) {
+    // DOUBLES MODE: need at least 2 eligible pairs across all three queues
+    const playersInGame = new Set<string>();
+    session.courts.forEach(c => {
+      if (c.currentGame) {
+        c.currentGame.team1.forEach(id => playersInGame.add(id));
+        c.currentGame.team2.forEach(id => playersInGame.add(id));
+      }
+    });
+    const allQueued = [
+      ...(session.doublesWinnerQueue  ?? []),
+      ...(session.doublesLoserQueue   ?? []),
+      ...(session.doublesWaitingQueue ?? []),
+    ];
+    const eligibleCount = allQueued.filter(pairId => {
+      const pair = session.pairs?.find(p => p.id === pairId);
+      if (!pair) return false;
+      if (playersInGame.has(pair.player1Id) || playersInGame.has(pair.player2Id)) return false;
+      const p1 = session.players.find(p => p.id === pair.player1Id);
+      const p2 = session.players.find(p => p.id === pair.player2Id);
+      return p1?.isActive && !p1.unavailable && p2?.isActive && !p2.unavailable;
+    }).length;
+    hasReadyStack = eligibleCount >= 2;
+  } else if (isRoundRobin) {
     // ROUND ROBIN MODE: Check if there are pre-built stacks
     const roundRobinStacksCount = session.roundRobinStacks?.length ?? 0;
     const customStacksCount = session.customStacks?.length ?? 0;
@@ -158,8 +147,8 @@ export function CourtView({ court }: CourtViewProps) {
     const winnersCount = session.winnerStack?.length ?? 0;
     const losersCount = session.loserStack?.length ?? 0;
     const waitingCount = session.waitingStack?.length ?? 0;
-    
-    hasReadyStack = 
+
+    hasReadyStack =
       winnersCount >= 4 ||                          // 4+ winners (full winner stack)
       losersCount >= 4 ||                           // 4+ losers (full loser stack)
       waitingCount >= 4 ||                          // 4+ waiting (full waiting stack)
@@ -225,10 +214,16 @@ export function CourtView({ court }: CourtViewProps) {
             </div>
           )}
           {isInGame && (
-            <span className="px-2 py-0.5 text-xs font-bold bg-red-600 text-white border border-red-700 rounded-full flex items-center gap-1 animate-pulse">
-              <span className="w-2 h-2 bg-white rounded-full" />
-              LIVE
-            </span>
+            <>
+              <span className="px-2 py-0.5 text-xs font-bold bg-red-600 text-white border border-red-700 rounded-full flex items-center gap-1 animate-pulse">
+                <span className="w-2 h-2 bg-white rounded-full" />
+                LIVE
+              </span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
+                <Timer className="w-3.5 h-3.5 text-slate-400" />
+                {elapsedTime}
+              </span>
+            </>
           )}
           {isMaintenance && (
             <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded-full flex items-center gap-1">
@@ -353,27 +348,29 @@ export function CourtView({ court }: CourtViewProps) {
                     );
                   }
                   
+                  const isDragTarget = draggedPlayer !== null && !(draggedPlayer.team === 'team1' && draggedPlayer.index === i);
                   return (
                     <div
                       key={i}
-                      draggable={!maintenanceMode}
-                      onDragStart={(e) => !maintenanceMode && handleDragStart(e, 'team1', i, playerId)}
-                      onDragOver={(e) => handleDragOver(e, 'team1', i)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, 'team1', i)}
-                      className={`flex items-center gap-1.5 p-1 bg-blue-50 rounded-lg transition-all ${
-                        maintenanceMode ? '' : 'cursor-grab active:cursor-grabbing'
-                      } ${
-                        dragOver?.team === 'team1' && dragOver?.index === i
-                          ? 'ring-2 ring-blue-400 ring-offset-1 bg-blue-100'
-                          : 'hover:bg-blue-100'
-                      }`}
+                      draggable={!isDoubles}
+                      onDragStart={() => !isDoubles && setDraggedPlayer({ team: 'team1', index: i })}
+                      onDragEnd={() => setDraggedPlayer(null)}
+                      onDragOver={(e) => { if (!isDoubles && isDragTarget) e.preventDefault(); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!isDoubles && draggedPlayer) {
+                          swapPlayers(court.id, draggedPlayer.team, draggedPlayer.index, 'team1', i);
+                          setDraggedPlayer(null);
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 p-1 rounded-lg transition-all ${
+                        isDragTarget && draggedPlayer ? 'bg-blue-100 ring-2 ring-blue-300' : 'bg-blue-50'
+                      } ${!isDoubles ? 'cursor-grab active:cursor-grabbing' : ''}`}
                     >
-                      {!maintenanceMode && <GripVertical className="w-3.5 h-3.5 text-blue-300 flex-shrink-0" />}
                       <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 font-semibold text-[10px] flex-shrink-0">
                         {player?.name.charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-xs font-medium text-slate-700 truncate flex-1">{player?.name}</span>
+                      <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate flex-1">{player?.name}</span>
                       {maintenanceMode && (
                         <button
                           onClick={() => removePlayerFromGame(court.id, 'team1', i)}
@@ -459,27 +456,29 @@ export function CourtView({ court }: CourtViewProps) {
                     );
                   }
                   
+                  const isDragTarget = draggedPlayer !== null && !(draggedPlayer.team === 'team2' && draggedPlayer.index === i);
                   return (
                     <div
                       key={i}
-                      draggable={!maintenanceMode}
-                      onDragStart={(e) => !maintenanceMode && handleDragStart(e, 'team2', i, playerId)}
-                      onDragOver={(e) => handleDragOver(e, 'team2', i)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, 'team2', i)}
-                      className={`flex items-center gap-1.5 p-1 bg-red-50 rounded-lg transition-all ${
-                        maintenanceMode ? '' : 'cursor-grab active:cursor-grabbing'
-                      } ${
-                        dragOver?.team === 'team2' && dragOver?.index === i
-                          ? 'ring-2 ring-red-400 ring-offset-1 bg-red-100'
-                          : 'hover:bg-red-100'
-                      }`}
+                      draggable={!isDoubles}
+                      onDragStart={() => !isDoubles && setDraggedPlayer({ team: 'team2', index: i })}
+                      onDragEnd={() => setDraggedPlayer(null)}
+                      onDragOver={(e) => { if (!isDoubles && isDragTarget) e.preventDefault(); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!isDoubles && draggedPlayer) {
+                          swapPlayers(court.id, draggedPlayer.team, draggedPlayer.index, 'team2', i);
+                          setDraggedPlayer(null);
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 p-1 rounded-lg transition-all ${
+                        isDragTarget && draggedPlayer ? 'bg-red-100 ring-2 ring-red-300' : 'bg-red-50'
+                      } ${!isDoubles ? 'cursor-grab active:cursor-grabbing' : ''}`}
                     >
-                      {!maintenanceMode && <GripVertical className="w-3.5 h-3.5 text-red-300 flex-shrink-0" />}
                       <div className="w-6 h-6 bg-red-200 rounded-full flex items-center justify-center text-red-700 font-semibold text-[10px] flex-shrink-0">
                         {player?.name.charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-xs font-medium text-slate-700 truncate flex-1">{player?.name}</span>
+                      <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate flex-1">{player?.name}</span>
                       {maintenanceMode && (
                         <button
                           onClick={() => removePlayerFromGame(court.id, 'team2', i)}

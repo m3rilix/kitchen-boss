@@ -134,6 +134,14 @@ function sanitizeSessionFromFirebase(data: unknown): Session | null {
     sanitized.waitingStack = ensureArray(sanitized.waitingStack);
     sanitized.matchHistory = ensureArray(sanitized.matchHistory);
 
+    // --- Doubles mode arrays (Firebase drops empty [] — must restore) ---
+    sanitized.pairs = ensureArray(sanitized.pairs);
+    sanitized.doublesWinnerQueue = ensureArray(sanitized.doublesWinnerQueue);
+    sanitized.doublesLoserQueue = ensureArray(sanitized.doublesLoserQueue);
+    sanitized.doublesWaitingQueue = ensureArray(sanitized.doublesWaitingQueue);
+    // doublesLastMatchType is a scalar — default to null if missing
+    if (sanitized.doublesLastMatchType === undefined) sanitized.doublesLastMatchType = null;
+
     // --- Nested string[][] arrays ---
     sanitized.winnerStacks = ensureNestedArrays(sanitized.winnerStacks);
     sanitized.loserStacks = ensureNestedArrays(sanitized.loserStacks);

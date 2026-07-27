@@ -153,12 +153,13 @@ export function scorePlayer(
   const opponentVarietyScore = -calculateOpponentVarietyScore(player.id, allPlayers, matchHistory);
   
   // Weighted total score
-  // Weights: waiting time (40%), games played (30%), partner variety (15%), opponent variety (15%)
-  const totalScore = 
-    (waitingTime / 60000) * 0.4 +  // Convert to minutes
-    gamesPlayedScore * 0.3 +
-    partnerVarietyScore * 0.15 +
-    opponentVarietyScore * 0.15;
+  // Weights: waiting time (50%), games played (10%), partner variety (20%), opponent variety (20%)
+  // gamesPlayed is weighted low: open play format means late arrivals can't control when they join
+  const totalScore =
+    (waitingTime / 60000) * 0.5 +  // Convert to minutes
+    gamesPlayedScore * 0.1 +
+    partnerVarietyScore * 0.2 +
+    opponentVarietyScore * 0.2;
   
   return {
     playerId: player.id,
@@ -270,8 +271,45 @@ export function buildSimpleStack(
 }
 
 /**
- * Build the next Round Robin stack of 4 players
- * @param respectOrder - If true, takes first 4 players in order (for reorder). If false, uses scoring algorithm.
+ * Score a 4-player arrangement for variety (team assignment quality).
+ * Higher = better variety (fewer repeated partners/opponents, no recent repeats).
+ */
+function scoreArrangement(
+  team1: [Player, Player],
+  team2: [Player, Player],
+  matchHistory: MatchHistoryEntry[]
+): number {
+  const t1Ids: [string, string] = [team1[0].id, team1[1].id];
+  const t2Ids: [string, string] = [team2[0].id, team2[1].id];
+
+  const partnerScore =
+    -getPartnerCount(team1[0].id, team1[1].id, matchHistory) +
+    -getPartnerCount(team2[0].id, team2[1].id, matchHistory);
+
+  const recentTeamPenalty =
+    (wasRecentTeam(team1[0].id, team1[1].id, matchHistory, 2) ? -100 : 0) +
+    (wasRecentTeam(team2[0].id, team2[1].id, matchHistory, 2) ? -100 : 0);
+
+  const opponentScore =
+    -getOpponentCount(team1[0].id, team2[0].id, matchHistory) +
+    -getOpponentCount(team1[0].id, team2[1].id, matchHistory) +
+    -getOpponentCount(team1[1].id, team2[0].id, matchHistory) +
+    -getOpponentCount(team1[1].id, team2[1].id, matchHistory);
+
+  const recentMatchupPenalty = wasRecentMatchup(t1Ids, t2Ids, matchHistory, 3) ? -100 : 0;
+
+  return partnerScore + recentTeamPenalty + opponentScore + recentMatchupPenalty;
+}
+
+/**
+ * Build the next Round Robin stack of 4 players.
+ *
+ * Strategy: score all waiting players, take the top 8 by priority (wait time +
+ * games played + variety), then find the best 4-player team arrangement from
+ * that pool. This ensures ALL 4 spots are filled by high-priority players, not
+ * just the first — fixing the "Player1 always plays" bias of the old approach.
+ *
+ * @param respectOrder - If true, takes first 4 in order (used by manual reorder).
  */
 export function buildRoundRobinStack(
   waitingPlayers: Player[],
@@ -279,35 +317,50 @@ export function buildRoundRobinStack(
   respectOrder: boolean = false
 ): [string, string, string, string] | null {
   if (waitingPlayers.length < 4) return null;
-  
-  // If respectOrder is true, just take the first 4 players
+
   if (respectOrder) {
     return buildSimpleStack(waitingPlayers);
   }
-  
-  // Score all waiting players
-  const scoredPlayers = waitingPlayers
-    .filter(p => p.waitingSince > 0) // Only players actually waiting
-    .map(p => scorePlayer(p, waitingPlayers, matchHistory))
-    .sort((a, b) => b.totalScore - a.totalScore);
-  
-  if (scoredPlayers.length < 4) return null;
-  
-  // Pick the highest priority player
-  const player1Id = scoredPlayers[0].playerId;
-  const player1 = waitingPlayers.find(p => p.id === player1Id)!;
-  
-  // Find best partner for player1
-  const remainingForPartner = waitingPlayers.filter(p => p.id !== player1Id);
-  const partner = findBestPartner(player1, remainingForPartner, matchHistory);
-  if (!partner) return null;
-  
-  // Find best opponents
-  const remainingForOpponents = remainingForPartner.filter(p => p.id !== partner.id);
-  const opponents = findBestOpponents([player1, partner], remainingForOpponents, matchHistory);
-  if (!opponents) return null;
-  
-  return [player1.id, partner.id, opponents[0].id, opponents[1].id];
+
+  // Score all waiting players and sort by priority (highest first)
+  const scored = waitingPlayers
+    .filter(p => p.waitingSince > 0)
+    .map(p => ({ player: p, score: scorePlayer(p, waitingPlayers, matchHistory).totalScore }))
+    .sort((a, b) => b.score - a.score);
+
+  if (scored.length < 4) return null;
+
+  // Take the top 8 candidates (all 4 selected players will come from this pool)
+  const candidates = scored.slice(0, Math.min(8, scored.length)).map(s => s.player);
+  const n = candidates.length;
+
+  let best: [string, string, string, string] | null = null;
+  let bestScore = -Infinity;
+
+  // Try all C(n,4) combinations and 3 team splits each — max C(8,4)×3 = 210 iterations
+  for (let a = 0; a < n - 3; a++) {
+    for (let b = a + 1; b < n - 2; b++) {
+      for (let c = b + 1; c < n - 1; c++) {
+        for (let d = c + 1; d < n; d++) {
+          const p = [candidates[a], candidates[b], candidates[c], candidates[d]];
+          const splits: [[Player, Player], [Player, Player]][] = [
+            [[p[0], p[1]], [p[2], p[3]]],
+            [[p[0], p[2]], [p[1], p[3]]],
+            [[p[0], p[3]], [p[1], p[2]]],
+          ];
+          for (const [t1, t2] of splits) {
+            const s = scoreArrangement(t1, t2, matchHistory);
+            if (s > bestScore) {
+              bestScore = s;
+              best = [t1[0].id, t1[1].id, t2[0].id, t2[1].id];
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return best;
 }
 
 /**
