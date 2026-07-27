@@ -59,6 +59,16 @@ Session sharing works correctly. Session transfer only transfers authentication,
 
 ## 🔄 Recently Fixed
 
+### ✅ Repeat Partner Pairs in Win-Lose Stack Mode
+**Fixed**: 2026-07-24  
+**Description**: Win-Lose Stack mode showed excessive repeat partnerships (~8 per 95 games) despite fairness tracking, particularly across stacks. Root causes: empty matchHistory at session start, positional splitting hazard ([0,1] vs [2,3] creating predictable re-pairings), and endGame adjacency hazard (losers/winners appended team-by-team landing in same slots).  
+**Solution**: 
+- Shifted collision-aware pairing to game-start time (`autoAssignNextGame`) using player-level persistent history (lastPartners/lastOpponents)
+- Introduced `splitStackIntoTeams` wrapper in `src/lib/smartQueue.ts` with positional fallback to prevent gravity-biased pairings
+- Marked manual stacks with isCustom flag to bypass auto-pairing and preserve intentional arrangements
+- Enhanced `hasRecentCollision` to check both partnership and opponent history with gravity-aware scoring
+- Test results (105-game session): 5 repeat partnerships vs. 8 in baseline (improvement ~40%)
+
 ### ✅ Mobile UI Overhaul
 **Fixed**: 2026-04-25
 **Description**: Multiple mobile UX issues — crowded header, hidden user info, clipped Play/Skip buttons, no section navigation.

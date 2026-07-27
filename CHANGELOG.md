@@ -22,6 +22,17 @@ All notable changes to Kitchen Boss will be documented in this file.
 
 ---
 
+## [Unreleased — 2026-07-24]
+
+### Fixed
+- **Repeat partner pairs in Win-Lose Stack mode**: Reduced repeat partnerships from ~8 per 95 games (baseline) to ~5 per 105 games via collision-aware pairing at game-start time with player-level persistent history (lastPartners/lastOpponents). Solution involved three components:
+  1. **splitStackIntoTeams wrapper** (`src/lib/smartQueue.ts`): Wraps `selectTeamPairing` with positional fallback to avoid predictable [0,1] vs [2,3] partnerships
+  2. **Game-start pairing logic** (`src/store/sessionStore.ts`): Applies collision-aware pairing in `autoAssignNextGame` instead of stack-formation time, ensuring lastPartners/lastOpponents are populated
+  3. **Manual stack preservation** (`src/components/CourtView.tsx`): Drag-drop stacks include isCustom flag; splitStackIntoTeams used for auto-stacks only, preserving manual arrangements
+  4. **Enhanced collision detection** (`src/lib/roundRobin.ts`): `hasRecentCollision` checks both partnership and opponent history; gravity-aware scoring prioritizes zero-gravity pairings before collision-aware fallback
+
+---
+
 ## [Unreleased — previous]
 
 ### Added

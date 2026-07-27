@@ -238,6 +238,49 @@ function calculatePairingPenalty(
 }
 
 /**
+ * Reorder a stack of 4 players to minimize collision penalty.
+ * Tries all 24 permutations and returns the ordering that yields the best pairing.
+ */
+export function optimizeStackOrder(playerIds: string[], allPlayers: Player[]): string[] {
+  if (playerIds.length !== 4) return playerIds;
+
+  const players = playerIds
+    .map(id => allPlayers.find(p => p.id === id))
+    .filter((p): p is Player => p !== undefined);
+
+  if (players.length !== 4) return playerIds;
+
+  // Generate all permutations of the 4 players
+  const permutations: Player[][] = [];
+  function permute(arr: Player[], start = 0) {
+    if (start === arr.length - 1) {
+      permutations.push([...arr]);
+      return;
+    }
+    for (let i = start; i < arr.length; i++) {
+      [arr[start], arr[i]] = [arr[i], arr[start]];
+      permute(arr, start + 1);
+      [arr[start], arr[i]] = [arr[i], arr[start]];
+    }
+  }
+  permute([...players]);
+
+  // For each permutation, find the best pairing and get its penalty
+  let bestPermutation = players;
+  let bestScore = Infinity;
+
+  for (const perm of permutations) {
+    const pairing = selectTeamPairing(perm);
+    if (pairing.score < bestScore) {
+      bestScore = pairing.score;
+      bestPermutation = perm;
+    }
+  }
+
+  return bestPermutation.map(p => p.id);
+}
+
+/**
  * Select best team pairing from 4 players
  * Minimizes repeat partners and opponents
  */
@@ -271,6 +314,42 @@ export function selectTeamPairing(players: Player[]): TeamPairing {
   pairings.sort((x, y) => x.score - y.score);
   
   return pairings[0];
+}
+
+/**
+ * Split a stack of 4 player IDs into 2 teams using pairing history.
+ * First optimizes the stack order to minimize collisions, then applies selectTeamPairing.
+ * Falls back to positional split if player lookup fails.
+ */
+export function splitStackIntoTeams(
+  playerIds: string[],
+  allPlayers: Player[]
+): { team1: [string, string]; team2: [string, string] } {
+  if (playerIds.length !== 4) {
+    // Fallback: positional split
+    return {
+      team1: [playerIds[0], playerIds[1]],
+      team2: [playerIds[2], playerIds[3]],
+    };
+  }
+
+  // Optimize the stack order to minimize collision penalty
+  const optimizedIds = optimizeStackOrder(playerIds, allPlayers);
+
+  const players = optimizedIds
+    .map(id => allPlayers.find(p => p.id === id))
+    .filter((p): p is Player => p !== undefined);
+
+  if (players.length !== 4) {
+    // Fallback: positional split
+    return {
+      team1: playerIds[0] && playerIds[1] ? [playerIds[0], playerIds[1]] : [playerIds[0], playerIds[2]],
+      team2: playerIds[2] && playerIds[3] ? [playerIds[2], playerIds[3]] : [playerIds[1], playerIds[3]],
+    };
+  }
+
+  const pairing = selectTeamPairing(players);
+  return { team1: pairing.team1, team2: pairing.team2 };
 }
 
 // ============================================

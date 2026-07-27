@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import type { Court } from '@/types';
+import { splitStackIntoTeams } from '@/lib/smartQueue';
 import { Play, Trophy, X, Users, Wrench, GripVertical, Pencil, Check, UserPlus, UserMinus, ChevronDown } from 'lucide-react';
 
 interface CourtViewProps {
@@ -24,6 +25,7 @@ interface StackDragData {
   source: 'stack';
   playerIds: string[];
   stackLabel: string;
+  isCustom?: boolean;
 }
 
 export function CourtView({ court }: CourtViewProps) {
@@ -665,11 +667,14 @@ export function CourtView({ court }: CourtViewProps) {
                     const data = JSON.parse(e.dataTransfer.getData('application/json'));
                     if (data.source === 'stack' && data.playerIds?.length === 4) {
                       const stackData = data as StackDragData;
-                      startGame(
-                        court.id,
-                        [stackData.playerIds[0], stackData.playerIds[1]] as [string, string],
-                        [stackData.playerIds[2], stackData.playerIds[3]] as [string, string]
-                      );
+                      // Custom stacks keep manual arrangement; others use smart pairing
+                      const { team1, team2 } = stackData.isCustom || !session
+                        ? {
+                            team1: [stackData.playerIds[0], stackData.playerIds[1]] as [string, string],
+                            team2: [stackData.playerIds[2], stackData.playerIds[3]] as [string, string],
+                          }
+                        : splitStackIntoTeams(stackData.playerIds, session.players);
+                      startGame(court.id, team1, team2);
                     }
                   } catch {
                     // Invalid data

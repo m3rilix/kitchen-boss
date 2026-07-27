@@ -1,8 +1,10 @@
 # Stack Queue Logic - Kitchen Boss
 
+⚠️ **DOCUMENTATION DRIFT** — Last updated 2026-04, implementation significantly changed 2026-07. This doc describes deprecated single-stack system (`winnerStack`, `loserStack`, `waitingStack`). Current implementation uses plural pre-built stacks (`winnerStacks[]`, `loserStacks[]`, `waitingStacks[]`) with collision-aware pairing applied at game-start time, not stack formation. See `src/lib/roundRobin.ts` (hasRecentCollision, selectTeamPairing) and `src/store/sessionStore.ts` (applyCollisionAwarePairing) for latest logic. **Needs rewrite.** —
+
 ## Overview
 
-The Stack Queue system manages player rotation for pickleball games. Instead of a simple FIFO (First-In, First-Out) queue, it uses **three separate stacks** to create balanced, fair matchups.
+The Stack Queue system manages player rotation for pickleball games. Instead of a simple FIFO (First-In, First-Out) queue, it uses **pre-built stacks** (arrays of stacks) to create balanced, fair matchups.
 
 ### Modes
 

@@ -3,6 +3,7 @@ import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import { X, Search, Trophy, TrendingDown, Layers, ChevronsUp, ChevronsDown, GripVertical, Star, Users, Zap, Rocket, Play, Clock, Plus, Check, Trash2, RefreshCw } from 'lucide-react';
 import type { Player } from '@/types';
+import { splitStackIntoTeams } from '@/lib/smartQueue';
 
 type StackType = 'ready' | 'forming-winners' | 'forming-losers' | 'forming-free' | 'winners' | 'losers' | 'custom' | 'round-robin';
 
@@ -753,7 +754,8 @@ export function PlayerQueue() {
                     e.dataTransfer.setData('application/json', JSON.stringify({
                       source: 'stack',
                       playerIds: stack.players.map(p => p.id),
-                      stackLabel: stack.label
+                      stackLabel: stack.label,
+                      isCustom: stack.type === 'custom'
                     }));
                     e.dataTransfer.effectAllowed = 'move';
                   }
@@ -862,10 +864,15 @@ export function PlayerQueue() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          // Custom stacks keep manual arrangement; others use smart pairing
+                          const playerIds = players.map(p => p.id);
+                          const { team1, team2 } = stack.type === 'custom'
+                            ? { team1: [playerIds[0], playerIds[1]] as [string, string], team2: [playerIds[2], playerIds[3]] as [string, string] }
+                            : splitStackIntoTeams(playerIds, session.players);
                           startGame(
                             availableCourt.id,
-                            [players[0].id, players[1].id],
-                            [players[2].id, players[3].id],
+                            team1,
+                            team2,
                             skippedQueue,
                             stack.customIndex
                           );

@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType } from '@/types';
 import { updateSharedSession } from '@/lib/firebase';
-import { getNextGamePlayers } from '@/lib/smartQueue';
+import { getNextGamePlayers, splitStackIntoTeams } from '@/lib/smartQueue';
 import { buildRoundRobinStack } from '@/lib/roundRobin';
 
 // Helper to generate share code
@@ -1975,8 +1975,9 @@ export const useSessionStore = create<SessionState>()(
             for (const stack of regularStacks) {
               const allAvailable = stack.every(id => !playersInGames.has(id));
               if (allAvailable) {
-                team1 = [stack[0], stack[1]];
-                team2 = [stack[2], stack[3]];
+                const split = splitStackIntoTeams(stack, state.session.players);
+                team1 = split.team1;
+                team2 = split.team2;
                 break;
               }
             }
@@ -2017,8 +2018,9 @@ export const useSessionStore = create<SessionState>()(
               }
               
               if (selectedStack) {
-                team1 = [selectedStack[0], selectedStack[1]];
-                team2 = [selectedStack[2], selectedStack[3]];
+                const split = splitStackIntoTeams(selectedStack, state.session.players);
+                team1 = split.team1;
+                team2 = split.team2;
               }
             }
           } else {
