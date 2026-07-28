@@ -1,9 +1,11 @@
-import type { Session, Player, Pair } from '@/types';
-import { Trophy } from 'lucide-react';
+import type { Session, Player } from '@/types';
+import { Trophy, Activity, Repeat, Hourglass, Timer, BarChart3 } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { pairDisplayName } from '@/lib/doubles';
 import { useThemeClasses } from '@/store/themeStore';
+import { rankPlayers, rankPairs, winPct, formatDiff, type PlayerWithDiff, type PairWithDiff } from '@/lib/leaderboard';
+import { analyzeSessionHealth } from '@/lib/sessionHealth';
 
 const formatDate = (dateStr?: string) => {
   if (!dateStr) return '';
@@ -31,35 +33,6 @@ const getRotationModeDisplay = (mode: string): string => {
     default:              return 'Stack Queue';
   }
 };
-
-// ── Rank helpers ───────────────────────────────────────────────────────────────
-
-function rankPlayers(players: Player[]): Player[] {
-  return [...players]
-    .filter(p => p.isActive)
-    .sort((a, b) => {
-      if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
-      const aRate = a.gamesPlayed > 0 ? a.gamesWon / a.gamesPlayed : 0;
-      const bRate = b.gamesPlayed > 0 ? b.gamesWon / b.gamesPlayed : 0;
-      if (bRate !== aRate) return bRate - aRate;
-      return b.gamesPlayed - a.gamesPlayed;
-    });
-}
-
-function rankPairs(pairs: Pair[]): Pair[] {
-  return [...pairs].sort((a, b) => {
-    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
-    const aRate = a.gamesPlayed > 0 ? a.gamesWon / a.gamesPlayed : 0;
-    const bRate = b.gamesPlayed > 0 ? b.gamesWon / b.gamesPlayed : 0;
-    if (bRate !== aRate) return bRate - aRate;
-    return b.gamesPlayed - a.gamesPlayed;
-  });
-}
-
-function winPct(won: number, played: number): string {
-  if (played === 0) return '–';
-  return Math.round((won / played) * 100) + '%';
-}
 
 // ── Medal badge ────────────────────────────────────────────────────────────────
 
@@ -112,7 +85,7 @@ function Podium({ players }: { players: Player[] }) {
 
 // ── Player row ─────────────────────────────────────────────────────────────────
 
-function PlayerRow({ rank, player, partnerName }: { rank: number; player: Player; partnerName?: string }) {
+function PlayerRow({ rank, player, partnerName }: { rank: number; player: PlayerWithDiff; partnerName?: string }) {
   const losses = player.gamesPlayed - player.gamesWon;
   const isTop3 = rank <= 3;
   return (
@@ -146,6 +119,10 @@ function PlayerRow({ rank, player, partnerName }: { rank: number; player: Player
           <p className="text-xs text-slate-400">Win%</p>
         </div>
         <div className="text-center min-w-[40px]">
+          <p className={`font-medium ${player.pointDiff > 0 ? 'text-green-600 dark:text-green-400' : player.pointDiff < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>{formatDiff(player.pointDiff)}</p>
+          <p className="text-xs text-slate-400">+/-</p>
+        </div>
+        <div className="text-center min-w-[40px]">
           <p className="font-medium text-slate-600 dark:text-slate-400">{player.gamesPlayed}</p>
           <p className="text-xs text-slate-400">GP</p>
         </div>
@@ -156,7 +133,7 @@ function PlayerRow({ rank, player, partnerName }: { rank: number; player: Player
 
 // ── Pair row ───────────────────────────────────────────────────────────────────
 
-function PairRow({ rank, pair, players }: { rank: number; pair: Pair; players: Player[] }) {
+function PairRow({ rank, pair, players }: { rank: number; pair: PairWithDiff; players: Player[] }) {
   const losses = pair.gamesPlayed - pair.gamesWon;
   const isTop3 = rank <= 3;
   const name = pairDisplayName(pair, players);
@@ -185,6 +162,10 @@ function PairRow({ rank, pair, players }: { rank: number; pair: Pair; players: P
           <p className="text-xs text-slate-400">Win%</p>
         </div>
         <div className="text-center min-w-[40px]">
+          <p className={`font-medium ${pair.pointDiff > 0 ? 'text-green-600 dark:text-green-400' : pair.pointDiff < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>{formatDiff(pair.pointDiff)}</p>
+          <p className="text-xs text-slate-400">+/-</p>
+        </div>
+        <div className="text-center min-w-[40px]">
           <p className="font-medium text-slate-600 dark:text-slate-400">{pair.gamesPlayed}</p>
           <p className="text-xs text-slate-400">GP</p>
         </div>
@@ -202,10 +183,11 @@ interface SharedScoreboardProps {
 export function SharedScoreboard({ session }: SharedScoreboardProps) {
   const theme = useThemeClasses();
   const isDoubles = session.rotationMode === 'doubles';
-  const rankedPlayers = rankPlayers(session.players);
-  const rankedPairs = isDoubles ? rankPairs(session.pairs ?? []) : [];
+  const rankedPlayers = rankPlayers(session.players, session.gamesCompleted);
+  const rankedPairs = isDoubles ? rankPairs(session.pairs ?? [], session.gamesCompleted) : [];
   const totalGames = session.gamesCompleted.length;
   const activePlayers = session.players.filter(p => p.isActive);
+  const sessionHealth = analyzeSessionHealth(session.players, session.gamesCompleted, session.matchHistory ?? []);
 
   const partnerMap = new Map<string, string>();
   if (isDoubles) {
@@ -307,6 +289,7 @@ export function SharedScoreboard({ session }: SharedScoreboardProps) {
                       <span className="w-[40px] text-center">W</span>
                       <span className="w-[40px] text-center">L</span>
                       <span className="w-[40px] text-center">Win%</span>
+                      <span className="w-[40px] text-center">+/-</span>
                       <span className="w-[40px] text-center">GP</span>
                     </div>
                   </div>
@@ -333,6 +316,7 @@ export function SharedScoreboard({ session }: SharedScoreboardProps) {
                         <span className="w-[40px] text-center">W</span>
                         <span className="w-[40px] text-center">L</span>
                         <span className="w-[40px] text-center">Win%</span>
+                        <span className="w-[40px] text-center">+/-</span>
                         <span className="w-[40px] text-center">GP</span>
                       </div>
                     </div>
@@ -342,6 +326,125 @@ export function SharedScoreboard({ session }: SharedScoreboardProps) {
                   ))}
                 </div>
               )}
+
+              {/* Session Health */}
+              <div className="mt-2 border-t border-slate-100 dark:border-slate-700">
+                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5" />
+                    Session Health
+                  </p>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+                  {/* 1. Longest waiting time */}
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                      <Hourglass className="w-3.5 h-3.5 text-blue-500" />
+                      Longest Waiting
+                    </p>
+                    {sessionHealth.longestWaiting.length === 0 ? (
+                      <p className="text-xs text-slate-400">No one waiting</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {sessionHealth.longestWaiting.map((w) => (
+                          <div key={w.id} className="flex items-center justify-between text-xs bg-blue-50 dark:bg-blue-900/10 rounded-lg px-2 py-1.5">
+                            <span className="text-slate-700 dark:text-slate-200 truncate">{w.name}</span>
+                            <span className="text-blue-600 dark:text-blue-400 font-semibold shrink-0 ml-2">{w.waitMinutes}m</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Games played difference */}
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                      <BarChart3 className="w-3.5 h-3.5 text-teal-500" />
+                      Games Played Difference
+                    </p>
+                    {sessionHealth.gamesPlayedSpread.most && sessionHealth.gamesPlayedSpread.least ? (
+                      <div className="flex items-center justify-between text-xs bg-teal-50 dark:bg-teal-900/10 rounded-lg px-2 py-1.5">
+                        <span className="text-slate-700 dark:text-slate-200 truncate">
+                          {sessionHealth.gamesPlayedSpread.most.name} ({sessionHealth.gamesPlayedSpread.most.gamesPlayed}) vs {sessionHealth.gamesPlayedSpread.least.name} ({sessionHealth.gamesPlayedSpread.least.gamesPlayed})
+                        </span>
+                        <span className="text-teal-600 dark:text-teal-400 font-semibold shrink-0 ml-2">{sessionHealth.gamesPlayedSpread.diff}</span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400">No games played</p>
+                    )}
+                  </div>
+
+                  {/* 3. Repeat partner pairs */}
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                      <Repeat className="w-3.5 h-3.5 text-purple-500" />
+                      Repeat Partner Pairs
+                    </p>
+                    {sessionHealth.repeatPartnerships.length === 0 ? (
+                      <p className="text-xs text-slate-400">No repeat partnerships — great variety!</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {sessionHealth.repeatPartnerships.map((rp, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs bg-purple-50 dark:bg-purple-900/10 rounded-lg px-2 py-1.5">
+                            <span className="text-slate-700 dark:text-slate-200 truncate">{rp.playerAName} & {rp.playerBName}</span>
+                            <span className="text-purple-600 dark:text-purple-400 font-semibold shrink-0 ml-2">{rp.count}×</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Repeat matchups (bonus, alongside repeat partners) */}
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                      <Repeat className="w-3.5 h-3.5 text-orange-500" />
+                      Repeat Matchups
+                    </p>
+                    {sessionHealth.repeatMatchups.length === 0 ? (
+                      <p className="text-xs text-slate-400">No repeat matchups — great variety!</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {sessionHealth.repeatMatchups.map((rm, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs bg-orange-50 dark:bg-orange-900/10 rounded-lg px-2 py-1.5">
+                            <span className="text-slate-700 dark:text-slate-200 truncate">{rm.teamANames.join(' & ')} vs {rm.teamBNames.join(' & ')}</span>
+                            <span className="text-orange-600 dark:text-orange-400 font-semibold shrink-0 ml-2">{rm.count}×</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 4. Longest match */}
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                      <Timer className="w-3.5 h-3.5 text-rose-500" />
+                      Longest Match
+                    </p>
+                    {sessionHealth.longestMatch ? (
+                      <div className="flex items-center justify-between text-xs bg-rose-50 dark:bg-rose-900/10 rounded-lg px-2 py-1.5">
+                        <span className="text-slate-700 dark:text-slate-200 truncate">
+                          {sessionHealth.longestMatch.team1Names.join(' & ')} vs {sessionHealth.longestMatch.team2Names.join(' & ')}
+                        </span>
+                        <span className="text-rose-600 dark:text-rose-400 font-semibold shrink-0 ml-2">{sessionHealth.longestMatch.minutes}m</span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400">No completed matches</p>
+                    )}
+                  </div>
+
+                  {/* 5. Average match per player */}
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                      <Activity className="w-3.5 h-3.5 text-indigo-500" />
+                      Average Match Per Player
+                    </p>
+                    <div className="flex items-center justify-between text-xs bg-indigo-50 dark:bg-indigo-900/10 rounded-lg px-2 py-1.5">
+                      <span className="text-slate-700 dark:text-slate-200">Across {activePlayers.length} active player{activePlayers.length !== 1 ? 's' : ''}</span>
+                      <span className="text-indigo-600 dark:text-indigo-400 font-semibold shrink-0 ml-2">{sessionHealth.avgGamesPerPlayer.toFixed(1)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </>
           )}
         </div>

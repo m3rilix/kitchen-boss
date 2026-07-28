@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType, Pair } from '@/types';
+import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType, Pair, MatchHistoryEntry } from '@/types';
 import { updateSharedSession } from '@/lib/firebase';
-import { getNextGamePlayers, splitStackIntoTeams } from '@/lib/smartQueue';
-import { buildRoundRobinStack } from '@/lib/roundRobin';
+import { getNextGamePlayers } from '@/lib/smartQueue';
+import { buildRoundRobinStack, pickBestTeamSplit } from '@/lib/roundRobin';
 import { buildDoublesMatchup, processDoublesGameEnd, processDoublesCancelGame, pairDisplayName } from '@/lib/doubles';
 
 // Helper to generate share code
@@ -72,6 +72,7 @@ interface SessionState {
   reshuffleByGamesPlayed: () => void;
   rebuildRoundRobinStacks: () => void;
   addNewRoundRobinStacks: () => void;
+  prepareNextRoundRobinStack: () => void;
   smartRebuildStacks: () => void;
   // Win-Lose Stack functions
   buildWinLoseStacks: () => void;
@@ -218,15 +219,20 @@ export const useSessionStore = create<SessionState>()(
             currentGame: undefined,
           }));
           
-          // Build initial stacks for Win-Lose mode
+          // Build initial stacks for Win-Lose mode with collision-aware pairing
           const rotationMode = state.session.rotationMode;
           let initialWaitingStacks: string[][] = [];
-          
+
           if (rotationMode === 'win_lose_stack' || rotationMode === 'full_rotation') {
-            // Build stacks of 4 from all players
+            // Build stacks of 4 from all players, applying variety-aware team assignment
+            // (matchHistory is empty on reset, so collision scoring won't find repeats yet, but structure is ready)
+            const matchHistory: MatchHistoryEntry[] = [];
             for (let i = 0; i < allPlayerIds.length; i += 4) {
-              const stack = allPlayerIds.slice(i, i + 4);
-              initialWaitingStacks.push(stack);
+              const stackIds = allPlayerIds.slice(i, i + 4);
+              if (stackIds.length === 4) {
+                // Store stacks as-is; pairing will be determined at game start time
+                initialWaitingStacks.push(stackIds);
+              }
             }
           }
           
@@ -553,13 +559,17 @@ export const useSessionStore = create<SessionState>()(
             stacks.map(stack => stack.filter(id => id !== playerId));
           
           // Consolidate incomplete stacks: flatten all incomplete stacks, re-chunk into groups of 4
-          // This ensures that after removal, e.g. a 3/4 stack + 1/4 stack merge into a 4/4 stack
+          // This ensures that after removal, e.g. a 3/4 stack + 1/4 stack merge into a 4/4 stack.
+          // Pairing will be determined at game start time.
           const consolidateStacks = (stacks: string[][]): string[][] => {
             const complete = stacks.filter(s => s.length >= 4);
             const incompletePlayers = stacks.filter(s => s.length > 0 && s.length < 4).flat();
             const rechunked: string[][] = [];
             for (let i = 0; i < incompletePlayers.length; i += 4) {
-              rechunked.push(incompletePlayers.slice(i, i + 4));
+              const chunkIds = incompletePlayers.slice(i, i + 4);
+              if (chunkIds.length === 4) {
+                rechunked.push(chunkIds);
+              }
             }
             return [...complete, ...rechunked];
           };
@@ -1235,13 +1245,14 @@ export const useSessionStore = create<SessionState>()(
               )
               .sort((a, b) => a.waitingSince - b.waitingSince); // Lower timestamp = waiting longer
             
-            // Build new waiting stacks (all players go to regular stacks after reorder)
+            // Build new waiting stacks (all players go to regular stacks after reorder);
+            // pairing will be determined at game start time
             const newWaitingStacks: string[][] = [];
             for (let i = 0; i < sortedPlayers.length; i += 4) {
-              const stack = sortedPlayers.slice(i, i + 4).map(p => p.id);
-              newWaitingStacks.push(stack);
+              const stackPlayers = sortedPlayers.slice(i, i + 4);
+              newWaitingStacks.push(stackPlayers.map(p => p.id));
             }
-            
+
             return {
               session: {
                 ...state.session,
@@ -1363,13 +1374,14 @@ export const useSessionStore = create<SessionState>()(
               )
               .sort((a, b) => a.gamesPlayed - b.gamesPlayed); // Fewer games = higher priority
             
-            // Build new waiting stacks (all players go to regular stacks after reorder)
+            // Build new waiting stacks (all players go to regular stacks after reorder);
+            // pairing will be determined at game start time
             const newWaitingStacks: string[][] = [];
             for (let i = 0; i < sortedPlayers.length; i += 4) {
-              const stack = sortedPlayers.slice(i, i + 4).map(p => p.id);
-              newWaitingStacks.push(stack);
+              const stackPlayers = sortedPlayers.slice(i, i + 4);
+              newWaitingStacks.push(stackPlayers.map(p => p.id));
             }
-            
+
             return {
               session: {
                 ...state.session,
@@ -1574,6 +1586,37 @@ export const useSessionStore = create<SessionState>()(
         });
       },
 
+      // ROUND ROBIN: Manually prepare exactly one more stack — bypasses the court-count cap used by
+      // addNewRoundRobinStacks so the manager can queue up additional stacks ahead of time.
+      prepareNextRoundRobinStack: () => {
+        set((state) => {
+          if (!state.session) return state;
+          if (state.session.rotationMode !== 'round_robin') return state;
+
+          const playersInStacks = new Set((state.session.roundRobinStacks || []).flat());
+          const customStackPlayerIds = new Set((state.session.customStacks || []).flat());
+
+          const availablePlayers = (state.session.waitingStack || [])
+            .filter(id => !playersInStacks.has(id) && !customStackPlayerIds.has(id))
+            .map(id => state.session!.players.find(p => p.id === id))
+            .filter((p): p is Player => p !== undefined && p.isActive && p.waitingSince > 0);
+
+          if (availablePlayers.length < 4) return state;
+
+          const stack = buildRoundRobinStack(availablePlayers, state.session.matchHistory || [], false);
+          if (!stack) return state;
+
+          const usedSet = new Set(stack);
+          return {
+            session: {
+              ...state.session,
+              roundRobinStacks: [...(state.session.roundRobinStacks || []), stack],
+              waitingStack: (state.session.waitingStack || []).filter(id => !usedSet.has(id)),
+            },
+          };
+        });
+      },
+
       // ROUND ROBIN: Smart rebuild - uses weighted algorithm considering games played, waiting time, match history
       // Collects ALL players from roundRobinStacks + waitingStack, sorts by smart score, rebuilds
       smartRebuildStacks: () => {
@@ -1696,16 +1739,17 @@ export const useSessionStore = create<SessionState>()(
           const availablePlayers = state.session.waitingStack.filter(id => 
             !playersInGames.has(id) && !playersInStacks.has(id)
           );
-          
-          
-          // Build stacks of 4
+
+          // Build stacks of 4; pairing will be determined at game start time with current matchHistory
           const newWaitingStacks: string[][] = [];
           for (let i = 0; i < availablePlayers.length; i += 4) {
-            const stack = availablePlayers.slice(i, i + 4);
-            newWaitingStacks.push(stack);
+            const stackIds = availablePlayers.slice(i, i + 4);
+            if (stackIds.length === 4) {
+              newWaitingStacks.push(stackIds);
+            }
           }
-          
-          
+
+
           return {
             session: {
               ...state.session,
@@ -1754,30 +1798,36 @@ export const useSessionStore = create<SessionState>()(
           let updatedWaitingStacks = [...state.session.waitingStacks];
           let updatedLoserStacks = [...state.session.loserStacks];
           let updatedWinnerStacks = [...state.session.winnerStacks];
-          
+
+          // Once a stack reaches exactly 4, it's ready to be played.
+          // Pairing will be determined at game start time with current matchHistory.
+          const finalizeIfComplete = (stack: string[]): string[] => {
+            return stack;
+          };
+
           // Process each player
           for (const playerId of availablePlayers) {
             // Priority 1: Check for Regular forming stack
             const regularFormingIdx = updatedWaitingStacks.findIndex(s => s.length < 4);
             if (regularFormingIdx !== -1) {
-              updatedWaitingStacks[regularFormingIdx] = [...updatedWaitingStacks[regularFormingIdx], playerId];
+              updatedWaitingStacks[regularFormingIdx] = finalizeIfComplete([...updatedWaitingStacks[regularFormingIdx], playerId]);
               continue;
             }
-            
+
             // Priority 2: Check for Loser forming stack
             const loserFormingIdx = updatedLoserStacks.findIndex(s => s.length < 4);
             if (loserFormingIdx !== -1) {
-              updatedLoserStacks[loserFormingIdx] = [...updatedLoserStacks[loserFormingIdx], playerId];
+              updatedLoserStacks[loserFormingIdx] = finalizeIfComplete([...updatedLoserStacks[loserFormingIdx], playerId]);
               continue;
             }
-            
+
             // Priority 3: Check for Winner forming stack
             const winnerFormingIdx = updatedWinnerStacks.findIndex(s => s.length < 4);
             if (winnerFormingIdx !== -1) {
-              updatedWinnerStacks[winnerFormingIdx] = [...updatedWinnerStacks[winnerFormingIdx], playerId];
+              updatedWinnerStacks[winnerFormingIdx] = finalizeIfComplete([...updatedWinnerStacks[winnerFormingIdx], playerId]);
               continue;
             }
-            
+
             // No forming stack exists - create new Regular forming stack
             updatedWaitingStacks.push([playerId]);
           }
@@ -2026,30 +2076,36 @@ export const useSessionStore = create<SessionState>()(
             // Win-Lose Stack: Add losers FIRST, then winners
             // Priority for each player: Same type forming → Any forming → Create new
             
+            // Once a stack reaches exactly 4, apply variety-aware team assignment
+            // Pairing will be determined at game start time with current matchHistory.
+            const finalizeIfComplete = (stack: string[]): string[] => {
+              return stack;
+            };
+
             // Helper function to add player to stacks
             const addPlayerToStacks = (playerId: string, playerType: 'loser' | 'winner') => {
               // Priority 1: Check for forming stack of SAME type
               if (playerType === 'loser') {
                 const loserFormingIdx = newLoserStacks.findIndex(s => s.length < 4);
                 if (loserFormingIdx !== -1) {
-                  newLoserStacks[loserFormingIdx].push(playerId);
+                  newLoserStacks[loserFormingIdx] = finalizeIfComplete([...newLoserStacks[loserFormingIdx], playerId]);
                   return;
                 }
               } else {
                 const winnerFormingIdx = newWinnerStacks.findIndex(s => s.length < 4);
                 if (winnerFormingIdx !== -1) {
-                  newWinnerStacks[winnerFormingIdx].push(playerId);
+                  newWinnerStacks[winnerFormingIdx] = finalizeIfComplete([...newWinnerStacks[winnerFormingIdx], playerId]);
                   return;
                 }
               }
-              
+
               // Priority 2: Check for Regular forming stack (neutral - can mix with anyone)
               const regularFormingIdx = newWaitingStacks.findIndex(s => s.length < 4);
               if (regularFormingIdx !== -1) {
-                newWaitingStacks[regularFormingIdx].push(playerId);
+                newWaitingStacks[regularFormingIdx] = finalizeIfComplete([...newWaitingStacks[regularFormingIdx], playerId]);
                 return;
               }
-              
+
               // Priority 3: Create new forming stack of player's type
               if (playerType === 'loser') {
                 newLoserStacks.push([playerId]);
@@ -2092,6 +2148,9 @@ export const useSessionStore = create<SessionState>()(
           // Get player names for logging
           const winnerNames = winningTeam.map(id => state.session!.players.find(p => p.id === id)?.name || '');
           const loserNames = losingTeam.map(id => state.session!.players.find(p => p.id === id)?.name || '');
+          const winningScore = score ? (winner === 'team1' ? score.team1 : score.team2) : undefined;
+          const losingScore = score ? (winner === 'team1' ? score.team2 : score.team1) : undefined;
+          const scoreSuffix = score ? ` (${winningScore}-${losingScore})` : '';
 
           return {
             session: {
@@ -2115,13 +2174,14 @@ export const useSessionStore = create<SessionState>()(
               activityLog: [
                 createLogEntry(
                   'game_ended',
-                  `${court.name}: ${winnerNames.join(' & ')} defeated ${loserNames.join(' & ')}`,
-                  { 
-                    courtId, 
-                    courtName: court.name, 
+                  `${court.name}: ${winnerNames.join(' & ')} defeated ${loserNames.join(' & ')}${scoreSuffix}`,
+                  {
+                    courtId,
+                    courtName: court.name,
                     winner,
                     team1Names: court.currentGame.team1.map(id => state.session!.players.find(p => p.id === id)?.name || ''),
                     team2Names: court.currentGame.team2.map(id => state.session!.players.find(p => p.id === id)?.name || ''),
+                    score,
                   }
                 ),
                 ...state.session.activityLog,
@@ -2260,7 +2320,7 @@ export const useSessionStore = create<SessionState>()(
 
         let team1: [string, string] | null = null;
         let team2: [string, string] | null = null;
-        
+
         // Get players currently in games
         const playersInGames = new Set<string>();
         state.session.courts.forEach((c) => {
@@ -2269,6 +2329,19 @@ export const useSessionStore = create<SessionState>()(
             c.currentGame.team2.forEach((id) => playersInGames.add(id));
           }
         });
+
+        // Helper: Apply collision-aware pairing to a 4-player stack at game start time
+        const applyCollisionAwarePairing = (stackIds: string[]): [string, string, string, string] => {
+          if (stackIds.length !== 4) return [stackIds[0], stackIds[1], stackIds[2], stackIds[3]];
+          const stackPlayers = stackIds
+            .map(id => state.session!.players.find(p => p.id === id))
+            .filter((p): p is Player => p !== undefined);
+          if (stackPlayers.length !== 4) return [stackIds[0], stackIds[1], stackIds[2], stackIds[3]];
+
+          // Apply collision-aware pairing with current matchHistory
+          const pairing = pickBestTeamSplit(stackPlayers as [Player, Player, Player, Player], state.session.matchHistory);
+          return pairing;
+        };
 
         // Check if user manually selected specific players for next game
         const nextStackPlayerIds = state.nextStackPlayerIds;
@@ -2332,38 +2405,39 @@ export const useSessionStore = create<SessionState>()(
           if (rotationMode === 'round_robin') {
             // Round Robin: pull from pre-built roundRobinStacks (first available stack)
             const roundRobinStacks = state.session.roundRobinStacks || [];
-            
+
             for (const stack of roundRobinStacks) {
               // Check if all 4 players in this stack are available
               const allAvailable = stack.every(id => !playersInGames.has(id));
               if (allAvailable && stack.length === 4) {
-                team1 = [stack[0], stack[1]];
-                team2 = [stack[2], stack[3]];
+                const pairing = applyCollisionAwarePairing(stack);
+                team1 = [pairing[0], pairing[1]];
+                team2 = [pairing[2], pairing[3]];
                 break;
               }
             }
           } else if (rotationMode === 'win_lose_stack' || rotationMode === 'full_rotation') {
             // Win-Lose Stack: Regular → Alternating (Win/Lose)
             // NOTE: Custom stacks are IGNORED by autoAssignNextGame - they must be manually started
-            
+
             // Priority 1: Regular stacks (always first before win/lose)
             const regularStacks = state.session.waitingStacks.filter(s => s.length === 4);
             for (const stack of regularStacks) {
               const allAvailable = stack.every(id => !playersInGames.has(id));
               if (allAvailable) {
-                const split = splitStackIntoTeams(stack, state.session.players);
-                team1 = split.team1;
-                team2 = split.team2;
+                const pairing = applyCollisionAwarePairing(stack);
+                team1 = [pairing[0], pairing[1]];
+                team2 = [pairing[2], pairing[3]];
                 break;
               }
             }
-            
+
             // Priority 2: Alternate between Winner and Loser stacks
             if (!team1 || !team2) {
               const lastType = state.session.lastStackType;
               const winnerStacks = state.session.winnerStacks.filter(s => s.length === 4);
               const loserStacks = state.session.loserStacks.filter(s => s.length === 4);
-              
+
               // Helper to find first available stack
               const findAvailableStack = (stacks: string[][]) => {
                 for (const stack of stacks) {
@@ -2372,15 +2446,15 @@ export const useSessionStore = create<SessionState>()(
                 }
                 return null;
               };
-              
+
               // Determine which type to try first based on alternating logic
               // If last was 'loser' or 'regular', try winner first
               // If last was 'winner', try loser first
               // If no last type, try loser first (give losers priority initially)
               const tryWinnerFirst = lastType === 'loser' || lastType === 'regular';
-              
+
               let selectedStack: string[] | null = null;
-              
+
               if (tryWinnerFirst) {
                 selectedStack = findAvailableStack(winnerStacks);
                 if (!selectedStack) {
@@ -2392,11 +2466,11 @@ export const useSessionStore = create<SessionState>()(
                   selectedStack = findAvailableStack(winnerStacks);
                 }
               }
-              
+
               if (selectedStack) {
-                const split = splitStackIntoTeams(selectedStack, state.session.players);
-                team1 = split.team1;
-                team2 = split.team2;
+                const pairing = applyCollisionAwarePairing(selectedStack);
+                team1 = [pairing[0], pairing[1]];
+                team2 = [pairing[2], pairing[3]];
               }
             }
           } else {
@@ -2405,8 +2479,9 @@ export const useSessionStore = create<SessionState>()(
             for (const customStack of customStacks) {
               const availableInCustom = customStack.filter(id => !playersInGames.has(id));
               if (availableInCustom.length === 4) {
-                team1 = [availableInCustom[0], availableInCustom[1]];
-                team2 = [availableInCustom[2], availableInCustom[3]];
+                const pairing = applyCollisionAwarePairing(availableInCustom);
+                team1 = [pairing[0], pairing[1]];
+                team2 = [pairing[2], pairing[3]];
                 break;
               }
             }

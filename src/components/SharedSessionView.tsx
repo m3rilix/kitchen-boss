@@ -3,8 +3,10 @@ import { useThemeClasses } from '@/store/themeStore';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { pairDisplayName } from '@/lib/doubles';
+import { rankPlayers, rankPairs, winPct, formatDiff } from '@/lib/leaderboard';
+import { analyzeSessionHealth } from '@/lib/sessionHealth';
 import { useState, useMemo, useEffect } from 'react';
-import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, X, GripVertical } from 'lucide-react';
+import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, X, GripVertical, Activity, Hourglass, Repeat, BarChart3 } from 'lucide-react';
 
 /** Format elapsed milliseconds as M:SS */
 function formatElapsed(ms: number): string {
@@ -100,32 +102,7 @@ const sortOptions = [
 
 type SortOption = typeof sortOptions[number]['value'];
 
-// â”€â”€ Leaderboard helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function rankPlayers(players: Player[]): Player[] {
-  return [...players].filter(p => p.isActive).sort((a, b) => {
-    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
-    const aRate = a.gamesPlayed > 0 ? a.gamesWon / a.gamesPlayed : 0;
-    const bRate = b.gamesPlayed > 0 ? b.gamesWon / b.gamesPlayed : 0;
-    if (bRate !== aRate) return bRate - aRate;
-    return b.gamesPlayed - a.gamesPlayed;
-  });
-}
-
-function rankPairs(pairs: Pair[]): Pair[] {
-  return [...pairs].sort((a, b) => {
-    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
-    const aRate = a.gamesPlayed > 0 ? a.gamesWon / a.gamesPlayed : 0;
-    const bRate = b.gamesPlayed > 0 ? b.gamesWon / b.gamesPlayed : 0;
-    if (bRate !== aRate) return bRate - aRate;
-    return b.gamesPlayed - a.gamesPlayed;
-  });
-}
-
-function winPct(won: number, played: number): string {
-  if (played === 0) return 'â€“';
-  return Math.round((won / played) * 100) + '%';
-}
+// -- Leaderboard helpers (rankPlayers/rankPairs/winPct/formatDiff imported from lib/leaderboard) --
 
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-base">ðŸ¥‡</span>;
@@ -173,17 +150,18 @@ interface DropZoneProps {
 }
 
 function SharedDropZone({ col, idx, dragging, dropTarget, setDropTarget, onDrop }: DropZoneProps) {
-  if (!dragging) return null;
-  const isActive = dropTarget?.col === col && dropTarget?.idx === idx;
+  const isActive = dragging !== null && dropTarget?.col === col && dropTarget?.idx === idx;
   return (
     <div
       className={`rounded-lg transition-all duration-150 ${
-        isActive
+        !dragging
+          ? 'h-0 overflow-hidden'
+          : isActive
           ? 'h-8 bg-blue-100 dark:bg-blue-900/30 border-2 border-dashed border-blue-400'
           : 'h-2'
       }`}
-      onDragOver={(e) => { e.preventDefault(); setDropTarget({ col, idx }); }}
-      onDrop={(e) => { e.preventDefault(); onDrop(col, idx); }}
+      onDragOver={(e) => { if (dragging) { e.preventDefault(); setDropTarget({ col, idx }); } }}
+      onDrop={(e) => { if (dragging) { e.preventDefault(); onDrop(col, idx); } }}
     />
   );
 }
@@ -234,7 +212,8 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
 
   const startDrag = (id: PanelId, e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move';
-    setDragging(id);
+    e.dataTransfer.setData('text/plain', id);
+    setTimeout(() => setDragging(id), 0);
   };
 
   const endDrag = () => {
@@ -292,128 +271,105 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   const stackQueue = useMemo(() => {
     try {
       if (!session?.players) return [];
-      
-      const getPlayersInStackOrder = (stackIds: string[]): Player[] => {
-        try {
-          return (stackIds || [])
-            .map(id => session.players.find(p => p.id === id))
-            .filter((p): p is Player => p !== undefined && p.isActive);
-        } catch (e) {
-          console.error('Error in getPlayersInStackOrder:', e);
-          return [];
-        }
+
+      type StackGroup = {
+        id: string;
+        players: Player[];
+        type: 'winners' | 'mixed' | 'forming';
+        label: string;
+        isReady: boolean;
       };
-    
-    // Get players by stack type
-    const winners = getPlayersInStackOrder(session.winnerStack ?? []);
-    const losers = getPlayersInStackOrder(session.loserStack ?? []);
-    const free = getPlayersInStackOrder(session.waitingStack ?? []);
-    
-    // Combine losers + free and sort by wait time (matches game selection logic)
-    const allLosersAndFree = [...losers, ...free].sort((a, b) => {
-      // Handle undefined/null values
-      const aWait = a?.waitingSince ?? 0;
-      const bWait = b?.waitingSince ?? 0;
-      if (aWait === 0 && bWait === 0) return 0;
-      if (aWait === 0) return 1;
-      if (bWait === 0) return -1;
-      return aWait - bWait;
-    });
-    
-    type StackGroup = {
-      id: string;
-      players: Player[];
-      type: 'winners' | 'mixed' | 'forming';
-      label: string;
-      isReady: boolean;
-    };
-    
-    // Build winner ready stacks
-    const winnerReadyStacks: StackGroup[] = [];
-    const winnerReadyCount = Math.floor(winners.length / 4);
-    for (let i = 0; i < winnerReadyCount; i++) {
-      winnerReadyStacks.push({
-        id: `winners-${i}`,
-        players: winners.slice(i * 4, (i + 1) * 4),
-        type: 'winners',
-        label: '', // Will be numbered later
-        isReady: true,
+
+      // ── Round Robin: read pre-built stacks from session (same source as PlayerQueue) ──
+      if (session.rotationMode === 'round_robin') {
+        const stackCounter = session.stackCounter ?? 0;
+        const preBuiltStacks = session.roundRobinStacks || [];
+
+        const readyStacks: StackGroup[] = preBuiltStacks
+          .map((stackIds, idx) => {
+            const players = stackIds
+              .map(id => session.players.find(p => p.id === id))
+              .filter((p): p is Player => p !== undefined);
+            return {
+              id: `rr-${idx}-${stackIds.slice(0, 2).join('-')}`,
+              players,
+              type: 'mixed' as const,
+              label: `Stack ${stackCounter + idx + 1}`,
+              isReady: true,
+            };
+          })
+          .filter(s => s.players.length === 4);
+
+        // Players not yet assigned to a pre-built stack
+        const usedIds = new Set(preBuiltStacks.flat());
+        const waitingPlayers = session.players
+          .filter(p => p.isActive && p.waitingSince > 0 && !usedIds.has(p.id))
+          .sort((a, b) => a.waitingSince - b.waitingSince);
+
+        const result: StackGroup[] = [...readyStacks];
+        if (waitingPlayers.length > 0) {
+          result.push({
+            id: 'rr-waiting',
+            players: waitingPlayers,
+            type: 'forming',
+            label: `Waiting (${waitingPlayers.length})`,
+            isReady: false,
+          });
+        }
+        return result;
+      }
+
+      // ── Win-Lose / Full Rotation: use pre-built stacks arrays ──
+      const getPlayersInStackOrder = (stackIds: string[]): Player[] => {
+        return (stackIds || [])
+          .map(id => session.players.find(p => p.id === id))
+          .filter((p): p is Player => p !== undefined && p.isActive);
+      };
+
+      const winners = getPlayersInStackOrder(session.winnerStack ?? []);
+      const losers = getPlayersInStackOrder(session.loserStack ?? []);
+      const free = getPlayersInStackOrder(session.waitingStack ?? []);
+
+      const allLosersAndFree = [...losers, ...free].sort((a, b) => {
+        const aWait = a?.waitingSince ?? 0;
+        const bWait = b?.waitingSince ?? 0;
+        if (aWait === 0 && bWait === 0) return 0;
+        if (aWait === 0) return 1;
+        if (bWait === 0) return -1;
+        return aWait - bWait;
       });
-    }
-    
-    // Build mixed ready stacks from losers + free
-    const mixedReadyStacks: StackGroup[] = [];
-    const mixedReadyCount = Math.floor(allLosersAndFree.length / 4);
-    for (let i = 0; i < mixedReadyCount; i++) {
-      mixedReadyStacks.push({
-        id: `mixed-${i}`,
-        players: allLosersAndFree.slice(i * 4, (i + 1) * 4),
-        type: 'mixed',
-        label: '', // Will be numbered later
-        isReady: true,
+
+      const winnerReadyStacks: StackGroup[] = [];
+      const winnerReadyCount = Math.floor(winners.length / 4);
+      for (let i = 0; i < winnerReadyCount; i++) {
+        winnerReadyStacks.push({ id: `winners-${i}`, players: winners.slice(i * 4, (i + 1) * 4), type: 'winners', label: '', isReady: true });
+      }
+
+      const mixedReadyStacks: StackGroup[] = [];
+      const mixedReadyCount = Math.floor(allLosersAndFree.length / 4);
+      for (let i = 0; i < mixedReadyCount; i++) {
+        mixedReadyStacks.push({ id: `mixed-${i}`, players: allLosersAndFree.slice(i * 4, (i + 1) * 4), type: 'mixed', label: '', isReady: true });
+      }
+
+      const allReadyStacks = [...winnerReadyStacks, ...mixedReadyStacks].sort((a, b) => {
+        if (!a.players.length) return 1;
+        if (!b.players.length) return -1;
+        return Math.min(...a.players.map(p => p?.waitingSince ?? Infinity)) - Math.min(...b.players.map(p => p?.waitingSince ?? Infinity));
       });
-    }
-    
-    // Combine ALL ready stacks and sort by longest waiting player (matches Manager View)
-    const allReadyStacks = [...winnerReadyStacks, ...mixedReadyStacks].sort((a, b) => {
-      // Handle empty stacks
-      if (!a.players.length && !b.players.length) return 0;
-      if (!a.players.length) return 1;
-      if (!b.players.length) return -1;
-      
-      const aMinWait = Math.min(...a.players.map(p => p?.waitingSince ?? Infinity));
-      const bMinWait = Math.min(...b.players.map(p => p?.waitingSince ?? Infinity));
-      return aMinWait - bMinWait;
-    });
-    
-    // Number the ready stacks sequentially
-    allReadyStacks.forEach((stack, idx) => {
-      stack.label = `Stack ${idx + 1}`;
-    });
-    
-    // Build forming stacks
-    const formingStacks: StackGroup[] = [];
-    const remainingWinners = winners.slice(winnerReadyCount * 4);
-    const remainingMixed = allLosersAndFree.slice(mixedReadyCount * 4);
-    
-    if (remainingWinners.length > 0) {
-      formingStacks.push({
-        id: 'forming-winners',
-        players: remainingWinners,
-        type: 'forming',
-        label: `Winners Forming (${remainingWinners.length}/4)`,
-        isReady: false,
-      });
-    }
-    
-    if (remainingMixed.length > 0) {
-      formingStacks.push({
-        id: 'forming-mixed',
-        players: remainingMixed,
-        type: 'forming',
-        label: `Forming (${remainingMixed.length}/4)`,
-        isReady: false,
-      });
-    }
-    
-    // Sort forming stacks by longest waiting player too
-    formingStacks.sort((a, b) => {
-      // Handle empty stacks
-      if (!a.players.length && !b.players.length) return 0;
-      if (!a.players.length) return 1;
-      if (!b.players.length) return -1;
-      
-      const aMinWait = Math.min(...a.players.map(p => p?.waitingSince ?? Infinity));
-      const bMinWait = Math.min(...b.players.map(p => p?.waitingSince ?? Infinity));
-      return aMinWait - bMinWait;
-    });
-    
-    return [...allReadyStacks, ...formingStacks];
+      allReadyStacks.forEach((stack, idx) => { stack.label = `Stack ${idx + 1}`; });
+
+      const formingStacks: StackGroup[] = [];
+      const remainingWinners = winners.slice(winnerReadyCount * 4);
+      const remainingMixed = allLosersAndFree.slice(mixedReadyCount * 4);
+      if (remainingWinners.length > 0) formingStacks.push({ id: 'forming-winners', players: remainingWinners, type: 'forming', label: `Winners Forming (${remainingWinners.length}/4)`, isReady: false });
+      if (remainingMixed.length > 0) formingStacks.push({ id: 'forming-mixed', players: remainingMixed, type: 'forming', label: `Forming (${remainingMixed.length}/4)`, isReady: false });
+
+      return [...allReadyStacks, ...formingStacks];
     } catch (e) {
       console.error('Error in stackQueue computation:', e);
       return [];
     }
-  }, [session?.players, session?.winnerStack, session?.loserStack, session?.waitingStack]);
+  }, [session?.players, session?.rotationMode, session?.roundRobinStacks, session?.stackCounter, session?.winnerStack, session?.loserStack, session?.waitingStack]);
 
   // Count players in games
   const playersInGame = session?.courts?.reduce((count, court) => {
@@ -553,7 +509,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                 <Layers className="w-4 h-4 text-amber-500" />
                 {isDoubles
                   ? `Pairs Queue (${totalPairsQueued})`
-                  : `Stack Queue (${session?.queue?.length || 0})`
+                  : `Stack Queue (${stackQueue.filter(s => s.isReady).length} ready · ${stackQueue.reduce((n, s) => n + s.players.length, 0)} players)`
                 }
               </h3>
             </div>
@@ -817,10 +773,10 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                     draggable
                     onDragStart={(e) => startDrag(panelId, e)}
                     onDragEnd={endDrag}
-                    className="group hidden lg:flex items-center justify-center h-5 mb-1 rounded cursor-grab active:cursor-grabbing hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    className="group hidden lg:flex items-center justify-center h-6 mb-1 rounded cursor-grab active:cursor-grabbing hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                     title="Drag to reposition panel"
                   >
-                    <GripVertical className="w-4 h-4 text-slate-200 dark:text-slate-700 group-hover:text-slate-400 dark:group-hover:text-slate-400 transition-colors" />
+                    <GripVertical className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-300 transition-colors" />
                   </div>
                   {renderPanelContent(panelId)}
                 </div>
@@ -957,10 +913,11 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
 
 function LeaderboardModal({ session, onClose }: { session: Session; onClose: () => void }) {
   const isDoubles = session.rotationMode === 'doubles';
-  const rankedPlayers = rankPlayers(session.players);
-  const rankedPairs = isDoubles ? rankPairs(session.pairs ?? []) : [];
+  const rankedPlayers = rankPlayers(session.players, session.gamesCompleted);
+  const rankedPairs = isDoubles ? rankPairs(session.pairs ?? [], session.gamesCompleted) : [];
   const totalGames = session.gamesCompleted.length;
   const activePlayers = session.players.filter(p => p.isActive);
+  const sessionHealth = analyzeSessionHealth(session.players, session.gamesCompleted, session.matchHistory ?? []);
 
   const partnerMap = new Map<string, string>();
   if (isDoubles) {
@@ -1006,6 +963,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                   <span className="w-8 text-center">W</span>
                   <span className="w-8 text-center">L</span>
                   <span className="w-10 text-center">Win%</span>
+                  <span className="w-10 text-center">+/-</span>
                   <span className="w-8 text-center">GP</span>
                 </div>
               </div>
@@ -1029,6 +987,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                       <span className="w-8 text-center font-bold text-green-600 dark:text-green-400">{player.gamesWon}</span>
                       <span className="w-8 text-center font-bold text-red-500 dark:text-red-400">{losses}</span>
                       <span className="w-10 text-center font-semibold text-slate-700 dark:text-slate-300">{winPct(player.gamesWon, player.gamesPlayed)}</span>
+                      <span className={`w-10 text-center font-medium ${player.pointDiff > 0 ? 'text-green-600 dark:text-green-400' : player.pointDiff < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>{formatDiff(player.pointDiff)}</span>
                       <span className="w-8 text-center text-slate-500 dark:text-slate-400">{player.gamesPlayed}</span>
                     </div>
                   </div>
@@ -1044,6 +1003,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                       <span className="w-8 text-center">W</span>
                       <span className="w-8 text-center">L</span>
                       <span className="w-10 text-center">Win%</span>
+                      <span className="w-10 text-center">+/-</span>
                       <span className="w-8 text-center">GP</span>
                     </div>
                   </div>
@@ -1062,6 +1022,7 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                           <span className="w-8 text-center font-bold text-green-600 dark:text-green-400">{pair.gamesWon}</span>
                           <span className="w-8 text-center font-bold text-red-500 dark:text-red-400">{losses}</span>
                           <span className="w-10 text-center font-semibold text-slate-700 dark:text-slate-300">{winPct(pair.gamesWon, pair.gamesPlayed)}</span>
+                          <span className={`w-10 text-center font-medium ${pair.pointDiff > 0 ? 'text-green-600 dark:text-green-400' : pair.pointDiff < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>{formatDiff(pair.pointDiff)}</span>
                           <span className="w-8 text-center text-slate-500 dark:text-slate-400">{pair.gamesPlayed}</span>
                         </div>
                       </div>
@@ -1069,6 +1030,123 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                   })}
                 </>
               )}
+
+              {/* Session Health */}
+              <div className="px-4 py-2 mt-2 bg-slate-50 dark:bg-slate-700/50 border-y border-slate-100 dark:border-slate-700">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5" />
+                  Session Health
+                </p>
+              </div>
+              <div className="px-4 py-3 space-y-4">
+                {/* 1. Longest waiting time */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Hourglass className="w-3.5 h-3.5 text-blue-500" />
+                    Longest Waiting
+                  </p>
+                  {sessionHealth.longestWaiting.length === 0 ? (
+                    <p className="text-xs text-slate-400">No one waiting right now</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {sessionHealth.longestWaiting.map((w) => (
+                        <div key={w.id} className="flex items-center justify-between text-xs bg-blue-50 dark:bg-blue-900/10 rounded-lg px-2 py-1.5">
+                          <span className="text-slate-700 dark:text-slate-200 truncate">{w.name}</span>
+                          <span className="text-blue-600 dark:text-blue-400 font-semibold shrink-0 ml-2">{w.waitMinutes}m</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Games played difference */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <BarChart3 className="w-3.5 h-3.5 text-teal-500" />
+                    Games Played Difference
+                  </p>
+                  {sessionHealth.gamesPlayedSpread.most && sessionHealth.gamesPlayedSpread.least ? (
+                    <div className="flex items-center justify-between text-xs bg-teal-50 dark:bg-teal-900/10 rounded-lg px-2 py-1.5">
+                      <span className="text-slate-700 dark:text-slate-200 truncate">
+                        {sessionHealth.gamesPlayedSpread.most.name} ({sessionHealth.gamesPlayedSpread.most.gamesPlayed}) vs {sessionHealth.gamesPlayedSpread.least.name} ({sessionHealth.gamesPlayedSpread.least.gamesPlayed})
+                      </span>
+                      <span className="text-teal-600 dark:text-teal-400 font-semibold shrink-0 ml-2">{sessionHealth.gamesPlayedSpread.diff}</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">No games played yet</p>
+                  )}
+                </div>
+
+                {/* 3. Repeat partner pairs */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Repeat className="w-3.5 h-3.5 text-purple-500" />
+                    Repeat Partner Pairs
+                  </p>
+                  {sessionHealth.repeatPartnerships.length === 0 ? (
+                    <p className="text-xs text-slate-400">No repeat partnerships - great variety!</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {sessionHealth.repeatPartnerships.map((rp, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-purple-50 dark:bg-purple-900/10 rounded-lg px-2 py-1.5">
+                          <span className="text-slate-700 dark:text-slate-200 truncate">{rp.playerAName} &amp; {rp.playerBName}</span>
+                          <span className="text-purple-600 dark:text-purple-400 font-semibold shrink-0 ml-2">{rp.count}x</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Repeat matchups (bonus, alongside repeat partners) */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Repeat className="w-3.5 h-3.5 text-orange-500" />
+                    Repeat Matchups
+                  </p>
+                  {sessionHealth.repeatMatchups.length === 0 ? (
+                    <p className="text-xs text-slate-400">No repeat matchups - great variety!</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {sessionHealth.repeatMatchups.map((rm, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-orange-50 dark:bg-orange-900/10 rounded-lg px-2 py-1.5">
+                          <span className="text-slate-700 dark:text-slate-200 truncate">{rm.teamANames.join(' & ')} vs {rm.teamBNames.join(' & ')}</span>
+                          <span className="text-orange-600 dark:text-orange-400 font-semibold shrink-0 ml-2">{rm.count}x</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Longest match */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Timer className="w-3.5 h-3.5 text-rose-500" />
+                    Longest Match
+                  </p>
+                  {sessionHealth.longestMatch ? (
+                    <div className="flex items-center justify-between text-xs bg-rose-50 dark:bg-rose-900/10 rounded-lg px-2 py-1.5">
+                      <span className="text-slate-700 dark:text-slate-200 truncate">
+                        {sessionHealth.longestMatch.team1Names.join(' & ')} vs {sessionHealth.longestMatch.team2Names.join(' & ')}
+                      </span>
+                      <span className="text-rose-600 dark:text-rose-400 font-semibold shrink-0 ml-2">{sessionHealth.longestMatch.minutes}m</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">No completed matches yet</p>
+                  )}
+                </div>
+
+                {/* 5. Average match per player */}
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                    <Activity className="w-3.5 h-3.5 text-indigo-500" />
+                    Average Match Per Player
+                  </p>
+                  <div className="flex items-center justify-between text-xs bg-indigo-50 dark:bg-indigo-900/10 rounded-lg px-2 py-1.5">
+                    <span className="text-slate-700 dark:text-slate-200">Across {activePlayers.length} active player{activePlayers.length !== 1 ? 's' : ''}</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-semibold shrink-0 ml-2">{sessionHealth.avgGamesPerPlayer.toFixed(1)}</span>
+                  </div>
+                </div>
+              </div>
 
               {/* Summary */}
               <div className="px-4 py-4 grid grid-cols-3 gap-3 border-t border-slate-100 dark:border-slate-700 mt-2">

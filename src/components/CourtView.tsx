@@ -2,8 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import type { Court } from '@/types';
-import { splitStackIntoTeams } from '@/lib/smartQueue';
-import { Play, Trophy, X, Users, Wrench, Pencil, Check, UserPlus, UserMinus, ChevronDown, Timer } from 'lucide-react';
+import { Play, Trophy, X, Users, Wrench, Pencil, Check, UserPlus, UserMinus, ChevronDown, Timer, Shuffle } from 'lucide-react';
 
 /** Format elapsed milliseconds as M:SS */
 function formatElapsed(ms: number): string {
@@ -21,8 +20,11 @@ interface StackDragData {
   source: 'stack';
   playerIds: string[];
   stackLabel: string;
-  isCustom?: boolean;
 }
+
+const MIN_WINNING_SCORE = 11;
+const MIN_WIN_MARGIN = 2;
+const MAX_SCORE = 20;
 
 export function CourtView({ court }: CourtViewProps) {
   const {
@@ -43,6 +45,9 @@ export function CourtView({ court }: CourtViewProps) {
   
   const [draggedPlayer, setDraggedPlayer] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
   const [showEndGame, setShowEndGame] = useState(false);
+  const [team1Score, setTeam1Score] = useState('');
+  const [team2Score, setTeam2Score] = useState('');
+  const [scoreError, setScoreError] = useState('');
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showMaintenanceMenu, setShowMaintenanceMenu] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -162,8 +167,76 @@ export function CourtView({ court }: CourtViewProps) {
     autoAssignNextGame(court.id);
   };
 
-  const handleEndGame = (winner: 'team1' | 'team2') => {
-    endGame(court.id, winner);
+  const handleOpenEndGame = () => {
+    setTeam1Score('');
+    setTeam2Score('');
+    setScoreError('');
+    setShowEndGame(true);
+  };
+
+  const handleCloseEndGame = () => {
+    setTeam1Score('');
+    setTeam2Score('');
+    setScoreError('');
+    setShowEndGame(false);
+  };
+
+  /** Validates a pair of scores against pickleball win rules. Returns an error message, or null if valid. */
+  const validateScore = (s1: number, s2: number): string | null => {
+    if (Number.isNaN(s1) || Number.isNaN(s2)) return 'Enter a score for both teams';
+    if (s1 < 0 || s2 < 0) return 'Scores cannot be negative';
+    if (s1 > MAX_SCORE || s2 > MAX_SCORE) return `Scores cannot exceed ${MAX_SCORE}`;
+    if (s1 === s2) return 'Scores cannot be tied';
+    const winningScore = Math.max(s1, s2);
+    const margin = Math.abs(s1 - s2);
+    if (winningScore < MIN_WINNING_SCORE) return `Winning score must be at least ${MIN_WINNING_SCORE}`;
+    if (margin < MIN_WIN_MARGIN) return `Must win by at least ${MIN_WIN_MARGIN} points`;
+    return null;
+  };
+
+  const handleSubmitScore = () => {
+    const s1 = parseInt(team1Score, 10);
+    const s2 = parseInt(team2Score, 10);
+    const error = validateScore(s1, s2);
+    if (error) {
+      setScoreError(error);
+      return;
+    }
+    const winner: 'team1' | 'team2' = s1 > s2 ? 'team1' : 'team2';
+    endGame(court.id, winner, { team1: s1, team2: s2 });
+    setTeam1Score('');
+    setTeam2Score('');
+    setScoreError('');
+    setShowEndGame(false);
+  };
+
+  /**
+   * Dev-only: ends the game with a random valid score, for fast testing.
+   * Defaults to a normal 11-point game most of the time; occasionally simulates a
+   * deuce game that went past 11, which must always be won by exactly 2 points.
+   */
+  const handleRandomScore = () => {
+    const DEUCE_CHANCE = 0.3;
+    const isDeuce = MAX_SCORE > MIN_WINNING_SCORE + 1 && Math.random() < DEUCE_CHANCE;
+    let winningScore: number;
+    let losingScore: number;
+    if (isDeuce) {
+      // Deuce: winning score is anywhere from 12 up to the cap, always won by exactly 2
+      winningScore = (MIN_WINNING_SCORE + 1) + Math.floor(Math.random() * (MAX_SCORE - MIN_WINNING_SCORE));
+      losingScore = winningScore - MIN_WIN_MARGIN;
+    } else {
+      // Normal game: ends right at 11
+      winningScore = MIN_WINNING_SCORE;
+      losingScore = Math.floor(Math.random() * (MIN_WINNING_SCORE - MIN_WIN_MARGIN + 1));
+    }
+    const winner: 'team1' | 'team2' = Math.random() < 0.5 ? 'team1' : 'team2';
+    const score = winner === 'team1'
+      ? { team1: winningScore, team2: losingScore }
+      : { team1: losingScore, team2: winningScore };
+    endGame(court.id, winner, score);
+    setTeam1Score('');
+    setTeam2Score('');
+    setScoreError('');
     setShowEndGame(false);
   };
 
@@ -498,7 +571,7 @@ export function CourtView({ court }: CourtViewProps) {
             {!showEndGame && !showCancelConfirm && !showMaintenanceMenu ? (
               <div className="flex gap-2">
                 <button
-                  onClick={() => setShowEndGame(true)}
+                  onClick={handleOpenEndGame}
                   className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition"
                 >
                   End Game
@@ -615,25 +688,59 @@ export function CourtView({ court }: CourtViewProps) {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-center text-slate-600">Who won?</p>
+                <p className="text-sm text-center text-slate-600">Enter final score</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleEndGame('team1')}
-                    className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 transition"
-                  >
-                    <Trophy className="w-4 h-4" />
-                    Team 1
-                  </button>
-                  <button
-                    onClick={() => handleEndGame('team2')}
-                    className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition"
-                  >
-                    <Trophy className="w-4 h-4" />
-                    Team 2
-                  </button>
+                  <div className="flex flex-col items-center gap-1">
+                    <label className="text-xs font-medium text-blue-700">Team 1</label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={MAX_SCORE}
+                      value={team1Score}
+                      onChange={(e) => { setTeam1Score(e.target.value); setScoreError(''); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitScore(); }}
+                      placeholder="0"
+                      className="w-full px-2 py-2 text-center text-lg font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <label className="text-xs font-medium text-red-700">Team 2</label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={MAX_SCORE}
+                      value={team2Score}
+                      onChange={(e) => { setTeam2Score(e.target.value); setScoreError(''); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitScore(); }}
+                      placeholder="0"
+                      className="w-full px-2 py-2 text-center text-lg font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+                    />
+                  </div>
                 </div>
+                {scoreError && (
+                  <p className="text-xs text-center text-red-600">{scoreError}</p>
+                )}
                 <button
-                  onClick={() => setShowEndGame(false)}
+                  onClick={handleSubmitScore}
+                  className="flex items-center justify-center gap-2 w-full py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition"
+                >
+                  <Trophy className="w-4 h-4" />
+                  Submit Score
+                </button>
+                {import.meta.env.DEV && (
+                  <button
+                    onClick={handleRandomScore}
+                    className="flex items-center justify-center gap-2 w-full py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200 transition"
+                    title="End with a random valid score (dev only)"
+                  >
+                    <Shuffle className="w-4 h-4" />
+                    Random Score (Dev)
+                  </button>
+                )}
+                <button
+                  onClick={handleCloseEndGame}
                   className="w-full py-1 text-xs text-slate-500 hover:text-slate-700"
                 >
                   Back
@@ -666,14 +773,11 @@ export function CourtView({ court }: CourtViewProps) {
                     const data = JSON.parse(e.dataTransfer.getData('application/json'));
                     if (data.source === 'stack' && data.playerIds?.length === 4) {
                       const stackData = data as StackDragData;
-                      // Custom stacks keep manual arrangement; others use smart pairing
-                      const { team1, team2 } = stackData.isCustom || !session
-                        ? {
-                            team1: [stackData.playerIds[0], stackData.playerIds[1]] as [string, string],
-                            team2: [stackData.playerIds[2], stackData.playerIds[3]] as [string, string],
-                          }
-                        : splitStackIntoTeams(stackData.playerIds, session.players);
-                      startGame(court.id, team1, team2);
+                      startGame(
+                        court.id,
+                        [stackData.playerIds[0], stackData.playerIds[1]] as [string, string],
+                        [stackData.playerIds[2], stackData.playerIds[3]] as [string, string]
+                      );
                     }
                   } catch {
                     // Invalid data
