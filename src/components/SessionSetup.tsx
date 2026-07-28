@@ -304,7 +304,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
                         {mode.disabled && (
                           <span className="flex items-center gap-1 text-xs text-slate-400">
                             <Lock className="w-3 h-3" />
-                            Coming Soon
+                            Under Maintenance
                           </span>
                         )}
                         {mode.hasSubModes && !mode.disabled && (
@@ -351,7 +351,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
                               {sub.disabled && (
                                 <span className="flex items-center gap-1 text-xs text-slate-400">
                                   <Lock className="w-3 h-3" />
-                                  Coming Soon
+                                  Under Maintenance
                                 </span>
                               )}
                             </div>
