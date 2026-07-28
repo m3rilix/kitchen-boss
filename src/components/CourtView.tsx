@@ -3,7 +3,7 @@ import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import type { Court } from '@/types';
 import { splitStackIntoTeams } from '@/lib/smartQueue';
-import { Play, Trophy, X, Users, Wrench, GripVertical, Pencil, Check, UserPlus, UserMinus, ChevronDown, Timer } from 'lucide-react';
+import { Play, Trophy, X, Users, Wrench, Pencil, Check, UserPlus, UserMinus, ChevronDown, Timer } from 'lucide-react';
 
 /** Format elapsed milliseconds as M:SS */
 function formatElapsed(ms: number): string {
