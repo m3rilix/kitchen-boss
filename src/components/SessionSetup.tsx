@@ -34,6 +34,7 @@ const rotationModes: RotationModeOption[] = [
         value: 'win_lose_stack',
         label: 'Win-Lose Stack',
         description: 'Winners play winners, losers play losers',
+        disabled: true,
       },
       {
         value: 'round_robin',
