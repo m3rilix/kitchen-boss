@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType, Pair, MatchHistoryEntry } from '@/types';
+import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType, Pair } from '@/types';
 import { updateSharedSession } from '@/lib/firebase';
 import { getNextGamePlayers } from '@/lib/smartQueue';
 import { buildRoundRobinStack, pickBestTeamSplit } from '@/lib/roundRobin';
@@ -226,7 +226,6 @@ export const useSessionStore = create<SessionState>()(
           if (rotationMode === 'win_lose_stack' || rotationMode === 'full_rotation') {
             // Build stacks of 4 from all players, applying variety-aware team assignment
             // (matchHistory is empty on reset, so collision scoring won't find repeats yet, but structure is ready)
-            const matchHistory: MatchHistoryEntry[] = [];
             for (let i = 0; i < allPlayerIds.length; i += 4) {
               const stackIds = allPlayerIds.slice(i, i + 4);
               if (stackIds.length === 4) {
@@ -2339,7 +2338,7 @@ export const useSessionStore = create<SessionState>()(
           if (stackPlayers.length !== 4) return [stackIds[0], stackIds[1], stackIds[2], stackIds[3]];
 
           // Apply collision-aware pairing with current matchHistory
-          const pairing = pickBestTeamSplit(stackPlayers as [Player, Player, Player, Player], state.session.matchHistory);
+          const pairing = pickBestTeamSplit(stackPlayers as [Player, Player, Player, Player], state.session!.matchHistory);
           return pairing;
         };
 
