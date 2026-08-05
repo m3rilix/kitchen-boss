@@ -19,6 +19,8 @@ import {
   updateProfile,
   sendPasswordResetEmail,
   sendEmailVerification,
+  signInWithPopup,
+  GoogleAuthProvider,
   Auth,
   User as FirebaseUser
 } from 'firebase/auth';
@@ -517,4 +519,51 @@ export async function sendVerificationEmail(): Promise<void> {
 
 export function isEmailVerified(): boolean {
   return auth.currentUser?.emailVerified ?? false;
+}
+
+// ============================================
+// GOOGLE SIGN-IN
+// ============================================
+
+const googleProvider = new GoogleAuthProvider();
+
+export async function signInWithGoogle(): Promise<User | null> {
+  try {
+    const userCredential = await signInWithPopup(auth, googleProvider);
+    const firebaseUser = userCredential.user;
+
+    // Check if user exists in Firestore
+    let userData = await getUserData(firebaseUser.uid);
+
+    if (!userData) {
+      // Create new user with 5-day trial
+      const now = new Date();
+      const endDate = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+
+      userData = {
+        id: firebaseUser.uid,
+        email: firebaseUser.email?.toLowerCase() || '',
+        name: firebaseUser.displayName || 'User',
+        role: 'user',
+        accessTier: '5_days',
+        accessStartDate: now.toISOString(),
+        accessEndDate: endDate.toISOString(),
+        createdAt: now.toISOString(),
+        lastLoginAt: now.toISOString(),
+        isActive: true,
+      };
+
+      await saveUserData(firebaseUser.uid, userData);
+    } else {
+      // Update last login
+      await updateUserData(firebaseUser.uid, {
+        lastLoginAt: new Date().toISOString()
+      });
+    }
+
+    return userData;
+  } catch (error) {
+    console.error('Google sign-in error:', error);
+    throw error;
+  }
 }

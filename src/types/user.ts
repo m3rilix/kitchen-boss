@@ -1,4 +1,4 @@
-export type AccessTier = '30_days' | '60_days' | 'infinite';
+export type AccessTier = '5_days' | '30_days' | '60_days' | 'infinite';
 export type UserRole = 'user' | 'admin';
 
 export interface User {

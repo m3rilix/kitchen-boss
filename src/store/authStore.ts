@@ -12,13 +12,19 @@ import {
   onAuthStateChangeListener,
   sendPasswordReset,
   sendVerificationEmail,
-  isEmailVerified
+  isEmailVerified,
+  signInWithGoogle
 } from '@/lib/firebase';
 
 // Calculate end date based on access tier
 const calculateEndDate = (tier: AccessTier, startDate: Date = new Date()): string | null => {
   if (tier === 'infinite') return null;
-  const days = tier === '30_days' ? 30 : 60;
+  let days: number;
+  if (tier === '5_days') days = 5;
+  else if (tier === '30_days') days = 30;
+  else if (tier === '60_days') days = 60;
+  else days = 30; // default fallback
+
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + days);
   return endDate.toISOString();
@@ -74,6 +80,7 @@ interface AuthStore {
   // Auth actions
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, name: string) => Promise<boolean>;
+  loginWithGoogle: () => Promise<boolean>;
   logout: () => Promise<void>;
   loginAsGuest: () => void;
   isGuest: () => boolean;
@@ -171,6 +178,7 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
 
         try {
+          // NOTE: registerUser in firebase.ts creates users with 5_days access
           const user = await registerUser(email, password, name);
 
           set({
@@ -211,6 +219,50 @@ export const useAuthStore = create<AuthStore>()(
           lastActivityAt: null,
           emailVerified: false
         });
+      },
+
+      loginWithGoogle: async () => {
+        set({ isLoading: true, error: null });
+
+        try {
+          const user = await signInWithGoogle();
+
+          if (!user) {
+            set({
+              isLoading: false,
+              error: 'Failed to load user data'
+            });
+            return false;
+          }
+
+          if (!isAccessValid(user)) {
+            set({
+              isLoading: false,
+              error: 'Access has expired'
+            });
+            return false;
+          }
+
+          set({
+            currentUser: user,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+            lastActivityAt: Date.now(),
+            emailVerified: true // Google accounts are pre-verified
+          });
+
+          return true;
+        } catch (error) {
+          const errorMessage = (error as Error).message;
+          set({
+            isLoading: false,
+            error: errorMessage.includes('popup-closed')
+              ? 'Sign-in cancelled'
+              : errorMessage
+          });
+          return false;
+        }
       },
 
       loginAsGuest: () => {

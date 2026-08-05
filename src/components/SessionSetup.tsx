@@ -19,8 +19,9 @@ interface RotationModeOption {
   label: string;
   description: string;
   disabled?: boolean;
+  status?: 'coming-soon' | 'under-maintenance';
   hasSubModes?: boolean;
-  subModes?: { value: SubMode; label: string; description: string; disabled?: boolean }[];
+  subModes?: { value: SubMode; label: string; description: string; disabled?: boolean; status?: 'coming-soon' | 'under-maintenance' }[];
 }
 
 const rotationModes: RotationModeOption[] = [
@@ -35,6 +36,7 @@ const rotationModes: RotationModeOption[] = [
         label: 'Win-Lose Stack',
         description: 'Winners play winners, losers play losers',
         disabled: true,
+        status: 'under-maintenance',
       },
       {
         value: 'round_robin',
@@ -53,12 +55,14 @@ const rotationModes: RotationModeOption[] = [
     label: 'King of the Court',
     description: 'Winners stay until they lose',
     disabled: true,
+    status: 'coming-soon',
   },
   {
     value: 'skill_based',
     label: 'Skill-Based',
     description: 'Balance teams based on skill ratings',
     disabled: true,
+    status: 'coming-soon',
   },
 ];
 
@@ -84,7 +88,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
   const [time, setTime] = useState(getCurrentTime());
   const [courtCount, setCourtCount] = useState(2);
   const [rotationMode, setRotationMode] = useState<RotationMode>('full_rotation');
-  const [subMode, setSubMode] = useState<SubMode>('win_lose_stack');
+  const [subMode, setSubMode] = useState<SubMode>('round_robin');
   const [expandedMode, setExpandedMode] = useState<RotationMode | null>('full_rotation');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -304,7 +308,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
                         {mode.disabled && (
                           <span className="flex items-center gap-1 text-xs text-slate-400">
                             <Lock className="w-3 h-3" />
-                            Under Maintenance
+                            {mode.status === 'coming-soon' ? 'Coming Soon' : 'Under Maintenance'}
                           </span>
                         )}
                         {mode.hasSubModes && !mode.disabled && (
@@ -351,7 +355,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
                               {sub.disabled && (
                                 <span className="flex items-center gap-1 text-xs text-slate-400">
                                   <Lock className="w-3 h-3" />
-                                  Under Maintenance
+                                  {sub.status === 'coming-soon' ? 'Coming Soon' : 'Under Maintenance'}
                                 </span>
                               )}
                             </div>
