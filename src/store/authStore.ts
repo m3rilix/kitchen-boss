@@ -13,7 +13,8 @@ import {
   sendPasswordReset,
   sendVerificationEmail,
   isEmailVerified,
-  signInWithGoogle
+  signInWithGoogle,
+  updateSessionActivity
 } from '@/lib/firebase';
 
 // Calculate end date based on access tier
@@ -299,11 +300,12 @@ export const useAuthStore = create<AuthStore>()(
         const now = Date.now();
         set({ lastActivityAt: now });
 
-        // Update last activity in Firestore (non-critical)
+        // Update last activity in Firestore and Realtime Database (non-critical)
         try {
           await updateUserData(currentUser.id, {
             lastLoginAt: new Date().toISOString()
           });
+          await updateSessionActivity(currentUser.id);
         } catch (error) {
           console.error('Error updating activity:', error);
         }

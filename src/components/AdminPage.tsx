@@ -15,16 +15,16 @@ interface AdminPageProps {
 }
 
 export function AdminPage({ onBack }: AdminPageProps) {
-  const { 
-    getAllUsers, 
-    updateUserAccess, 
-    updateUserRole, 
-    toggleUserActive, 
+  const {
+    getAllUsers,
+    updateUserAccess,
+    updateUserRole,
+    toggleUserActive,
     deleteUser,
     extendAccess,
     setCustomExpiryDate,
     forceLogoutUser,
-    currentUser 
+    currentUser
   } = useAuthStore();
   const theme = useThemeClasses();
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
@@ -239,27 +239,41 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
                 {/* Status */}
                 <div className="col-span-2">
-                  <button
-                    onClick={() => toggleUserActive(user.id)}
-                    disabled={user.id === currentUser?.id}
-                    className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full transition ${
-                      user.isActive
-                        ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-                    } disabled:cursor-not-allowed`}
-                  >
-                    {user.isActive ? (
-                      <>
-                        <CheckCircle className="w-3 h-3" />
-                        Active
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-3 h-3" />
-                        Inactive
-                      </>
-                    )}
-                  </button>
+                  {(() => {
+                    const daysLeft = getDaysRemaining(user.accessEndDate);
+                    const isExpired = daysLeft !== null && daysLeft <= 0;
+
+                    return (
+                      <button
+                        onClick={() => toggleUserActive(user.id)}
+                        disabled={user.id === currentUser?.id || isExpired}
+                        className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full transition ${
+                          isExpired
+                            ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+                            : user.isActive
+                              ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                        } disabled:cursor-not-allowed`}
+                      >
+                        {isExpired ? (
+                          <>
+                            <XCircle className="w-3 h-3" />
+                            Expired
+                          </>
+                        ) : user.isActive ? (
+                          <>
+                            <CheckCircle className="w-3 h-3" />
+                            Active
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-3 h-3" />
+                            Inactive
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()}
                 </div>
 
                 {/* Online Status */}
@@ -323,9 +337,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
                               const now = new Date();
                               const expiredDate = new Date(now.getTime() - 1000); // 1 second ago = already expired
                               await setCustomExpiryDate(user.id, expiredDate.toISOString().split('T')[0]);
-                              alert('Access revoked for ' + user.name);
+                              await forceLogoutUser(user.id);
+                              alert('Access revoked and user logged out');
                             } catch (error) {
                               console.error('Error revoking access:', error);
+                              alert('Failed to revoke access');
                             }
                           }
                           setSelectedUser(null);
