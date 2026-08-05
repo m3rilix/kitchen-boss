@@ -44,13 +44,18 @@ class ShareViewErrorBoundary extends Component<{ children: ReactNode }, { hasErr
 
 function App() {
   const { session, shareCode, syncToFirebase } = useSessionStore();
-  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout, validateAndCleanupSession, currentUser, sessionId, logout } = useAuthStore();
+  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout, validateAndCleanupSession, currentUser, sessionId, logout, initializeAuth } = useAuthStore();
   const [sharedSession, setSharedSession] = useState<Session | null>(null);
   // Initialize synchronously so first render already knows we're in share mode
   // (prevents flash of SessionViewPage with corrupted localStorage data)
   const [viewingShareCode, setViewingShareCode] = useState<string | null>(() => getShareCodeFromUrl());
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sessionTransferred, setSessionTransferred] = useState(false);
+
+  // Initialize Firebase Auth listener on mount
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
 
   // Session timeout check and validation - runs every minute
   useEffect(() => {
@@ -76,29 +81,8 @@ function App() {
     return () => clearInterval(interval);
   }, [isAuthenticated, checkSessionTimeout, validateAndCleanupSession]);
 
-  // Listen for session changes (detect session transfer)
-  useEffect(() => {
-    if (!isAuthenticated || !currentUser || !sessionId) return;
-    
-    let isCurrentSession = true;
-    
-    const unsubscribe = onSessionChange(currentUser.id, (firebaseSession) => {
-      // If session exists in Firebase but sessionId doesn't match, session was transferred
-      // Only trigger logout if this is not the current active session
-      // If firebaseSession is null, user logged out normally (don't show transfer modal)
-      if (firebaseSession && firebaseSession.sessionId !== sessionId && isCurrentSession) {
-        setSessionTransferred(true);
-        isCurrentSession = false; // Prevent multiple logout calls
-        // Logout without removing Firebase session (already transferred)
-        logout(true); // Skip Firebase removal since session was transferred
-      }
-    });
-    
-    return () => {
-      isCurrentSession = false;
-      unsubscribe();
-    };
-  }, [isAuthenticated, currentUser, sessionId, logout]);
+  // Firebase Auth handles session management automatically
+  // No need for manual session transfer detection
 
   // Update activity on user interactions
   useEffect(() => {

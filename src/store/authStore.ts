@@ -1,9 +1,20 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, AccessTier, UserRole } from '@/types/user';
-
-// Generate unique ID
-const generateId = () => Math.random().toString(36).substring(2, 15);
+import {
+  registerUser,
+  loginUser,
+  logoutUser,
+  getUserData,
+  updateUserData,
+  getAllUsers,
+  deleteUserData,
+  onAuthStateChangeListener,
+  sendPasswordReset,
+  sendVerificationEmail,
+  isEmailVerified,
+  auth
+} from '@/lib/firebase';
 
 // Calculate end date based on access tier
 const calculateEndDate = (tier: AccessTier, startDate: Date = new Date()): string | null => {
@@ -17,36 +28,34 @@ const calculateEndDate = (tier: AccessTier, startDate: Date = new Date()): strin
 // Check if access is still valid
 const isAccessValid = (user: User): boolean => {
   if (!user.isActive) return false;
-  if (user.accessEndDate === null) return true; // infinite
+  if (user.accessEndDate === null) return true;
   return new Date(user.accessEndDate) > new Date();
 };
 
 // Calculate days remaining
 const getDaysRemaining = (endDate: string | null): number | null => {
-  if (endDate === null) return null; // infinite
+  if (endDate === null) return null;
   const end = new Date(endDate);
   const now = new Date();
   const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   return Math.max(0, diff);
 };
 
-// Get time remaining as formatted string (hours or days)
+// Get time remaining as formatted string
 const getTimeRemaining = (endDate: string | null): string | null => {
-  if (endDate === null) return null; // infinite
+  if (endDate === null) return null;
   const end = new Date(endDate);
   const now = new Date();
   const diffMs = end.getTime() - now.getTime();
-  
+
   if (diffMs <= 0) return '0 hours';
-  
+
   const hours = Math.ceil(diffMs / (1000 * 60 * 60));
-  
-  // If less than 24 hours, show hours
+
   if (hours < 24) {
     return `${hours} hour${hours !== 1 ? 's' : ''}`;
   }
-  
-  // Otherwise show days
+
   const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   return `${days} day${days !== 1 ? 's' : ''}`;
 };
@@ -54,42 +63,46 @@ const getTimeRemaining = (endDate: string | null): string | null => {
 // Session timeout in milliseconds (1 hour)
 const SESSION_TIMEOUT_MS = 60 * 60 * 1000;
 
-// Generate a unique session ID
-const generateSessionId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
 interface AuthStore {
   // State
   currentUser: User | null;
-  users: User[];
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
   lastActivityAt: number | null;
-  sessionId: string | null;
+  emailVerified: boolean;
 
   // Auth actions
-  login: (email: string, password: string, forceTransfer?: boolean) => Promise<boolean | { existingSession: any }>;
+  login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, name: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   loginAsGuest: () => void;
-  logout: (skipFirebaseRemoval?: boolean) => Promise<void>;
   isGuest: () => boolean;
-  
+
   // Session management
   updateActivity: () => Promise<void>;
   checkSessionTimeout: () => Promise<boolean>;
-  isSessionValid: () => Promise<boolean>;
-  validateAndCleanupSession: () => Promise<void>;
-  
+  isSessionValid: () => boolean;
+
   // User management (admin)
-  getAllUsers: () => User[];
-  updateUserAccess: (userId: string, tier: AccessTier) => void;
-  updateUserRole: (userId: string, role: UserRole) => void;
-  toggleUserActive: (userId: string) => void;
-  deleteUser: (userId: string) => void;
-  extendAccess: (userId: string, days: number) => void;
-  setCustomExpiryDate: (userId: string, date: string) => void;
-  forceLogoutUser: (userId: string) => Promise<void>;
-  
+  getAllUsers: () => Promise<User[]>;
+  updateUserAccess: (userId: string, tier: AccessTier) => Promise<void>;
+  updateUserRole: (userId: string, role: UserRole) => Promise<void>;
+  toggleUserActive: (userId: string) => Promise<void>;
+  deleteUser: (userId: string) => Promise<void>;
+  extendAccess: (userId: string, days: number) => Promise<void>;
+  setCustomExpiryDate: (userId: string, date: string) => Promise<void>;
+
+  // Email verification
+  sendVerificationEmail: () => Promise<void>;
+  checkEmailVerification: () => void;
+
+  // Password reset
+  sendPasswordResetEmail: (email: string) => Promise<void>;
+
+  // Initialization
+  initializeAuth: () => void;
+
   // Helpers
   isAccessValid: () => boolean;
   getDaysRemaining: () => number | null;
@@ -97,235 +110,111 @@ interface AuthStore {
   isAdmin: () => boolean;
 }
 
-// Simple password storage (in production, use proper hashing)
-interface StoredCredentials {
-  [email: string]: string;
-}
-
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
       currentUser: null,
-      users: [
-        // Default admin user
-        {
-          id: 'admin-001',
-          email: 'admin@kitchenboss.app',
-          name: 'Admin',
-          role: 'admin' as UserRole,
-          accessTier: 'infinite' as AccessTier,
-          accessStartDate: new Date().toISOString(),
-          accessEndDate: null,
-          createdAt: new Date().toISOString(),
-          lastLoginAt: new Date().toISOString(),
-          isActive: true,
-        },
-        // Demo accounts (always available for login, but hidden in prod UI)
-        {
-          id: 'demo-001',
-          email: 'demo1@kitchenboss.app',
-          name: 'Demo User 1',
-          role: 'user' as UserRole,
-          accessTier: '30_days' as AccessTier,
-          accessStartDate: new Date().toISOString(),
-          accessEndDate: calculateEndDate('30_days'),
-          createdAt: new Date().toISOString(),
-          lastLoginAt: new Date().toISOString(),
-          isActive: true,
-        },
-        {
-          id: 'demo-002',
-          email: 'demo2@kitchenboss.app',
-          name: 'Demo User 2',
-          role: 'user' as UserRole,
-          accessTier: '30_days' as AccessTier,
-          accessStartDate: new Date().toISOString(),
-          accessEndDate: calculateEndDate('30_days'),
-          createdAt: new Date().toISOString(),
-          lastLoginAt: new Date().toISOString(),
-          isActive: true,
-        },
-        {
-          id: 'demo-003',
-          email: 'demo3@kitchenboss.app',
-          name: 'Demo User 3',
-          role: 'user' as UserRole,
-          accessTier: '60_days' as AccessTier,
-          accessStartDate: new Date().toISOString(),
-          accessEndDate: calculateEndDate('60_days'),
-          createdAt: new Date().toISOString(),
-          lastLoginAt: new Date().toISOString(),
-          isActive: true,
-        },
-        {
-          id: 'demo-004',
-          email: 'demo4@kitchenboss.app',
-          name: 'Demo User 4',
-          role: 'user' as UserRole,
-          accessTier: '60_days' as AccessTier,
-          accessStartDate: new Date().toISOString(),
-          accessEndDate: calculateEndDate('60_days'),
-          createdAt: new Date().toISOString(),
-          lastLoginAt: new Date().toISOString(),
-          isActive: true,
-        },
-      ],
       isAuthenticated: false,
       isLoading: false,
       error: null,
       lastActivityAt: null,
-      sessionId: null,
+      emailVerified: false,
 
-      login: async (email: string, password: string, forceTransfer: boolean = false) => {
+      login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const { users } = get();
-        const user = users.find(u => u.email === email);
 
-        if (!user) {
-          set({ isLoading: false, error: 'User not found' });
-          return false;
-        }
-
-        // Get stored credentials
-        const storedCreds = JSON.parse(localStorage.getItem('kitchenboss-credentials') || '{}') as StoredCredentials;
-        
-        // Default passwords for built-in accounts
-        const defaultPasswords: Record<string, string> = {
-          'admin@kitchenboss.app': 'admin123!!',
-          'demo1@kitchenboss.app': 'Kb7xP2m',
-          'demo2@kitchenboss.app': 'Qw9Tn4k',
-          'demo3@kitchenboss.app': 'Ry5Hj8s',
-          'demo4@kitchenboss.app': 'Lm3Vb6p',
-        };
-        
-        // Check password (use stored or default) - BEFORE checking existing session
-        const storedPassword = storedCreds[email.toLowerCase()] || defaultPasswords[email.toLowerCase()] || null;
-        
-        if (storedPassword !== password) {
-          set({ isLoading: false, error: 'Invalid password' });
-          return false;
-        }
-
-        // Check if user is already logged in elsewhere (AFTER password validation)
-        if (!forceTransfer) {
-          try {
-            const { getActiveSession } = await import('@/lib/firebase');
-            const existingSession = await getActiveSession(user.id);
-            
-            if (existingSession) {
-              // Check if the existing session is still active (within timeout)
-              const timeSinceActivity = Date.now() - existingSession.lastActivity;
-              if (timeSinceActivity < SESSION_TIMEOUT_MS) {
-                // Return existing session info for confirmation dialog
-                set({ isLoading: false });
-                return { existingSession };
-              }
-            }
-          } catch (error) {
-            console.error('Error checking active session:', error);
-            // Continue with login if Firebase check fails
-          }
-        }
-
-        if (!user.isActive) {
-          set({ isLoading: false, error: 'Account is deactivated' });
-          return false;
-        }
-
-        if (!isAccessValid(user)) {
-          set({ isLoading: false, error: 'Access has expired' });
-          return false;
-        }
-
-        // Update last login
-        const updatedUser = { ...user, lastLoginAt: new Date().toISOString() };
-        const updatedUsers = users.map(u => u.id === user.id ? updatedUser : u);
-
-        // Create new session
-        const newSessionId = generateSessionId();
-        const now = Date.now();
-        
-        // Store active session in Firebase
         try {
-          const { storeActiveSession, getDeviceInfo } = await import('@/lib/firebase');
-          await storeActiveSession(user.id, {
-            sessionId: newSessionId,
-            lastActivity: now,
-            loginTime: now,
-            userAgent: navigator.userAgent,
-            deviceInfo: getDeviceInfo()
-          });
-        } catch (error) {
-          console.error('Error storing active session:', error);
-          // Continue with login even if Firebase storage fails
-        }
+          const user = await loginUser(email, password);
 
-        set({ 
-          currentUser: updatedUser, 
-          users: updatedUsers,
-          isAuthenticated: true, 
-          isLoading: false,
-          error: null,
-          sessionId: newSessionId,
-          lastActivityAt: now
-        });
-        
-        return true;
+          if (!user) {
+            set({
+              isLoading: false,
+              error: 'Failed to load user data'
+            });
+            return false;
+          }
+
+          if (!isAccessValid(user)) {
+            set({
+              isLoading: false,
+              error: 'Access has expired'
+            });
+            return false;
+          }
+
+          set({
+            currentUser: user,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+            lastActivityAt: Date.now(),
+            emailVerified: isEmailVerified()
+          });
+
+          return true;
+        } catch (error) {
+          const errorMessage = (error as Error).message;
+          set({
+            isLoading: false,
+            error: errorMessage.includes('user-not-found')
+              ? 'User not found'
+              : errorMessage.includes('wrong-password')
+                ? 'Invalid password'
+                : errorMessage
+          });
+          return false;
+        }
       },
 
       register: async (email: string, password: string, name: string) => {
         set({ isLoading: true, error: null });
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const { users } = get();
-        
-        // Check if email exists
-        if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-          set({ isLoading: false, error: 'Email already registered' });
+
+        try {
+          const user = await registerUser(email, password, name);
+
+          set({
+            currentUser: user,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+            lastActivityAt: Date.now(),
+            emailVerified: false
+          });
+
+          return true;
+        } catch (error) {
+          const errorMessage = (error as Error).message;
+          set({
+            isLoading: false,
+            error: errorMessage.includes('email-already-in-use')
+              ? 'Email already registered'
+              : errorMessage.includes('weak-password')
+                ? 'Password must be at least 6 characters'
+                : errorMessage
+          });
           return false;
         }
+      },
 
-        // Create new user with 24-hour trial
-        const now = new Date();
-        const endDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
-        const newUser: User = {
-          id: generateId(),
-          email: email.toLowerCase(),
-          name,
-          role: 'user',
-          accessTier: '30_days', // Keep tier name for compatibility
-          accessStartDate: now.toISOString(),
-          accessEndDate: endDate.toISOString(),
-          createdAt: now.toISOString(),
-          lastLoginAt: now.toISOString(),
-          isActive: true,
-        };
+      logout: async () => {
+        try {
+          await logoutUser();
+        } catch (error) {
+          console.error('Logout error:', error);
+        }
 
-        // Store password
-        const storedCreds = JSON.parse(localStorage.getItem('kitchenboss-credentials') || '{}') as StoredCredentials;
-        storedCreds[email.toLowerCase()] = password;
-        localStorage.setItem('kitchenboss-credentials', JSON.stringify(storedCreds));
-
-        set({ 
-          users: [...users, newUser],
-          currentUser: newUser,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null
+        set({
+          currentUser: null,
+          isAuthenticated: false,
+          error: null,
+          lastActivityAt: null,
+          emailVerified: false
         });
-
-        return true;
       },
 
       loginAsGuest: () => {
         const guestUser: User = {
-          id: 'guest-' + generateId(),
+          id: 'guest-' + Math.random().toString(36).substring(2, 15),
           email: 'guest@local',
           name: 'Guest',
           role: 'user',
@@ -334,35 +223,14 @@ export const useAuthStore = create<AuthStore>()(
           accessEndDate: null,
           createdAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
-          isActive: true,
+          isActive: true
         };
-        
-        set({ 
+
+        set({
           currentUser: guestUser,
           isAuthenticated: true,
-          error: null
-        });
-      },
-
-      logout: async (skipFirebaseRemoval: boolean = false) => {
-        const { currentUser } = get();
-        
-        // Remove active session from Firebase (unless skipped for session transfer)
-        if (currentUser && !skipFirebaseRemoval) {
-          try {
-            const { removeActiveSession } = await import('@/lib/firebase');
-            await removeActiveSession(currentUser.id);
-          } catch (error) {
-            console.error('Error removing active session:', error);
-          }
-        }
-        
-        set({ 
-          currentUser: null, 
-          isAuthenticated: false, 
           error: null,
-          sessionId: null,
-          lastActivityAt: null
+          lastActivityAt: Date.now()
         });
       },
 
@@ -370,214 +238,224 @@ export const useAuthStore = create<AuthStore>()(
         const { currentUser } = get();
         return currentUser?.email === 'guest@local';
       },
-      
-      // Session management
+
       updateActivity: async () => {
-        const { currentUser, sessionId } = get();
-        if (!currentUser || !sessionId) return;
-        
+        const { currentUser } = get();
+        if (!currentUser || currentUser.email === 'guest@local') return;
+
         const now = Date.now();
-        
-        // Update local state
         set({ lastActivityAt: now });
-        
-        // Update Firebase session activity
+
+        // Update last activity in Firestore (non-critical)
         try {
-          const { updateSessionActivity } = await import('@/lib/firebase');
-          await updateSessionActivity(currentUser.id);
+          await updateUserData(currentUser.id, {
+            lastLoginAt: new Date().toISOString()
+          });
         } catch (error) {
-          console.error('Error updating session activity:', error);
-          // Don't throw error to avoid disrupting user experience
+          console.error('Error updating activity:', error);
         }
       },
-      
+
       checkSessionTimeout: async () => {
         const { lastActivityAt, isAuthenticated, logout } = get();
-        
+
         if (!isAuthenticated || !lastActivityAt) return false;
-        
+
         const timeSinceActivity = Date.now() - lastActivityAt;
         if (timeSinceActivity >= SESSION_TIMEOUT_MS) {
           await logout();
-          return true; // Session timed out
+          return true;
         }
         return false;
       },
-      
-      isSessionValid: async () => {
-        const { currentUser, sessionId, lastActivityAt } = get();
-        
-        if (!currentUser || !sessionId) return false;
-        
-        // Check timeout
-        if (lastActivityAt) {
-          const timeSinceActivity = Date.now() - lastActivityAt;
-          if (timeSinceActivity >= SESSION_TIMEOUT_MS) return false;
-        }
-        
-        // Check if this session is still the active one in Firebase
-        try {
-          const { getActiveSession } = await import('@/lib/firebase');
-          const storedSession = await getActiveSession(currentUser.id);
-          
-          if (!storedSession || storedSession.sessionId !== sessionId) {
-            return false; // Session was invalidated (logged in elsewhere)
-          }
-        } catch (error) {
-          console.error('Error validating session:', error);
-          // Return true if Firebase check fails to avoid disrupting user experience
-        }
-        
-        return true;
+
+      isSessionValid: () => {
+        const { lastActivityAt, isAuthenticated } = get();
+
+        if (!isAuthenticated || !lastActivityAt) return false;
+
+        const timeSinceActivity = Date.now() - lastActivityAt;
+        return timeSinceActivity < SESSION_TIMEOUT_MS;
       },
 
       validateAndCleanupSession: async () => {
         const { isAuthenticated, currentUser, logout } = get();
-        
+
         if (!isAuthenticated || !currentUser) return;
-        
-        // Check if session is still valid
-        const isValid = await get().isSessionValid();
-        
-        if (!isValid) {
-          // Session is no longer valid (force logged out by admin), logout user
+
+        // Check if access is still valid
+        if (!isAccessValid(currentUser)) {
           await logout();
         }
       },
 
-      getAllUsers: () => {
-        return get().users;
-      },
-
-      updateUserAccess: (userId: string, tier: AccessTier) => {
-        const { users } = get();
-        const now = new Date();
-        const updatedUsers = users.map(u => 
-          u.id === userId 
-            ? { 
-                ...u, 
-                accessTier: tier,
-                accessStartDate: now.toISOString(),
-                accessEndDate: calculateEndDate(tier, now)
-              } 
-            : u
-        );
-        set({ users: updatedUsers });
-        
-        // Update current user if it's the same
-        const { currentUser } = get();
-        if (currentUser?.id === userId) {
-          const updated = updatedUsers.find(u => u.id === userId);
-          if (updated) set({ currentUser: updated });
-        }
-      },
-
-      updateUserRole: (userId: string, role: UserRole) => {
-        const { users } = get();
-        const updatedUsers = users.map(u => 
-          u.id === userId ? { ...u, role } : u
-        );
-        set({ users: updatedUsers });
-        
-        const { currentUser } = get();
-        if (currentUser?.id === userId) {
-          const updated = updatedUsers.find(u => u.id === userId);
-          if (updated) set({ currentUser: updated });
-        }
-      },
-
-      toggleUserActive: (userId: string) => {
-        const { users, currentUser } = get();
-        
-        // Prevent deactivating yourself
-        if (currentUser?.id === userId) return;
-        
-        const updatedUsers = users.map(u => 
-          u.id === userId ? { ...u, isActive: !u.isActive } : u
-        );
-        set({ users: updatedUsers });
-      },
-
-      deleteUser: (userId: string) => {
-        const { users, currentUser } = get();
-        
-        // Prevent deleting yourself
-        if (currentUser?.id === userId) return;
-        
-        const updatedUsers = users.filter(u => u.id !== userId);
-        set({ users: updatedUsers });
-        
-        // Remove credentials
-        const user = users.find(u => u.id === userId);
-        if (user) {
-          const storedCreds = JSON.parse(localStorage.getItem('kitchenboss-credentials') || '{}') as StoredCredentials;
-          delete storedCreds[user.email.toLowerCase()];
-          localStorage.setItem('kitchenboss-credentials', JSON.stringify(storedCreds));
-        }
-      },
-
-      extendAccess: (userId: string, days: number) => {
-        const { users } = get();
-        const user = users.find(u => u.id === userId);
-        if (!user) return;
-
-        let newEndDate: Date;
-        if (user.accessEndDate === null) {
-          // Already infinite, no change needed
-          return;
-        } else {
-          const currentEnd = new Date(user.accessEndDate);
-          const now = new Date();
-          // Extend from current end date or now, whichever is later
-          const baseDate = currentEnd > now ? currentEnd : now;
-          newEndDate = new Date(baseDate);
-          newEndDate.setDate(newEndDate.getDate() + days);
-        }
-
-        const updatedUsers = users.map(u => 
-          u.id === userId 
-            ? { ...u, accessEndDate: newEndDate.toISOString() } 
-            : u
-        );
-        set({ users: updatedUsers });
-        
-        const { currentUser } = get();
-        if (currentUser?.id === userId) {
-          const updated = updatedUsers.find(u => u.id === userId);
-          if (updated) set({ currentUser: updated });
-        }
-      },
-
-      setCustomExpiryDate: (userId: string, date: string) => {
-        const { users } = get();
-        const user = users.find(u => u.id === userId);
-        if (!user) return;
-
-        // Convert date string (YYYY-MM-DD) to ISO string with end of day time
-        const expiryDate = new Date(date);
-        expiryDate.setHours(23, 59, 59, 999); // Set to end of day
-
-        const updatedUsers = users.map(u => 
-          u.id === userId 
-            ? { ...u, accessEndDate: expiryDate.toISOString() } 
-            : u
-        );
-        set({ users: updatedUsers });
-        
-        const { currentUser } = get();
-        if (currentUser?.id === userId) {
-          const updated = updatedUsers.find(u => u.id === userId);
-          if (updated) set({ currentUser: updated });
-        }
-      },
-
-      forceLogoutUser: async (userId: string) => {
+      getAllUsers: async () => {
         try {
-          const { removeActiveSession } = await import('@/lib/firebase');
-          await removeActiveSession(userId);
+          return await getAllUsers();
         } catch (error) {
-          console.warn('Could not force logout user (non-critical):', error);
+          console.error('Error getting all users:', error);
+          return [];
         }
+      },
+
+      updateUserAccess: async (userId: string, tier: AccessTier) => {
+        try {
+          const now = new Date();
+          await updateUserData(userId, {
+            accessTier: tier,
+            accessStartDate: now.toISOString(),
+            accessEndDate: calculateEndDate(tier, now)
+          });
+
+          const { currentUser } = get();
+          if (currentUser?.id === userId) {
+            const updated = await getUserData(userId);
+            if (updated) set({ currentUser: updated });
+          }
+        } catch (error) {
+          console.error('Error updating user access:', error);
+        }
+      },
+
+      updateUserRole: async (userId: string, role: UserRole) => {
+        try {
+          await updateUserData(userId, { role });
+
+          const { currentUser } = get();
+          if (currentUser?.id === userId) {
+            const updated = await getUserData(userId);
+            if (updated) set({ currentUser: updated });
+          }
+        } catch (error) {
+          console.error('Error updating user role:', error);
+        }
+      },
+
+      toggleUserActive: async (userId: string) => {
+        try {
+          const user = await getUserData(userId);
+          if (!user) return;
+
+          const { currentUser } = get();
+          if (currentUser?.id === userId) return;
+
+          await updateUserData(userId, { isActive: !user.isActive });
+        } catch (error) {
+          console.error('Error toggling user active status:', error);
+        }
+      },
+
+      deleteUser: async (userId: string) => {
+        try {
+          const { currentUser } = get();
+          if (currentUser?.id === userId) return;
+
+          await deleteUserData(userId);
+        } catch (error) {
+          console.error('Error deleting user:', error);
+        }
+      },
+
+      extendAccess: async (userId: string, days: number) => {
+        try {
+          const user = await getUserData(userId);
+          if (!user) return;
+
+          let newEndDate: Date;
+          if (user.accessEndDate === null) {
+            return;
+          } else {
+            const currentEnd = new Date(user.accessEndDate);
+            const now = new Date();
+            const baseDate = currentEnd > now ? currentEnd : now;
+            newEndDate = new Date(baseDate);
+            newEndDate.setDate(newEndDate.getDate() + days);
+          }
+
+          await updateUserData(userId, {
+            accessEndDate: newEndDate.toISOString()
+          });
+
+          const { currentUser } = get();
+          if (currentUser?.id === userId) {
+            const updated = await getUserData(userId);
+            if (updated) set({ currentUser: updated });
+          }
+        } catch (error) {
+          console.error('Error extending access:', error);
+        }
+      },
+
+      setCustomExpiryDate: async (userId: string, date: string) => {
+        try {
+          const expiryDate = new Date(date);
+          expiryDate.setHours(23, 59, 59, 999);
+
+          await updateUserData(userId, {
+            accessEndDate: expiryDate.toISOString()
+          });
+
+          const { currentUser } = get();
+          if (currentUser?.id === userId) {
+            const updated = await getUserData(userId);
+            if (updated) set({ currentUser: updated });
+          }
+        } catch (error) {
+          console.error('Error setting custom expiry date:', error);
+        }
+      },
+
+      sendVerificationEmail: async () => {
+        try {
+          await sendVerificationEmail();
+          set({ error: null });
+        } catch (error) {
+          set({ error: (error as Error).message });
+        }
+      },
+
+      checkEmailVerification: () => {
+        set({ emailVerified: isEmailVerified() });
+      },
+
+      sendPasswordResetEmail: async (email: string) => {
+        try {
+          await sendPasswordReset(email);
+          set({ error: null });
+        } catch (error) {
+          set({ error: (error as Error).message });
+        }
+      },
+
+      initializeAuth: () => {
+        const unsubscribe = onAuthStateChangeListener(async (firebaseUser) => {
+          if (firebaseUser) {
+            const userData = await getUserData(firebaseUser.uid);
+            if (userData && isAccessValid(userData)) {
+              set({
+                currentUser: userData,
+                isAuthenticated: true,
+                lastActivityAt: Date.now(),
+                emailVerified: firebaseUser.emailVerified
+              });
+            } else {
+              set({
+                currentUser: null,
+                isAuthenticated: false,
+                lastActivityAt: null
+              });
+            }
+          } else {
+            set({
+              currentUser: null,
+              isAuthenticated: false,
+              lastActivityAt: null,
+              emailVerified: false
+            });
+          }
+        });
+
+        return unsubscribe;
       },
 
       isAccessValid: () => {
@@ -601,94 +479,10 @@ export const useAuthStore = create<AuthStore>()(
       isAdmin: () => {
         const { currentUser } = get();
         return currentUser?.role === 'admin';
-      },
+      }
     }),
     {
-      name: 'kitchenboss-auth',
-      merge: (persistedState: unknown, currentState: AuthStore) => {
-        const persisted = persistedState as Partial<AuthStore> | undefined;
-        
-        // Default users that should always exist
-        const defaultUsers: User[] = [
-          {
-            id: 'admin-001',
-            email: 'admin@kitchenboss.app',
-            name: 'Admin',
-            role: 'admin' as UserRole,
-            accessTier: 'infinite' as AccessTier,
-            accessStartDate: new Date().toISOString(),
-            accessEndDate: null,
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-            isActive: true,
-          },
-          {
-            id: 'demo-001',
-            email: 'demo1@kitchenboss.app',
-            name: 'Demo User 1',
-            role: 'user' as UserRole,
-            accessTier: '30_days' as AccessTier,
-            accessStartDate: new Date().toISOString(),
-            accessEndDate: calculateEndDate('30_days'),
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-            isActive: true,
-          },
-          {
-            id: 'demo-002',
-            email: 'demo2@kitchenboss.app',
-            name: 'Demo User 2',
-            role: 'user' as UserRole,
-            accessTier: '30_days' as AccessTier,
-            accessStartDate: new Date().toISOString(),
-            accessEndDate: calculateEndDate('30_days'),
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-            isActive: true,
-          },
-          {
-            id: 'demo-003',
-            email: 'demo3@kitchenboss.app',
-            name: 'Demo User 3',
-            role: 'user' as UserRole,
-            accessTier: '60_days' as AccessTier,
-            accessStartDate: new Date().toISOString(),
-            accessEndDate: calculateEndDate('60_days'),
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-            isActive: true,
-          },
-          {
-            id: 'demo-004',
-            email: 'demo4@kitchenboss.app',
-            name: 'Demo User 4',
-            role: 'user' as UserRole,
-            accessTier: '60_days' as AccessTier,
-            accessStartDate: new Date().toISOString(),
-            accessEndDate: calculateEndDate('60_days'),
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-            isActive: true,
-          },
-        ];
-        
-        // Merge persisted users with default users (ensure defaults always exist)
-        const persistedUsers = persisted?.users || [];
-        const mergedUsers = [...defaultUsers];
-        
-        // Add any non-default users from persisted state
-        persistedUsers.forEach(user => {
-          if (!defaultUsers.some(d => d.id === user.id)) {
-            mergedUsers.push(user);
-          }
-        });
-        
-        return {
-          ...currentState,
-          ...persisted,
-          users: mergedUsers,
-        };
-      },
+      name: 'kitchenboss-auth'
     }
   )
 );

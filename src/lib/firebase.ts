@@ -1,6 +1,30 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, onValue, remove } from 'firebase/database';
-import type { Session } from '@/types';
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  deleteDoc,
+  query,
+  where
+} from 'firebase/firestore';
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+  sendPasswordResetEmail,
+  sendEmailVerification,
+  Auth,
+  User as FirebaseUser
+} from 'firebase/auth';
+import type { Session, User } from '@/types';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBabSf3Ks_ArGPjQSK-kNRoojUSBW3FzDA",
@@ -16,6 +40,8 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
+export const auth: Auth = getAuth(app);
+export const db = getFirestore(app);
 
 // Generate a short share code (6 characters)
 export function generateShareCode(): string {
@@ -363,19 +389,133 @@ export function getDeviceInfo(): string {
   const ua = navigator.userAgent;
   let browser = 'Unknown Browser';
   let os = 'Unknown OS';
-  
+
   // Detect browser
   if (ua.indexOf('Chrome') > -1 && ua.indexOf('Edg') === -1) browser = 'Chrome';
   else if (ua.indexOf('Safari') > -1 && ua.indexOf('Chrome') === -1) browser = 'Safari';
   else if (ua.indexOf('Firefox') > -1) browser = 'Firefox';
   else if (ua.indexOf('Edg') > -1) browser = 'Edge';
-  
+
   // Detect OS
   if (ua.indexOf('Win') > -1) os = 'Windows';
   else if (ua.indexOf('Mac') > -1) os = 'macOS';
   else if (ua.indexOf('Linux') > -1) os = 'Linux';
   else if (ua.indexOf('Android') > -1) os = 'Android';
   else if (ua.indexOf('iOS') > -1 || ua.indexOf('iPhone') > -1 || ua.indexOf('iPad') > -1) os = 'iOS';
-  
+
   return `${browser} on ${os}`;
+}
+
+// ============================================
+// FIREBASE AUTH & FIRESTORE
+// ============================================
+
+export async function registerUser(email: string, password: string, name: string): Promise<User> {
+  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+  // Update display name in Firebase Auth
+  await updateProfile(userCredential.user, { displayName: name });
+
+  // Create user document in Firestore
+  const newUser: User = {
+    id: userCredential.user.uid,
+    email: email.toLowerCase(),
+    name,
+    role: 'user',
+    accessTier: '30_days',
+    accessStartDate: new Date().toISOString(),
+    accessEndDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+    isActive: true,
+  };
+
+  await saveUserData(userCredential.user.uid, newUser);
+
+  return newUser;
+}
+
+export async function loginUser(email: string, password: string): Promise<User | null> {
+  const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+  // Update last login in Firestore
+  await updateUserData(userCredential.user.uid, {
+    lastLoginAt: new Date().toISOString()
+  });
+
+  // Fetch and return user data
+  return getUserData(userCredential.user.uid);
+}
+
+export async function logoutUser(): Promise<void> {
+  await signOut(auth);
+}
+
+export async function saveUserData(uid: string, user: User): Promise<void> {
+  const userRef = doc(db, 'users', uid);
+  await setDoc(userRef, {
+    ...user,
+    updatedAt: new Date().toISOString()
+  });
+}
+
+export async function getUserData(uid: string): Promise<User | null> {
+  try {
+    const userRef = doc(db, 'users', uid);
+    const snapshot = await getDoc(userRef);
+    return snapshot.exists() ? (snapshot.data() as User) : null;
+  } catch (error) {
+    console.error('Error getting user data:', error);
+    return null;
+  }
+}
+
+export async function updateUserData(uid: string, updates: Partial<User>): Promise<void> {
+  try {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+      ...updates,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error updating user data:', error);
+  }
+}
+
+export async function getAllUsers(): Promise<User[]> {
+  try {
+    const usersRef = collection(db, 'users');
+    const snapshot = await getDocs(usersRef);
+    return snapshot.docs.map(doc => doc.data() as User);
+  } catch (error) {
+    console.error('Error getting all users:', error);
+    return [];
+  }
+}
+
+export async function deleteUserData(uid: string): Promise<void> {
+  try {
+    const userRef = doc(db, 'users', uid);
+    await deleteDoc(userRef);
+  } catch (error) {
+    console.error('Error deleting user data:', error);
+  }
+}
+
+export function onAuthStateChangeListener(callback: (user: FirebaseUser | null) => void): () => void {
+  return onAuthStateChanged(auth, callback);
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  await sendPasswordResetEmail(auth, email);
+}
+
+export async function sendVerificationEmail(): Promise<void> {
+  if (auth.currentUser) {
+    await sendEmailVerification(auth.currentUser);
+  }
+}
+
+export function isEmailVerified(): boolean {
+  return auth.currentUser?.emailVerified ?? false;
 }
