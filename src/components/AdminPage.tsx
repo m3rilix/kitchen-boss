@@ -128,11 +128,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
     );
   };
 
-  const handleExtendAccess = (userId: string) => {
-    if (useCustomDate && customDate) {
-      setCustomExpiryDate(userId, customDate);
-    } else {
-      extendAccess(userId, extendDays);
+  const handleExtendAccess = async (userId: string) => {
+    try {
+      if (useCustomDate && customDate) {
+        await setCustomExpiryDate(userId, customDate);
+        alert('Access expiry date set successfully');
+      } else {
+        await extendAccess(userId, extendDays);
+        alert(`Access extended by ${extendDays} days`);
+      }
+    } catch (error) {
+      console.error('Error extending access:', error);
+      alert('Failed to extend access');
     }
     setShowExtendModal(null);
     setExtendDays(30);
@@ -310,6 +317,23 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         Extend Access
                       </button>
                       <button
+                        onClick={async () => {
+                          if (confirm(`Set access to expire TODAY for ${user.name}? They will lose access immediately.`)) {
+                            try {
+                              await setCustomExpiryDate(user.id, new Date().toISOString().split('T')[0]);
+                              alert('Access expired for ' + user.name);
+                            } catch (error) {
+                              console.error('Error expiring access:', error);
+                            }
+                          }
+                          setSelectedUser(null);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Expire Access (Today)
+                      </button>
+                      <button
                         onClick={() => {
                           updateUserRole(user.id, user.role === 'admin' ? 'user' : 'admin');
                           setSelectedUser(null);
@@ -439,7 +463,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleExtendAccess(showExtendModal)}
+                  onClick={() => showExtendModal && handleExtendAccess(showExtendModal)}
                   className={`flex-1 px-4 py-2 text-sm font-medium text-white ${theme.bg600} rounded-lg hover:opacity-90 transition`}
                 >
                   Extend
