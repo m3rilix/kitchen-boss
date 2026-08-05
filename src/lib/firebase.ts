@@ -563,7 +563,17 @@ export async function signInWithGoogle(): Promise<User | null> {
 
     return userData;
   } catch (error) {
+    const err = error as any;
+    if (err.code === 'auth/popup-blocked') {
+      throw new Error('Google Sign-In popup was blocked. Please check your browser settings.');
+    } else if (err.code === 'auth/popup-closed-by-user') {
+      throw new Error('Google Sign-In was cancelled.');
+    } else if (err.code === 'auth/unauthorized-domain') {
+      throw new Error('Google Sign-In is not configured for this domain. Contact support.');
+    } else if (err.code === 'auth/operation-not-supported-in-this-environment') {
+      throw new Error('Google Sign-In is not available in this browser. Try a different browser.');
+    }
     console.error('Google sign-in error:', error);
-    throw error;
+    throw new Error('Failed to sign in with Google. Please try again.');
   }
 }

@@ -318,12 +318,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       </button>
                       <button
                         onClick={async () => {
-                          if (confirm(`Set access to expire TODAY for ${user.name}? They will lose access immediately.`)) {
+                          if (confirm(`Immediately revoke access for ${user.name}?`)) {
                             try {
-                              await setCustomExpiryDate(user.id, new Date().toISOString().split('T')[0]);
-                              alert('Access expired for ' + user.name);
+                              const now = new Date();
+                              const expiredDate = new Date(now.getTime() - 1000); // 1 second ago = already expired
+                              await setCustomExpiryDate(user.id, expiredDate.toISOString().split('T')[0]);
+                              alert('Access revoked for ' + user.name);
                             } catch (error) {
-                              console.error('Error expiring access:', error);
+                              console.error('Error revoking access:', error);
                             }
                           }
                           setSelectedUser(null);
