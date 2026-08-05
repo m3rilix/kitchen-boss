@@ -37,18 +37,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [users, setUsers] = useState<User[]>([]);
 
   // Load users and active sessions on mount and refresh every 30 seconds
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const loadedUsers = await getAllUsers();
-        setUsers(loadedUsers);
-        const sessions = await getAllActiveSessions();
-        setActiveSessions(sessions);
-      } catch (error) {
-        console.error('Error loading data:', error);
-      }
-    };
+  const loadData = async () => {
+    try {
+      const loadedUsers = await getAllUsers();
+      setUsers(loadedUsers);
+      const sessions = await getAllActiveSessions();
+      setActiveSessions(sessions);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
+  };
 
+  useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 30000); // Refresh every 30 seconds
 
@@ -137,6 +137,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
         await extendAccess(userId, extendDays);
         alert(`Access extended by ${extendDays} days`);
       }
+      // Refresh user list to show updated access dates
+      await loadData();
     } catch (error) {
       console.error('Error extending access:', error);
       alert('Failed to extend access');
@@ -212,7 +214,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <div className="col-span-1">
                   <select
                     value={user.role}
-                    onChange={(e) => updateUserRole(user.id, e.target.value as UserRole)}
+                    onChange={async (e) => {
+                      await updateUserRole(user.id, e.target.value as UserRole);
+                      await loadData();
+                    }}
                     disabled={user.id === currentUser?.id}
                     className="text-sm px-2 py-1 border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
                   >
@@ -227,7 +232,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     {getAccessBadge(user.accessTier, user.accessEndDate)}
                     <select
                       value={user.accessTier}
-                      onChange={(e) => updateUserAccess(user.id, e.target.value as AccessTier)}
+                      onChange={async (e) => {
+                        await updateUserAccess(user.id, e.target.value as AccessTier);
+                        await loadData();
+                      }}
                       className="text-xs px-2 py-1 border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300"
                     >
                       <option value="30_days">30 Days</option>
@@ -245,7 +253,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
                     return (
                       <button
-                        onClick={() => toggleUserActive(user.id)}
+                        onClick={async () => {
+                          await toggleUserActive(user.id);
+                          await loadData();
+                        }}
                         disabled={user.id === currentUser?.id || isExpired}
                         className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full transition ${
                           isExpired
@@ -339,6 +350,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
                               await setCustomExpiryDate(user.id, expiredDate.toISOString().split('T')[0]);
                               await forceLogoutUser(user.id);
                               alert('Access revoked and user logged out');
+                              // Refresh user list to show updated status
+                              await loadData();
                             } catch (error) {
                               console.error('Error revoking access:', error);
                               alert('Failed to revoke access');
@@ -352,8 +365,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         Expire Access (Today)
                       </button>
                       <button
-                        onClick={() => {
-                          updateUserRole(user.id, user.role === 'admin' ? 'user' : 'admin');
+                        onClick={async () => {
+                          await updateUserRole(user.id, user.role === 'admin' ? 'user' : 'admin');
+                          await loadData();
                           setSelectedUser(null);
                         }}
                         disabled={user.id === currentUser?.id}
@@ -388,9 +402,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         ) : null;
                       })()}
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (confirm(`Delete user ${user.name}?`)) {
-                            deleteUser(user.id);
+                            await deleteUser(user.id);
+                            await loadData();
                           }
                           setSelectedUser(null);
                         }}

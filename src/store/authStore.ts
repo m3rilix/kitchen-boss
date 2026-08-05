@@ -338,9 +338,23 @@ export const useAuthStore = create<AuthStore>()(
 
         if (!isAuthenticated || !currentUser) return;
 
-        // Check if access is still valid
-        if (!isAccessValid(currentUser)) {
-          await logout();
+        // Re-fetch user data from Firestore to check for admin changes (access expiry, etc.)
+        try {
+          const freshUserData = await getUserData(currentUser.id);
+
+          // If user was deleted or access is no longer valid, logout
+          if (!freshUserData || !isAccessValid(freshUserData)) {
+            await logout();
+            return;
+          }
+
+          // Update currentUser with fresh data if anything changed
+          if (freshUserData.accessEndDate !== currentUser.accessEndDate) {
+            set({ currentUser: freshUserData });
+          }
+        } catch (error) {
+          console.error('Error validating session:', error);
+          // Don't logout on network errors, just skip validation
         }
       },
 
