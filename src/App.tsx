@@ -9,7 +9,7 @@ import { SessionViewPage } from '@/components/SessionViewPage';
 import { SharedSessionView } from '@/components/SharedSessionView';
 import { SharedScoreboard } from '@/components/SharedScoreboard';
 import { SessionTransferredModal } from '@/components/SessionTransferModal';
-import { getShareCodeFromUrl, clearShareCodeFromUrl, subscribeToSession, onSessionChange } from '@/lib/firebase';
+import { getShareCodeFromUrl, clearShareCodeFromUrl, subscribeToSession } from '@/lib/firebase';
 import type { Session } from '@/types';
 
 // Error boundary to catch render errors in shared session view
@@ -44,7 +44,7 @@ class ShareViewErrorBoundary extends Component<{ children: ReactNode }, { hasErr
 
 function App() {
   const { session, shareCode, syncToFirebase } = useSessionStore();
-  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout, validateAndCleanupSession, currentUser, sessionId, logout, initializeAuth } = useAuthStore();
+  const { isAuthenticated, isAccessValid, isAdmin, updateActivity, checkSessionTimeout, validateAndCleanupSession, logout, initializeAuth } = useAuthStore();
   const [sharedSession, setSharedSession] = useState<Session | null>(null);
   // Initialize synchronously so first render already knows we're in share mode
   // (prevents flash of SessionViewPage with corrupted localStorage data)

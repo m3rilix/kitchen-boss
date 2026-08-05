@@ -8,9 +8,7 @@ import {
   updateDoc,
   collection,
   getDocs,
-  deleteDoc,
-  query,
-  where
+  deleteDoc
 } from 'firebase/firestore';
 import {
   getAuth,
@@ -24,7 +22,8 @@ import {
   Auth,
   User as FirebaseUser
 } from 'firebase/auth';
-import type { Session, User } from '@/types';
+import type { Session } from '@/types';
+import type { User } from '@/types/user';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBabSf3Ks_ArGPjQSK-kNRoojUSBW3FzDA",

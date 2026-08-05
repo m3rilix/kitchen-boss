@@ -12,8 +12,7 @@ import {
   onAuthStateChangeListener,
   sendPasswordReset,
   sendVerificationEmail,
-  isEmailVerified,
-  auth
+  isEmailVerified
 } from '@/lib/firebase';
 
 // Calculate end date based on access tier
@@ -83,6 +82,7 @@ interface AuthStore {
   updateActivity: () => Promise<void>;
   checkSessionTimeout: () => Promise<boolean>;
   isSessionValid: () => boolean;
+  validateAndCleanupSession: () => Promise<void>;
 
   // User management (admin)
   getAllUsers: () => Promise<User[]>;
@@ -92,6 +92,7 @@ interface AuthStore {
   deleteUser: (userId: string) => Promise<void>;
   extendAccess: (userId: string, days: number) => Promise<void>;
   setCustomExpiryDate: (userId: string, date: string) => Promise<void>;
+  forceLogoutUser: (userId: string) => Promise<void>;
 
   // Email verification
   sendVerificationEmail: () => Promise<void>;
@@ -402,6 +403,17 @@ export const useAuthStore = create<AuthStore>()(
           }
         } catch (error) {
           console.error('Error setting custom expiry date:', error);
+        }
+      },
+
+      forceLogoutUser: async (userId: string) => {
+        try {
+          // Set access end date to now, effectively logging them out
+          await updateUserData(userId, {
+            accessEndDate: new Date().toISOString()
+          });
+        } catch (error) {
+          console.error('Error force logging out user:', error);
         }
       },
 

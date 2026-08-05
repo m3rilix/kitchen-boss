@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeClasses } from '@/store/themeStore';
-import type { AccessTier, UserRole } from '@/types/user';
+import type { AccessTier, UserRole, User } from '@/types/user';
 import { getAllActiveSessions, type ActiveSession } from '@/lib/firebase';
 import { 
   Users, Shield, Clock, Infinity, Calendar, 
@@ -34,24 +34,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [customDate, setCustomDate] = useState('');
   const [activeSessions, setActiveSessions] = useState<Record<string, ActiveSession>>({});
 
-  const users = getAllUsers();
+  const [users, setUsers] = useState<User[]>([]);
 
-  // Load active sessions on mount and refresh every 30 seconds
+  // Load users and active sessions on mount and refresh every 30 seconds
   useEffect(() => {
-    const loadActiveSessions = async () => {
+    const loadData = async () => {
       try {
+        const loadedUsers = await getAllUsers();
+        setUsers(loadedUsers);
         const sessions = await getAllActiveSessions();
         setActiveSessions(sessions);
       } catch (error) {
-        console.error('Error loading active sessions:', error);
+        console.error('Error loading data:', error);
       }
     };
 
-    loadActiveSessions();
-    const interval = setInterval(loadActiveSessions, 30000); // Refresh every 30 seconds
+    loadData();
+    const interval = setInterval(loadData, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, [getAllUsers]);
 
   const getDaysRemaining = (endDate: string | null): number | null => {
     if (endDate === null) return null;
