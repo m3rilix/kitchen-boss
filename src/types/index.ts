@@ -42,6 +42,8 @@ export interface Game {
   endedAt?: Date;
   score?: { team1: number; team2: number };
   winner?: 'team1' | 'team2';
+  isEdited?: boolean;
+  editedAt?: string;
 }
 
 export interface Court {

@@ -6,7 +6,9 @@ import { pairDisplayName } from '@/lib/doubles';
 import { rankPlayers, rankPairs, winPct, formatDiff } from '@/lib/leaderboard';
 import { analyzeSessionHealth } from '@/lib/sessionHealth';
 import { useState, useMemo, useEffect } from 'react';
-import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, X, GripVertical, Activity, Hourglass, Repeat, BarChart3 } from 'lucide-react';
+import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, GripVertical, Activity, Hourglass, Repeat, BarChart3 } from 'lucide-react';
+import { MatchLogList } from './MatchLogList';
+import { PlayerStatsModal } from './PlayerStatsModal';
 
 /** Format elapsed milliseconds as M:SS */
 function formatElapsed(ms: number): string {
@@ -183,7 +185,8 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [logTab, setLogTab] = useState<'activity' | 'matches'>('activity');
   const [activeTab, setActiveTab] = useState<MobileSection>('courts');
   const [layout, setLayoutState] = useState<PanelLayout>(loadSharedLayout);
   const [dragging, setDragging] = useState<PanelId | null>(null);
@@ -484,20 +487,23 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
     switch (id) {
       case 'courts':
         return (
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <LayoutGrid className="w-4 h-4 text-blue-500" />
-                Courts ({session?.courts?.length || 0})
-              </h3>
-            </div>
-            <div className="p-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(session?.courts || []).map((court) => (
-                  <ReadOnlyCourtView key={court.id} court={court} getPlayerById={getPlayerById} />
-                ))}
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4 text-blue-500" />
+                  Courts ({session?.courts?.length || 0})
+                </h3>
+              </div>
+              <div className="p-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(session?.courts || []).map((court) => (
+                    <ReadOnlyCourtView key={court.id} court={court} getPlayerById={getPlayerById} />
+                  ))}
+                </div>
               </div>
             </div>
+            <LeaderboardPanel session={session} onSelectPlayer={setSelectedPlayerId} />
           </div>
         );
 
@@ -673,7 +679,10 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                   const partnerId = pair ? (pair.player1Id === player.id ? pair.player2Id : pair.player1Id) : undefined;
                   const partner = partnerId ? session.players.find(p => p.id === partnerId) : undefined;
                   return (
-                    <div key={player.id} className={`flex items-center gap-3 p-2 rounded-lg ${
+                    <button
+                      key={player.id}
+                      onClick={() => setSelectedPlayerId(player.id)}
+                      className={`w-full flex items-center gap-3 p-2 rounded-lg text-left ${
                       status === 'playing'     ? 'bg-red-50 dark:bg-red-900/20' :
                       status === 'unavailable' ? 'bg-slate-100 dark:bg-slate-700/60 opacity-60' :
                                                  'hover:bg-slate-50 dark:hover:bg-slate-700'
@@ -687,7 +696,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                       }`}>{player.name.charAt(0).toUpperCase()}</div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-sm font-medium truncate ${
+                          <span className={`text-sm font-medium truncate hover:underline ${
                             status === 'unavailable' ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-200'
                           }`}>{player.name}</span>
                           {status === 'playing' && (
@@ -705,7 +714,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                           )}
                         </div>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -717,30 +726,56 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
         return (
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <History className="w-4 h-4 text-slate-500" />
-                Recent Activity
-              </h3>
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-700/60 rounded-lg p-0.5 w-fit">
+                <button
+                  onClick={() => setLogTab('activity')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+                    logTab === 'activity' ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  <History className="w-3.5 h-3.5" />
+                  Activity
+                </button>
+                <button
+                  onClick={() => setLogTab('matches')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+                    logTab === 'matches' ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  <ScrollText className="w-3.5 h-3.5" />
+                  Match Log
+                </button>
+              </div>
             </div>
-            <div className="p-4 max-h-48 overflow-y-auto">
-              {(session?.activityLog?.length || 0) === 0 ? (
-                <p className="text-sm text-slate-500 text-center py-4">No activity yet</p>
-              ) : (
-                <div className="space-y-2">
-                  {(session?.activityLog || []).slice(0, 10).map((entry) => (
-                    <div key={entry.id} className="flex items-start gap-2 py-1">
-                      <div className="flex-shrink-0 mt-0.5">{getActivityIcon(entry.type)}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs ${entry.type === 'stack_skipped' ? 'text-purple-600 dark:text-purple-400 font-medium' : 'text-slate-600 dark:text-slate-400'}`}>
-                          {entry.message}
-                        </p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500">{formatActivityTime(entry.timestamp)}</p>
+            {logTab === 'matches' ? (
+              <div className="p-2">
+                <MatchLogList
+                  gamesCompleted={session?.gamesCompleted || []}
+                  players={session?.players || []}
+                  maxHeightClass="max-h-48"
+                />
+              </div>
+            ) : (
+              <div className="p-4 max-h-48 overflow-y-auto">
+                {(session?.activityLog?.length || 0) === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-4">No activity yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {(session?.activityLog || []).slice(0, 10).map((entry) => (
+                      <div key={entry.id} className="flex items-start gap-2 py-1">
+                        <div className="flex-shrink-0 mt-0.5">{getActivityIcon(entry.type)}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs ${entry.type === 'stack_skipped' ? 'text-purple-600 dark:text-purple-400 font-medium' : 'text-slate-600 dark:text-slate-400'}`}>
+                            {entry.message}
+                          </p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500">{formatActivityTime(entry.timestamp)}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         );
     }
@@ -851,13 +886,6 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
 
             {/* Right: Actions */}
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowLeaderboard(true)}
-                className={`p-2 rounded-lg transition ${theme.bgButton} ${theme.textButton}`}
-                title="Leaderboard / Stats"
-              >
-                <Trophy className="w-4 h-4" />
-              </button>
               <SettingsDropdown />
               <button
                 onClick={onExit}
@@ -901,17 +929,25 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
         </div>
       </nav>
 
-      {/* Leaderboard Modal */}
-      {showLeaderboard && (
-        <LeaderboardModal session={session} onClose={() => setShowLeaderboard(false)} />
-      )}
+      {/* Player Stats Modal */}
+      {selectedPlayerId && (() => {
+        const player = session.players.find(p => p.id === selectedPlayerId);
+        return player ? (
+          <PlayerStatsModal
+            player={player}
+            players={session.players}
+            gamesCompleted={session.gamesCompleted}
+            onClose={() => setSelectedPlayerId(null)}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
 
 // â”€â”€ Leaderboard Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function LeaderboardModal({ session, onClose }: { session: Session; onClose: () => void }) {
+function LeaderboardPanel({ session, onSelectPlayer }: { session: Session; onSelectPlayer: (id: string) => void }) {
   const isDoubles = session.rotationMode === 'doubles';
   const rankedPlayers = rankPlayers(session.players, session.gamesCompleted);
   const rankedPairs = isDoubles ? rankPairs(session.pairs ?? [], session.gamesCompleted) : [];
@@ -929,26 +965,20 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
-          <div>
-            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-yellow-500" />
-              Leaderboard
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {session.name} Â· {totalGames} game{totalGames !== 1 ? 's' : ''} Â· {activePlayers.length} player{activePlayers.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+        <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <Trophy className="w-4 h-4 text-yellow-500" />
+          Session Rankings
+        </h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          {totalGames} game{totalGames !== 1 ? 's' : ''} Â· {activePlayers.length} player{activePlayers.length !== 1 ? 's' : ''}
+        </p>
+      </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto">
+      {/* Body */}
+      <div>
           {totalGames === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-400 dark:text-slate-500">
               <Trophy className="w-10 h-10 mb-3 opacity-20" />
@@ -973,16 +1003,18 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
                 return (
                   <div key={player.id} className={`flex items-center gap-3 px-4 py-2.5 ${rank <= 3 ? 'bg-yellow-50/40 dark:bg-yellow-900/5' : ''} ${rank % 2 === 0 ? 'bg-slate-50/60 dark:bg-slate-800/30' : ''}`}>
                     <div className="w-7 flex items-center justify-center shrink-0"><RankBadge rank={rank} /></div>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm shrink-0 ${
+                    <button
+                      onClick={() => onSelectPlayer(player.id)}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm shrink-0 ${
                       rank === 1 ? 'bg-yellow-200 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
                       rank === 2 ? 'bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-100' :
                       rank === 3 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200' :
                                    'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                    }`}>{player.name.charAt(0).toUpperCase()}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate">{player.name}</p>
+                    }`}>{player.name.charAt(0).toUpperCase()}</button>
+                    <button onClick={() => onSelectPlayer(player.id)} className="flex-1 min-w-0 text-left">
+                      <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate hover:underline">{player.name}</p>
                       {partnerMap.get(player.id) && <p className="text-xs text-slate-400">with {partnerMap.get(player.id)}</p>}
-                    </div>
+                    </button>
                     <div className="flex items-center gap-3 text-sm shrink-0">
                       <span className="w-8 text-center font-bold text-green-600 dark:text-green-400">{player.gamesWon}</span>
                       <span className="w-8 text-center font-bold text-red-500 dark:text-red-400">{losses}</span>
@@ -1168,7 +1200,6 @@ function LeaderboardModal({ session, onClose }: { session: Session; onClose: () 
             </>
           )}
         </div>
-      </div>
     </div>
   );
 }

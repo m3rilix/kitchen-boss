@@ -93,6 +93,7 @@ interface SessionState {
   // Game actions
   startGame: (courtId: string, team1: [string, string], team2: [string, string], skippedQueue?: boolean, customStackIndex?: number) => void;
   endGame: (courtId: string, winner: 'team1' | 'team2', score?: { team1: number; team2: number }) => void;
+  editCompletedGame: (gameId: string, updates: { score?: { team1: number; team2: number }; winner?: 'team1' | 'team2' }) => void;
   cancelGame: (courtId: string) => void;
   autoAssignNextGame: (courtId: string) => void;
   swapPlayers: (courtId: string, fromTeam: 'team1' | 'team2', fromIndex: number, toTeam: 'team1' | 'team2', toIndex: number) => void;
@@ -2230,6 +2231,60 @@ export const useSessionStore = create<SessionState>()(
             };
           });
         }
+      },
+
+      editCompletedGame: (gameId, updates) => {
+        set((state) => {
+          if (!state.session) return state;
+
+          const gameIndex = state.session.gamesCompleted.findIndex(g => g.id === gameId);
+          if (gameIndex === -1) return state;
+
+          const game = state.session.gamesCompleted[gameIndex];
+          const winnerChanged = updates.winner && updates.winner !== game.winner;
+
+          // If the winner flips, swap gamesWon between the two teams' players
+          let updatedPlayers = state.session.players;
+          if (winnerChanged) {
+            const oldWinningTeam = game.winner === 'team1' ? game.team1 : game.team2;
+            const newWinningTeam = updates.winner === 'team1' ? game.team1 : game.team2;
+            updatedPlayers = state.session.players.map((p) => {
+              if (oldWinningTeam.includes(p.id)) return { ...p, gamesWon: Math.max(0, p.gamesWon - 1) };
+              if (newWinningTeam.includes(p.id)) return { ...p, gamesWon: p.gamesWon + 1 };
+              return p;
+            });
+          }
+
+          const updatedGame: Game = {
+            ...game,
+            score: updates.score ?? game.score,
+            winner: updates.winner ?? game.winner,
+            isEdited: true,
+            editedAt: new Date().toISOString(),
+          };
+
+          const newGamesCompleted = [...state.session.gamesCompleted];
+          newGamesCompleted[gameIndex] = updatedGame;
+
+          const team1Names = game.team1.map(id => state.session!.players.find(p => p.id === id)?.name || '');
+          const team2Names = game.team2.map(id => state.session!.players.find(p => p.id === id)?.name || '');
+
+          return {
+            session: {
+              ...state.session,
+              players: updatedPlayers,
+              gamesCompleted: newGamesCompleted,
+              activityLog: [
+                createLogEntry(
+                  'game_ended',
+                  `Match edited: ${team1Names.join(' & ')} vs ${team2Names.join(' & ')}`,
+                  { winner: updatedGame.winner, team1Names, team2Names, score: updatedGame.score }
+                ),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
       },
 
       cancelGame: (courtId) => {

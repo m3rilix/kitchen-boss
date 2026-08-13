@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
-import { useThemeClasses } from '@/store/themeStore';
-import { History, Trophy, UserPlus, ChevronsUp, ChevronUp, ChevronDown, UserMinus, Play, Copy, Check, Rocket } from 'lucide-react';
-import type { ActivityType } from '@/types';
+import { History, Trophy, UserPlus, ChevronsUp, ChevronUp, ChevronDown, UserMinus, Play, Copy, Check, Rocket, ScrollText } from 'lucide-react';
+import type { ActivityType, Game } from '@/types';
+import { MatchLogList } from './MatchLogList';
+import { EditMatchModal } from './EditMatchModal';
 
 const isDev = import.meta.env.DEV;
 
@@ -40,9 +41,10 @@ const formatTime = (date: Date) => {
 
 export function ActivityLog() {
   const { session } = useSessionStore();
-  const theme = useThemeClasses();
   const [showCount, setShowCount] = useState(20);
   const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState<'activity' | 'matches'>('activity');
+  const [editingGame, setEditingGame] = useState<Game | null>(null);
 
   if (!session) return null;
 
@@ -71,13 +73,29 @@ export function ActivityLog() {
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <div className="p-4 border-b border-slate-100 bg-slate-50">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-            <History className={`w-4 h-4 ${theme.text}`} />
-            Activity Log
-          </h3>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1 bg-slate-200/60 rounded-lg p-0.5">
+            <button
+              onClick={() => setTab('activity')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+                tab === 'activity' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              Activity Log
+            </button>
+            <button
+              onClick={() => setTab('matches')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+                tab === 'matches' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <ScrollText className="w-3.5 h-3.5" />
+              Match Log
+            </button>
+          </div>
           <div className="flex items-center gap-2">
-            {isDev && (
+            {isDev && tab === 'activity' && (
               <button
                 onClick={handleCopyLog}
                 className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition"
@@ -87,55 +105,78 @@ export function ActivityLog() {
                 {copied ? 'Copied!' : 'Copy'}
               </button>
             )}
-            <span className="text-sm text-slate-500">{activityLog.length} events</span>
+            <span className="text-sm text-slate-500">
+              {tab === 'activity' ? `${activityLog.length} events` : `${session.gamesCompleted.length} games`}
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
-        {recentActivities.length === 0 ? (
-          <div className="p-6 text-center text-slate-500">
-            <p className="text-sm">No activity yet</p>
+      {tab === 'matches' ? (
+        <div className="p-2">
+          <MatchLogList
+            gamesCompleted={session.gamesCompleted}
+            players={session.players}
+            editable
+            onEdit={(game) => setEditingGame(game)}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+            {recentActivities.length === 0 ? (
+              <div className="p-6 text-center text-slate-500">
+                <p className="text-sm">No activity yet</p>
+              </div>
+            ) : (
+              recentActivities.map((activity) => (
+                <div
+                  key={activity.id}
+                  className={`flex items-start gap-3 p-3 hover:bg-slate-50 transition ${
+                    activity.type === 'game_ended' ? 'bg-amber-50/50' : ''
+                  }`}
+                >
+                  <div className="mt-0.5 flex-shrink-0">
+                    {getActivityIcon(activity.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-700">{activity.message}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {formatTime(activity.timestamp)}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
-        ) : (
-          recentActivities.map((activity) => (
-            <div
-              key={activity.id}
-              className={`flex items-start gap-3 p-3 hover:bg-slate-50 transition ${
-                activity.type === 'game_ended' ? 'bg-amber-50/50' : ''
-              }`}
-            >
-              <div className="mt-0.5 flex-shrink-0">
-                {getActivityIcon(activity.type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-slate-700">{activity.message}</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {formatTime(activity.timestamp)}
-                </p>
-              </div>
+
+          {/* Load More / Show All */}
+          {hasMore && (
+            <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-center gap-3">
+              <button
+                onClick={handleLoadMore}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Load More ({activityLog.length - showCount} remaining)
+              </button>
+              <span className="text-slate-300">|</span>
+              <button
+                onClick={handleShowAll}
+                className="text-sm text-slate-500 hover:text-slate-700"
+              >
+                Show All
+              </button>
             </div>
-          ))
-        )}
-      </div>
+          )}
+        </>
+      )}
 
-      {/* Load More / Show All */}
-      {hasMore && (
-        <div className="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-center gap-3">
-          <button
-            onClick={handleLoadMore}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Load More ({activityLog.length - showCount} remaining)
-          </button>
-          <span className="text-slate-300">|</span>
-          <button
-            onClick={handleShowAll}
-            className="text-sm text-slate-500 hover:text-slate-700"
-          >
-            Show All
-          </button>
-        </div>
+      {editingGame && (
+        <EditMatchModal
+          game={editingGame}
+          players={session.players}
+          onClose={() => setEditingGame(null)}
+        />
       )}
     </div>
   );
