@@ -76,6 +76,12 @@ function generateSessionId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+// updateActivity() fires on every click/keydown/scroll/mousemove — without throttling
+// this writes to Firestore on every mouse pixel of movement, blowing through the daily
+// write quota in minutes. Only actually write once per this interval.
+const ACTIVITY_WRITE_THROTTLE_MS = 60 * 1000;
+let lastActivityWriteAt = 0;
+
 interface AuthStore {
   // State
   currentUser: User | null;
@@ -321,6 +327,11 @@ export const useAuthStore = create<AuthStore>()(
 
         const now = Date.now();
         set({ lastActivityAt: now });
+
+        // This fires on every click/keydown/scroll/mousemove — throttle the network
+        // writes so normal mouse movement doesn't spam Firestore/Realtime DB writes.
+        if (now - lastActivityWriteAt < ACTIVITY_WRITE_THROTTLE_MS) return;
+        lastActivityWriteAt = now;
 
         // Update last activity in Firestore and Realtime Database (non-critical)
         try {
