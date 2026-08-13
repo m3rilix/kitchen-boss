@@ -107,15 +107,15 @@ type SortOption = typeof sortOptions[number]['value'];
 // -- Leaderboard helpers (rankPlayers/rankPairs/winPct/formatDiff imported from lib/leaderboard) --
 
 function RankBadge({ rank }: { rank: number }) {
-  if (rank === 1) return <span className="text-base">ðŸ¥‡</span>;
-  if (rank === 2) return <span className="text-base">ðŸ¥ˆ</span>;
-  if (rank === 3) return <span className="text-base">ðŸ¥‰</span>;
+  if (rank === 1) return <span className="text-base">🥇</span>;
+  if (rank === 2) return <span className="text-base">🥈</span>;
+  if (rank === 3) return <span className="text-base">🥉</span>;
   return <span className="text-sm font-semibold text-slate-400 w-6 text-center">{rank}</span>;
 }
 
 // â”€â”€ Panel drag-reorder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-type PanelId = 'courts' | 'queue' | 'players' | 'log';
+type PanelId = 'courts' | 'queue' | 'leaderboard' | 'players' | 'log';
 
 interface PanelLayout {
   main: PanelId[];
@@ -124,7 +124,7 @@ interface PanelLayout {
 
 const DEFAULT_SHARED_LAYOUT: PanelLayout = {
   main: ['courts'],
-  sidebar: ['queue', 'players', 'log'],
+  sidebar: ['queue', 'leaderboard', 'players', 'log'],
 };
 
 function loadSharedLayout(): PanelLayout {
@@ -133,7 +133,7 @@ function loadSharedLayout(): PanelLayout {
     if (!saved) return DEFAULT_SHARED_LAYOUT;
     const parsed = JSON.parse(saved);
     if (!Array.isArray(parsed.main) || !Array.isArray(parsed.sidebar)) return DEFAULT_SHARED_LAYOUT;
-    const all: PanelId[] = ['courts', 'queue', 'players', 'log'];
+    const all: PanelId[] = ['courts', 'queue', 'leaderboard', 'players', 'log'];
     const found = new Set([...parsed.main, ...parsed.sidebar]);
     if (!all.every(p => found.has(p))) return DEFAULT_SHARED_LAYOUT;
     return parsed;
@@ -170,13 +170,14 @@ function SharedDropZone({ col, idx, dragging, dropTarget, setDropTarget, onDrop 
 
 // â”€â”€ Mobile tab config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-type MobileSection = 'courts' | 'queue' | 'players' | 'log';
+type MobileSection = 'courts' | 'queue' | 'leaderboard' | 'players' | 'log';
 
 const MOBILE_TABS: { id: MobileSection; label: string; icon: React.ReactNode }[] = [
-  { id: 'courts',  label: 'Courts',  icon: <LayoutGrid className="w-5 h-5" /> },
-  { id: 'queue',   label: 'Queue',   icon: <Layers className="w-5 h-5" /> },
-  { id: 'players', label: 'Players', icon: <Users className="w-5 h-5" /> },
-  { id: 'log',     label: 'Log',     icon: <ScrollText className="w-5 h-5" /> },
+  { id: 'courts',      label: 'Courts',   icon: <LayoutGrid className="w-5 h-5" /> },
+  { id: 'queue',       label: 'Queue',    icon: <Layers className="w-5 h-5" /> },
+  { id: 'leaderboard', label: 'Rankings', icon: <Trophy className="w-5 h-5" /> },
+  { id: 'players',     label: 'Players',  icon: <Users className="w-5 h-5" /> },
+  { id: 'log',         label: 'Log',      icon: <ScrollText className="w-5 h-5" /> },
 ];
 
 export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
@@ -487,25 +488,25 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
     switch (id) {
       case 'courts':
         return (
-          <div className="space-y-4">
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4 text-blue-500" />
-                  Courts ({session?.courts?.length || 0})
-                </h3>
-              </div>
-              <div className="p-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(session?.courts || []).map((court) => (
-                    <ReadOnlyCourtView key={court.id} court={court} getPlayerById={getPlayerById} />
-                  ))}
-                </div>
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <LayoutGrid className="w-4 h-4 text-blue-500" />
+                Courts ({session?.courts?.length || 0})
+              </h3>
+            </div>
+            <div className="p-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(session?.courts || []).map((court) => (
+                  <ReadOnlyCourtView key={court.id} court={court} getPlayerById={getPlayerById} />
+                ))}
               </div>
             </div>
-            <LeaderboardPanel session={session} onSelectPlayer={setSelectedPlayerId} />
           </div>
         );
+
+      case 'leaderboard':
+        return <LeaderboardPanel session={session} onSelectPlayer={setSelectedPlayerId} />;
 
       case 'queue':
         return (
@@ -568,7 +569,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                                   <span>{pair.gamesWon}W â€“ {losses}L</span>
-                                  {p1 && p2 && (<><span>â€¢</span><span className="truncate">{p1.name} &amp; {p2.name}</span></>)}
+                                  {p1 && p2 && (<><span>•</span><span className="truncate">{p1.name} &amp; {p2.name}</span></>)}
                                 </div>
                               </div>
                             </div>
@@ -708,9 +709,9 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                         </div>
                         <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
                           <span>{player.gamesPlayed} games</span>
-                          {partner && (<><span>â€¢</span><span className="flex items-center gap-1"><Link2 className="w-3 h-3" />{partner.name}</span></>)}
+                          {partner && (<><span>•</span><span className="flex items-center gap-1"><Link2 className="w-3 h-3" />{partner.name}</span></>)}
                           {player.waitingSince > 0 && !isDoubles && (
-                            <><span>â€¢</span><span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatWaitTime(player.waitingSince, player.gamesPlayed)}</span></>
+                            <><span>•</span><span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatWaitTime(player.waitingSince, player.gamesPlayed)}</span></>
                           )}
                         </div>
                       </div>
@@ -851,7 +852,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                 {(session.date || session.location) && (
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                     {session.date && <span>{formatDate(session.date)} {formatTime(session.time)}</span>}
-                    {session.date && session.location && <span> â€¢ </span>}
+                    {session.date && session.location && <span> • </span>}
                     {session.location && <span>{session.location}</span>}
                   </p>
                 )}
@@ -973,7 +974,7 @@ function LeaderboardPanel({ session, onSelectPlayer }: { session: Session; onSel
           Session Rankings
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          {totalGames} game{totalGames !== 1 ? 's' : ''} Â· {activePlayers.length} player{activePlayers.length !== 1 ? 's' : ''}
+          {totalGames} game{totalGames !== 1 ? 's' : ''} · {activePlayers.length} player{activePlayers.length !== 1 ? 's' : ''}
         </p>
       </div>
 
@@ -1003,14 +1004,6 @@ function LeaderboardPanel({ session, onSelectPlayer }: { session: Session; onSel
                 return (
                   <div key={player.id} className={`flex items-center gap-3 px-4 py-2.5 ${rank <= 3 ? 'bg-yellow-50/40 dark:bg-yellow-900/5' : ''} ${rank % 2 === 0 ? 'bg-slate-50/60 dark:bg-slate-800/30' : ''}`}>
                     <div className="w-7 flex items-center justify-center shrink-0"><RankBadge rank={rank} /></div>
-                    <button
-                      onClick={() => onSelectPlayer(player.id)}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm shrink-0 ${
-                      rank === 1 ? 'bg-yellow-200 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-                      rank === 2 ? 'bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-100' :
-                      rank === 3 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200' :
-                                   'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                    }`}>{player.name.charAt(0).toUpperCase()}</button>
                     <button onClick={() => onSelectPlayer(player.id)} className="flex-1 min-w-0 text-left">
                       <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate hover:underline">{player.name}</p>
                       {partnerMap.get(player.id) && <p className="text-xs text-slate-400">with {partnerMap.get(player.id)}</p>}

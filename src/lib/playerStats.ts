@@ -14,7 +14,8 @@ export interface MatchHistoryItem {
   won: boolean;
   partnerName?: string;
   opponentNames: string[];
-  score?: { team1: number; team2: number };
+  /** Score from this player's perspective: { mine, theirs }. */
+  score?: { mine: number; theirs: number };
   endedAt?: Date;
   isEdited?: boolean;
 }
@@ -70,12 +71,16 @@ export function computePlayerMatchStats(
       opponentMap.set(oppId, existing);
     }
 
+    const score = game.score
+      ? { mine: onTeam1 ? game.score.team1 : game.score.team2, theirs: onTeam1 ? game.score.team2 : game.score.team1 }
+      : undefined;
+
     history.push({
       gameId: game.id,
       won,
       partnerName: partnerId ? nameById.get(partnerId) : undefined,
       opponentNames: otherTeam.map(id => nameById.get(id) || 'Unknown'),
-      score: game.score,
+      score,
       endedAt: game.endedAt,
       isEdited: game.isEdited,
     });

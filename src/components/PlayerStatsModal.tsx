@@ -131,7 +131,7 @@ export function PlayerStatsModal({ player, players, gamesCompleted, onClose }: P
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
-                      {h.score && <span className="text-slate-500 dark:text-slate-400 font-medium">{h.score.team1}-{h.score.team2}</span>}
+                      {h.score && <span className="text-slate-500 dark:text-slate-400 font-medium">{h.score.mine}-{h.score.theirs}</span>}
                       <span className="text-slate-400 dark:text-slate-500">{formatGameTime(h.endedAt)}</span>
                     </div>
                   </div>

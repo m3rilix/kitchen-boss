@@ -69,6 +69,13 @@ const getTimeRemaining = (endDate: string | null): string | null => {
 // Session timeout in milliseconds (1 hour)
 const SESSION_TIMEOUT_MS = 60 * 60 * 1000;
 
+// Unique token for this browser's login — written to the user's Firestore doc on
+// every login so a newer login elsewhere can be detected and this session logged out.
+function generateSessionId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 interface AuthStore {
   // State
   currentUser: User | null;
@@ -77,6 +84,7 @@ interface AuthStore {
   error: string | null;
   lastActivityAt: number | null;
   emailVerified: boolean;
+  mySessionId: string | null;
 
   // Auth actions
   login: (email: string, password: string) => Promise<boolean>;
@@ -128,6 +136,7 @@ export const useAuthStore = create<AuthStore>()(
       error: null,
       lastActivityAt: null,
       emailVerified: false,
+      mySessionId: null,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
@@ -151,13 +160,17 @@ export const useAuthStore = create<AuthStore>()(
             return false;
           }
 
+          const sessionId = generateSessionId();
+          await updateUserData(user.id, { activeSessionId: sessionId });
+
           set({
-            currentUser: user,
+            currentUser: { ...user, activeSessionId: sessionId },
             isAuthenticated: true,
             isLoading: false,
             error: null,
             lastActivityAt: Date.now(),
-            emailVerified: isEmailVerified()
+            emailVerified: isEmailVerified(),
+            mySessionId: sessionId
           });
 
           return true;
@@ -182,13 +195,17 @@ export const useAuthStore = create<AuthStore>()(
           // NOTE: registerUser in firebase.ts creates users with 5_days access
           const user = await registerUser(email, password, name);
 
+          const sessionId = generateSessionId();
+          await updateUserData(user.id, { activeSessionId: sessionId });
+
           set({
-            currentUser: user,
+            currentUser: { ...user, activeSessionId: sessionId },
             isAuthenticated: true,
             isLoading: false,
             error: null,
             lastActivityAt: Date.now(),
-            emailVerified: false
+            emailVerified: false,
+            mySessionId: sessionId
           });
 
           return true;
@@ -218,7 +235,8 @@ export const useAuthStore = create<AuthStore>()(
           isAuthenticated: false,
           error: null,
           lastActivityAt: null,
-          emailVerified: false
+          emailVerified: false,
+          mySessionId: null
         });
       },
 
@@ -244,12 +262,16 @@ export const useAuthStore = create<AuthStore>()(
             return false;
           }
 
+          const sessionId = generateSessionId();
+          await updateUserData(user.id, { activeSessionId: sessionId });
+
           set({
-            currentUser: user,
+            currentUser: { ...user, activeSessionId: sessionId },
             isAuthenticated: true,
             isLoading: false,
             error: null,
             lastActivityAt: Date.now(),
+            mySessionId: sessionId,
             emailVerified: true // Google accounts are pre-verified
           });
 
@@ -334,7 +356,7 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       validateAndCleanupSession: async () => {
-        const { isAuthenticated, currentUser, logout } = get();
+        const { isAuthenticated, currentUser, mySessionId, logout } = get();
 
         if (!isAuthenticated || !currentUser) return;
 
@@ -345,6 +367,14 @@ export const useAuthStore = create<AuthStore>()(
           // If user was deleted or access is no longer valid, logout
           if (!freshUserData || !isAccessValid(freshUserData)) {
             await logout();
+            return;
+          }
+
+          // If a newer login (this account, another browser/device) has claimed the
+          // session, this browser is stale — log out rather than keep two sessions alive.
+          if (mySessionId && freshUserData.activeSessionId && freshUserData.activeSessionId !== mySessionId) {
+            await logout();
+            set({ error: 'Signed out — this account was signed in on another device.' });
             return;
           }
 

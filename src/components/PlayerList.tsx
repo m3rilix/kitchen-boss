@@ -4,6 +4,7 @@ import { useThemeClasses } from '@/store/themeStore';
 import { UserPlus, Trash2, RotateCcw, Users, AlertCircle, FlaskConical, Search, ArrowUpDown, AlertTriangle, ArrowUp, ArrowDown, Clock, Link2, Link2Off, BanIcon, Plus, Check, X, UserCheck } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { pairDisplayName } from '@/lib/doubles';
+import { PlayerStatsModal } from './PlayerStatsModal';
 import type { Pair } from '@/types';
 
 // Format waiting time - only show "Just joined" for players with 0 games
@@ -29,6 +30,7 @@ export function PlayerList() {
   const [sortBy, setSortBy] = useState<'name' | 'games' | 'wins' | 'losses' | 'waitTime'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [statsPlayerId, setStatsPlayerId] = useState<string | null>(null);
 
   // Doubles mode — pair creation modal
   const [showPairModal, setShowPairModal] = useState(false);
@@ -607,7 +609,10 @@ export function PlayerList() {
                 }`}
               >
                 {/* Avatar */}
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm ${
+                <button
+                  onClick={() => setStatsPlayerId(player.id)}
+                  title="View player stats"
+                  className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm shrink-0 ${
                   isInGame
                     ? 'bg-blue-200 text-blue-700'
                     : player.unavailable
@@ -617,14 +622,17 @@ export function PlayerList() {
                   {player.unavailable
                     ? <BanIcon className="w-4 h-4" />
                     : player.name.charAt(0).toUpperCase()}
-                </div>
+                </button>
 
                 {/* Player Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className={`font-medium truncate ${player.unavailable ? 'text-red-500 line-through' : 'text-slate-800'}`}>
+                    <button
+                      onClick={() => setStatsPlayerId(player.id)}
+                      className={`font-medium truncate hover:underline text-left ${player.unavailable ? 'text-red-500 line-through' : 'text-slate-800'}`}
+                    >
                       {player.name}
-                    </p>
+                    </button>
                     {isInGame && (
                       <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
                         Playing
@@ -750,6 +758,18 @@ export function PlayerList() {
     </div>
 
     </div>
+
+    {statsPlayerId && (() => {
+      const statsPlayer = session.players.find(p => p.id === statsPlayerId);
+      return statsPlayer ? (
+        <PlayerStatsModal
+          player={statsPlayer}
+          players={session.players}
+          gamesCompleted={session.gamesCompleted}
+          onClose={() => setStatsPlayerId(null)}
+        />
+      ) : null;
+    })()}
     </>
   );
 }

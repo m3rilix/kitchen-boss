@@ -12,6 +12,7 @@ export interface User {
   createdAt: string;
   lastLoginAt: string;
   isActive: boolean;
+  activeSessionId?: string; // Latest login's session token — used to detect/kick out older sessions
 }
 
 export interface AuthState {

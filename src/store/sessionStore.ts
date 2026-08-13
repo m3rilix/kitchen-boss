@@ -2269,6 +2269,20 @@ export const useSessionStore = create<SessionState>()(
           const team1Names = game.team1.map(id => state.session!.players.find(p => p.id === id)?.name || '');
           const team2Names = game.team2.map(id => state.session!.players.find(p => p.id === id)?.name || '');
 
+          const changeParts: string[] = [];
+          const scoreChanged = updates.score && (updates.score.team1 !== game.score?.team1 || updates.score.team2 !== game.score?.team2);
+          if (scoreChanged && game.score) {
+            changeParts.push(`score ${game.score.team1}-${game.score.team2} → ${updatedGame.score!.team1}-${updatedGame.score!.team2}`);
+          } else if (scoreChanged) {
+            changeParts.push(`score set to ${updatedGame.score!.team1}-${updatedGame.score!.team2}`);
+          }
+          if (winnerChanged) {
+            const oldWinnerNames = game.winner === 'team1' ? team1Names : team2Names;
+            const newWinnerNames = updates.winner === 'team1' ? team1Names : team2Names;
+            changeParts.push(`winner ${oldWinnerNames.join(' & ')} → ${newWinnerNames.join(' & ')}`);
+          }
+          const changeSummary = changeParts.length > 0 ? ` (${changeParts.join(', ')})` : '';
+
           return {
             session: {
               ...state.session,
@@ -2277,7 +2291,7 @@ export const useSessionStore = create<SessionState>()(
               activityLog: [
                 createLogEntry(
                   'game_ended',
-                  `Match edited: ${team1Names.join(' & ')} vs ${team2Names.join(' & ')}`,
+                  `Match edited: ${team1Names.join(' & ')} vs ${team2Names.join(' & ')}${changeSummary}`,
                   { winner: updatedGame.winner, team1Names, team2Names, score: updatedGame.score }
                 ),
                 ...state.session.activityLog,
