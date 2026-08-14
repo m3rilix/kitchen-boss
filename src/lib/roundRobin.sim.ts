@@ -116,6 +116,7 @@ function simulate() {
 
       const gameEndMs = toMs(gameEndMin);
       matchHistory.push({
+        gameId: `sim-${totalGames}`,
         team1: [stack[0], stack[1]],
         team2: [stack[2], stack[3]],
         timestamp: currentTime,

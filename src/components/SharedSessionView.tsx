@@ -188,6 +188,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [logTab, setLogTab] = useState<'activity' | 'matches'>('activity');
+  const [activityShowCount, setActivityShowCount] = useState(20);
   const [activeTab, setActiveTab] = useState<MobileSection>('courts');
   const [layout, setLayoutState] = useState<PanelLayout>(loadSharedLayout);
   const [dragging, setDragging] = useState<PanelId | null>(null);
@@ -757,25 +758,44 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                 />
               </div>
             ) : (
-              <div className="p-4 max-h-48 overflow-y-auto">
-                {(session?.activityLog?.length || 0) === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-4">No activity yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {(session?.activityLog || []).slice(0, 10).map((entry) => (
-                      <div key={entry.id} className="flex items-start gap-2 py-1">
-                        <div className="flex-shrink-0 mt-0.5">{getActivityIcon(entry.type)}</div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs ${entry.type === 'stack_skipped' ? 'text-purple-600 dark:text-purple-400 font-medium' : 'text-slate-600 dark:text-slate-400'}`}>
-                            {entry.message}
-                          </p>
-                          <p className="text-xs text-slate-400 dark:text-slate-500">{formatActivityTime(entry.timestamp)}</p>
+              <>
+                <div className="p-4 max-h-48 overflow-y-auto">
+                  {(session?.activityLog?.length || 0) === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-4">No activity yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(session?.activityLog || []).slice(0, activityShowCount).map((entry) => (
+                        <div key={entry.id} className="flex items-start gap-2 py-1">
+                          <div className="flex-shrink-0 mt-0.5">{getActivityIcon(entry.type)}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs ${entry.type === 'stack_skipped' ? 'text-purple-600 dark:text-purple-400 font-medium' : 'text-slate-600 dark:text-slate-400'}`}>
+                              {entry.message}
+                            </p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">{formatActivityTime(entry.timestamp)}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {(session?.activityLog?.length || 0) > activityShowCount && (
+                  <div className="p-2 border-t border-slate-100 dark:border-slate-700 flex items-center justify-center gap-3">
+                    <button
+                      onClick={() => setActivityShowCount(c => Math.min(c + 20, session?.activityLog?.length || 0))}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium"
+                    >
+                      Load More ({(session?.activityLog?.length || 0) - activityShowCount} remaining)
+                    </button>
+                    <span className="text-slate-300 dark:text-slate-600">|</span>
+                    <button
+                      onClick={() => setActivityShowCount(session?.activityLog?.length || 0)}
+                      className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                    >
+                      Show All
+                    </button>
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         );

@@ -85,6 +85,7 @@ export interface ActivityLogEntry {
 
 // Match history entry for Round Robin tracking
 export interface MatchHistoryEntry {
+  gameId: string; // Matches the Game.id this entry was recorded for — lets a cancelled game remove its own entry
   team1: [string, string]; // Player IDs
   team2: [string, string]; // Player IDs
   timestamp: number;

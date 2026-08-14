@@ -1954,6 +1954,7 @@ export const useSessionStore = create<SessionState>()(
 
           // Record match history for Round Robin tracking
           const matchEntry = {
+            gameId: game.id,
             team1: team1 as [string, string],
             team2: team2 as [string, string],
             timestamp: Date.now(),
@@ -2321,6 +2322,11 @@ export const useSessionStore = create<SessionState>()(
             { courtId, courtName: court.name }
           );
 
+          // Remove this game's matchHistory entry (added at start-game time) so a
+          // cancelled game doesn't count as a real matchup for variety/health stats
+          const cancelledGameId = court.currentGame.id;
+          const newMatchHistory = (state.session.matchHistory ?? []).filter(m => m.gameId !== cancelledGameId);
+
           // ── Doubles mode: return both pairs to the front of the waiting queue ──
           if (state.session.rotationMode === 'doubles') {
             const pairA = state.session.pairs?.find(p =>
@@ -2342,6 +2348,7 @@ export const useSessionStore = create<SessionState>()(
                   doublesWinnerQueue:  result.doublesWinnerQueue,
                   doublesLoserQueue:   result.doublesLoserQueue,
                   doublesWaitingQueue: result.doublesWaitingQueue,
+                  matchHistory: newMatchHistory,
                   activityLog: [logEntry, ...state.session.activityLog],
                 },
               };
@@ -2368,6 +2375,7 @@ export const useSessionStore = create<SessionState>()(
               courts: updatedCourts,
               queue: newQueue,
               waitingStack: newWaitingStack,
+              matchHistory: newMatchHistory,
               activityLog: [logEntry, ...state.session.activityLog],
             },
           };
