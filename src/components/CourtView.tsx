@@ -44,6 +44,9 @@ export function CourtView({ court }: CourtViewProps) {
   const theme = useThemeClasses();
   
   const [draggedPlayer, setDraggedPlayer] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
+  // Tap-to-swap: touch devices can't do HTML5 drag-and-drop, so tap one player then
+  // tap another to swap them — mirrors the desktop drag-and-drop swap behavior.
+  const [selectedSlot, setSelectedSlot] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
   const [showEndGame, setShowEndGame] = useState(false);
   const [team1Score, setTeam1Score] = useState('');
   const [team2Score, setTeam2Score] = useState('');
@@ -85,6 +88,12 @@ export function CourtView({ court }: CourtViewProps) {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [court.currentGame?.startedAt]);
+
+  // Clear a pending tap-to-swap selection when this court's game changes (new game,
+  // ended, or cancelled) so a stale highlight doesn't carry into the next game.
+  useEffect(() => {
+    setSelectedSlot(null);
+  }, [court.currentGame?.id]);
 
   if (!session) return null;
 
@@ -238,6 +247,23 @@ export function CourtView({ court }: CourtViewProps) {
     setTeam2Score('');
     setScoreError('');
     setShowEndGame(false);
+  };
+
+  // Tap-to-swap fallback for touch devices (HTML5 drag-and-drop doesn't fire on touch).
+  // First tap selects a player; a second tap on a different slot swaps them; tapping
+  // the same slot again deselects it.
+  const handleSlotTap = (team: 'team1' | 'team2', index: number) => {
+    if (isDoubles) return;
+    if (!selectedSlot) {
+      setSelectedSlot({ team, index });
+      return;
+    }
+    if (selectedSlot.team === team && selectedSlot.index === index) {
+      setSelectedSlot(null);
+      return;
+    }
+    swapPlayers(court.id, selectedSlot.team, selectedSlot.index, team, index);
+    setSelectedSlot(null);
   };
 
   return (
@@ -422,6 +448,7 @@ export function CourtView({ court }: CourtViewProps) {
                   }
                   
                   const isDragTarget = draggedPlayer !== null && !(draggedPlayer.team === 'team1' && draggedPlayer.index === i);
+                  const isSelected = selectedSlot?.team === 'team1' && selectedSlot?.index === i;
                   return (
                     <div
                       key={i}
@@ -436,9 +463,12 @@ export function CourtView({ court }: CourtViewProps) {
                           setDraggedPlayer(null);
                         }
                       }}
+                      onClick={() => handleSlotTap('team1', i)}
                       className={`flex items-center gap-1.5 p-1 rounded-lg transition-all ${
+                        isSelected ? 'bg-blue-200 ring-2 ring-blue-500' :
                         isDragTarget && draggedPlayer ? 'bg-blue-100 ring-2 ring-blue-300' : 'bg-blue-50'
-                      } ${!isDoubles ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                      } ${!isDoubles ? 'cursor-pointer active:cursor-grabbing' : ''}`}
+                      title={!isDoubles ? 'Tap to select, tap another player to swap' : undefined}
                     >
                       <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 font-semibold text-[10px] flex-shrink-0">
                         {player?.name.charAt(0).toUpperCase()}
@@ -446,7 +476,7 @@ export function CourtView({ court }: CourtViewProps) {
                       <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate flex-1">{player?.name}</span>
                       {maintenanceMode && (
                         <button
-                          onClick={() => removePlayerFromGame(court.id, 'team1', i)}
+                          onClick={(e) => { e.stopPropagation(); removePlayerFromGame(court.id, 'team1', i); }}
                           className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-100 rounded transition"
                           title="Remove player"
                         >
@@ -530,6 +560,7 @@ export function CourtView({ court }: CourtViewProps) {
                   }
                   
                   const isDragTarget = draggedPlayer !== null && !(draggedPlayer.team === 'team2' && draggedPlayer.index === i);
+                  const isSelected = selectedSlot?.team === 'team2' && selectedSlot?.index === i;
                   return (
                     <div
                       key={i}
@@ -544,9 +575,12 @@ export function CourtView({ court }: CourtViewProps) {
                           setDraggedPlayer(null);
                         }
                       }}
+                      onClick={() => handleSlotTap('team2', i)}
                       className={`flex items-center gap-1.5 p-1 rounded-lg transition-all ${
+                        isSelected ? 'bg-red-200 ring-2 ring-red-500' :
                         isDragTarget && draggedPlayer ? 'bg-red-100 ring-2 ring-red-300' : 'bg-red-50'
-                      } ${!isDoubles ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                      } ${!isDoubles ? 'cursor-pointer active:cursor-grabbing' : ''}`}
+                      title={!isDoubles ? 'Tap to select, tap another player to swap' : undefined}
                     >
                       <div className="w-6 h-6 bg-red-200 rounded-full flex items-center justify-center text-red-700 font-semibold text-[10px] flex-shrink-0">
                         {player?.name.charAt(0).toUpperCase()}
@@ -554,7 +588,7 @@ export function CourtView({ court }: CourtViewProps) {
                       <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate flex-1">{player?.name}</span>
                       {maintenanceMode && (
                         <button
-                          onClick={() => removePlayerFromGame(court.id, 'team2', i)}
+                          onClick={(e) => { e.stopPropagation(); removePlayerFromGame(court.id, 'team2', i); }}
                           className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-100 rounded transition"
                           title="Remove player"
                         >
