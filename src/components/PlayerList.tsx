@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
-import { UserPlus, Trash2, RotateCcw, Users, AlertCircle, FlaskConical, Search, ArrowUpDown, AlertTriangle, ArrowUp, ArrowDown, Clock, Link2, Link2Off, BanIcon, Plus, Check, X, UserCheck } from 'lucide-react';
+import { UserPlus, Trash2, RotateCcw, Users, AlertCircle, FlaskConical, Search, ArrowUpDown, AlertTriangle, ArrowUp, ArrowDown, Clock, Link2, Link2Off, BanIcon, Plus, Check, X, UserCheck, UserX } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { pairDisplayName } from '@/lib/doubles';
 import { PlayerStatsModal } from './PlayerStatsModal';
@@ -31,7 +31,7 @@ export function PlayerList() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [statsPlayerId, setStatsPlayerId] = useState<string | null>(null);
-  const [checkInFilter, setCheckInFilter] = useState<'all' | 'pending'>('all');
+  const [checkInFilter, setCheckInFilter] = useState<'all' | 'pending' | 'removed'>('all');
   const [autoCheckIn, setAutoCheckIn] = useState(false);
 
   // Doubles mode — pair creation modal
@@ -150,11 +150,15 @@ export function PlayerList() {
     p => p.isActive && !pairedPlayerIds.has(p.id)
   );
 
-  // Filter and sort players — "pending" shows only players who haven't checked in yet
+  // Filter and sort players — "pending" shows who hasn't checked in; "removed" shows
+  // who was taken out of the queue/stacks (waitingSince < 0) without leaving the session
   const pendingCount = session.players.filter(p => !p.checkedInAt).length;
+  const removedCount = session.players.filter(p => p.isActive && p.waitingSince < 0).length;
   const basePlayerList = checkInFilter === 'pending'
     ? session.players.filter(p => !p.checkedInAt)
-    : session.players;
+    : checkInFilter === 'removed'
+      ? session.players.filter(p => p.isActive && p.waitingSince < 0)
+      : session.players;
 
   const filteredAndSortedPlayers = basePlayerList
     .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -464,6 +468,15 @@ export function PlayerList() {
               <UserCheck className="w-3.5 h-3.5" />
               Check-In {pendingCount > 0 && `(${pendingCount})`}
             </button>
+            <button
+              onClick={() => setCheckInFilter('removed')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+                checkInFilter === 'removed' ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              <UserX className="w-3.5 h-3.5" />
+              Not in Queue {removedCount > 0 && `(${removedCount})`}
+            </button>
           </div>
         )}
 
@@ -628,6 +641,11 @@ export function PlayerList() {
                 <UserCheck className="w-6 h-6 mx-auto mb-1 text-green-500" />
                 <p className="text-sm">Everyone's checked in!</p>
               </>
+            ) : checkInFilter === 'removed' && removedCount === 0 ? (
+              <>
+                <UserX className="w-6 h-6 mx-auto mb-1 text-slate-400" />
+                <p className="text-sm">No one's been removed from the queue</p>
+              </>
             ) : (
               <>
                 <p className="text-sm">No players match "{searchQuery}"</p>
@@ -705,6 +723,11 @@ export function PlayerList() {
                         Pending
                       </span>
                     )}
+                    {!isPending && !isInGame && !isInQueue && player.waitingSince < 0 && (
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 rounded">
+                        Not in queue
+                      </span>
+                    )}
                     {waitingTooLong && !isInGame && (
                       <span className="flex items-center gap-1 text-red-600" title="Waiting over 15 minutes">
                         <AlertTriangle className="w-3.5 h-3.5" />
@@ -773,10 +796,11 @@ export function PlayerList() {
                       {!isInGame && !isInQueue && !isPending && (
                         <button
                           onClick={() => addToQueue(player.id)}
-                          className="p-1.5 text-slate-400 hover:text-blue-600 transition"
-                          title="Add to queue"
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition"
+                          title="Add back to queue"
                         >
-                          <RotateCcw className="w-4 h-4" />
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          Add to queue
                         </button>
                       )}
                       {!isInGame && (

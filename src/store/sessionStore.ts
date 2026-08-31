@@ -574,10 +574,17 @@ export const useSessionStore = create<SessionState>()(
             return [...complete, ...rechunked];
           };
           
-          // Also remove from roundRobinStacks
-          const newRoundRobinStacks = removeFromNestedStacks(state.session.roundRobinStacks || [])
-            .filter(stack => stack.length === 4); // Remove incomplete stacks
-          
+          // Also remove from roundRobinStacks. A stack that had the removed player
+          // drops to 3/4 — its survivors must go back to waitingStack (not be silently
+          // dropped) or they become orphaned: invisible to addNewRoundRobinStacks/
+          // rebuildRoundRobinStacks (which only scan roundRobinStacks + waitingStack),
+          // which showed as "No stack ready" on courts despite enough waiting players.
+          const roundRobinStacksAfterRemoval = removeFromNestedStacks(state.session.roundRobinStacks || []);
+          const newRoundRobinStacks = roundRobinStacksAfterRemoval.filter(stack => stack.length === 4);
+          const orphanedFromRoundRobin = roundRobinStacksAfterRemoval
+            .filter(stack => stack.length > 0 && stack.length < 4)
+            .flat();
+
           const isWinLose = state.session.rotationMode === 'win_lose_stack' || state.session.rotationMode === 'full_rotation';
           
           const rawWinnerStacks = removeFromNestedStacks(state.session.winnerStacks || []);
@@ -597,7 +604,7 @@ export const useSessionStore = create<SessionState>()(
               // Remove from deprecated singular stacks
               winnerStack: state.session.winnerStack.filter((id) => id !== playerId),
               loserStack: state.session.loserStack.filter((id) => id !== playerId),
-              waitingStack: state.session.waitingStack.filter((id) => id !== playerId),
+              waitingStack: [...state.session.waitingStack.filter((id) => id !== playerId), ...orphanedFromRoundRobin],
               // Remove from active plural stacks (used by Win-Lose UI)
               winnerStacks: newWinnerStacks,
               loserStacks: newLoserStacks,
