@@ -526,12 +526,16 @@ export const useSessionStore = create<SessionState>()(
               ...state.session,
               queue: [...state.session.queue, playerId],
               // Add to waitingStack if not in any stack
-              waitingStack: (!inWinnerStack && !inLoserStack && !inWaitingStack) 
+              waitingStack: (!inWinnerStack && !inLoserStack && !inWaitingStack)
                 ? [...state.session.waitingStack, playerId]
                 : state.session.waitingStack,
               players: updatedPlayers,
-              // Clear roundRobinStacks so they get rebuilt with new player
-              roundRobinStacks: [],
+              // NOTE: roundRobinStacks is intentionally left untouched here. Wiping it
+              // to [] would drop any already-ready 4-player stacks; their members were
+              // already removed from waitingStack when that stack was built, so they'd
+              // become orphaned — invisible to addNewRoundRobinStacks (which only scans
+              // roundRobinStacks + waitingStack) — showing "No stack ready" despite
+              // waitingSince-based player counts still looking correct.
             },
           };
         });
