@@ -31,6 +31,8 @@ export function PlayerList() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [statsPlayerId, setStatsPlayerId] = useState<string | null>(null);
+  const [checkInFilter, setCheckInFilter] = useState<'all' | 'pending'>('all');
+  const [autoCheckIn, setAutoCheckIn] = useState(false);
 
   // Doubles mode — pair creation modal
   const [showPairModal, setShowPairModal] = useState(false);
@@ -81,14 +83,23 @@ export function PlayerList() {
       .filter(name => name.length > 0);
   };
 
+  const addAndMaybeCheckIn = (name: string) => {
+    addPlayer(name);
+    if (!autoCheckIn) return;
+    // Auto check-in — find the player by name right after add (zustand is sync)
+    const state = useSessionStore.getState();
+    const player = state.session?.players.find(p => p.name === name && !p.checkedInAt);
+    if (player) checkInPlayer(player.id);
+  };
+
   const handleAddPlayers = (e: React.FormEvent) => {
     e.preventDefault();
     const names = parseNames(playerNames);
-    
+
     // Check for duplicates
     const duplicates: string[] = [];
     const newNames: string[] = [];
-    
+
     names.forEach(name => {
       if (isNameDuplicate(name)) {
         duplicates.push(name);
@@ -97,18 +108,18 @@ export function PlayerList() {
         newNames.push(name);
       }
     });
-    
+
     if (duplicates.length > 0) {
       setDuplicateWarning(duplicates);
       // Still add the non-duplicate names
       if (newNames.length > 0) {
-        newNames.forEach(name => addPlayer(name));
+        newNames.forEach(addAndMaybeCheckIn);
       }
       return;
     }
-    
+
     if (newNames.length > 0) {
-      newNames.forEach(name => addPlayer(name));
+      newNames.forEach(addAndMaybeCheckIn);
       setPlayerNames('');
       setShowAddForm(false);
       setDuplicateWarning([]);
@@ -139,8 +150,11 @@ export function PlayerList() {
     p => p.isActive && !pairedPlayerIds.has(p.id)
   );
 
-  // Filter and sort players — always show all players (no pairing mode filter)
-  const basePlayerList = session.players;
+  // Filter and sort players — "pending" shows only players who haven't checked in yet
+  const pendingCount = session.players.filter(p => !p.checkedInAt).length;
+  const basePlayerList = checkInFilter === 'pending'
+    ? session.players.filter(p => !p.checkedInAt)
+    : session.players;
 
   const filteredAndSortedPlayers = basePlayerList
     .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -430,6 +444,29 @@ export function PlayerList() {
           </div>
         </div>
 
+        {/* Check-in filter tabs */}
+        {session.players.length > 0 && (
+          <div className="flex items-center gap-1 bg-slate-200/60 dark:bg-slate-700/60 rounded-lg p-0.5 w-fit mb-2">
+            <button
+              onClick={() => setCheckInFilter('all')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+                checkInFilter === 'all' ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setCheckInFilter('pending')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+                checkInFilter === 'pending' ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              Not Checked In {pendingCount > 0 && `(${pendingCount})`}
+            </button>
+          </div>
+        )}
+
         {/* Search and Sort */}
         {session.players.length > 0 && (
           <div className="flex items-center gap-2">
@@ -498,7 +535,17 @@ export function PlayerList() {
               rows={5}
               autoFocus
             />
-            
+
+            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={autoCheckIn}
+                onChange={(e) => setAutoCheckIn(e.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              Check in automatically (adds them straight to the queue)
+            </label>
+
             {/* Duplicate Warning */}
             {duplicatesInInput.length > 0 && (
               <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
@@ -575,6 +622,11 @@ export function PlayerList() {
               <>
                 <p className="text-sm">No players yet</p>
                 <p className="text-xs mt-1">Click "Add" to add players</p>
+              </>
+            ) : checkInFilter === 'pending' && pendingCount === 0 ? (
+              <>
+                <UserCheck className="w-6 h-6 mx-auto mb-1 text-green-500" />
+                <p className="text-sm">Everyone's checked in!</p>
               </>
             ) : (
               <>

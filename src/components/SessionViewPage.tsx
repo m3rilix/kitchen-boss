@@ -19,13 +19,13 @@ interface PanelLayout {
 }
 
 const DEFAULT_LAYOUT: PanelLayout = {
-  main: ['courts'],
-  sidebar: ['queue', 'players', 'log'],
+  main: ['courts', 'players', 'log'],
+  sidebar: ['queue'],
 };
 
 function loadLayout(): PanelLayout {
   try {
-    const saved = localStorage.getItem('kb-panel-layout');
+    const saved = localStorage.getItem('kb-panel-layout-v2');
     if (!saved) return DEFAULT_LAYOUT;
     const parsed = JSON.parse(saved);
     if (!Array.isArray(parsed.main) || !Array.isArray(parsed.sidebar)) return DEFAULT_LAYOUT;
@@ -88,7 +88,7 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
 
   const saveLayout = (l: PanelLayout) => {
     setLayoutState(l);
-    localStorage.setItem('kb-panel-layout', JSON.stringify(l));
+    localStorage.setItem('kb-panel-layout-v2', JSON.stringify(l));
   };
 
   const handleDrop = (col: 'main' | 'sidebar', idx: number) => {

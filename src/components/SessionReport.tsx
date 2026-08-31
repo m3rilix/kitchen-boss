@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { pairDisplayName } from '@/lib/doubles';
 import type { Player } from '@/types';
@@ -5,6 +6,7 @@ import { rankPlayers, rankPairs, winPct, formatDiff, type PlayerWithDiff, type P
 import { analyzeSessionHealth } from '@/lib/sessionHealth';
 import { X, Trophy, Activity, Repeat, Hourglass, Timer, BarChart3 } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
+import { PlayerStatsModal } from './PlayerStatsModal';
 
 // ── Medal badge ───────────────────────────────────────────────────────────────
 
@@ -67,9 +69,10 @@ interface PlayerRowProps {
   rank: number;
   player: PlayerWithDiff;
   partnerName?: string;
+  onSelect: (playerId: string) => void;
 }
 
-function PlayerRow({ rank, player, partnerName }: PlayerRowProps) {
+function PlayerRow({ rank, player, partnerName, onSelect }: PlayerRowProps) {
   const losses = player.gamesPlayed - player.gamesWon;
   const isTop3 = rank <= 3;
 
@@ -78,20 +81,12 @@ function PlayerRow({ rank, player, partnerName }: PlayerRowProps) {
       <div className="w-8 flex items-center justify-center shrink-0">
         <RankBadge rank={rank} />
       </div>
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm shrink-0 ${
-        rank === 1 ? 'bg-yellow-200 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-        rank === 2 ? 'bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-100' :
-        rank === 3 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200' :
-        'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-      }`}>
-        {player.name.charAt(0).toUpperCase()}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate">{player.name}</p>
+      <button onClick={() => onSelect(player.id)} className="flex-1 min-w-0 text-left">
+        <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate hover:underline">{player.name}</p>
         {partnerName && (
           <p className="text-xs text-slate-400 dark:text-slate-500">with {partnerName}</p>
         )}
-      </div>
+      </button>
       <div className="flex items-center gap-4 text-sm shrink-0">
         <div className="text-center min-w-[40px]">
           <p className="font-bold text-green-600 dark:text-green-400">{player.gamesWon}</p>
@@ -178,6 +173,7 @@ interface SessionReportProps {
 
 export function SessionReport({ onClose, onEndSession, isEndOfSession = false }: SessionReportProps) {
   const { session } = useSessionStore();
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   if (!session) return null;
 
@@ -264,6 +260,7 @@ export function SessionReport({ onClose, onEndSession, isEndOfSession = false }:
                     rank={idx + 1}
                     player={player}
                     partnerName={partnerMap.get(player.id)}
+                    onSelect={setSelectedPlayerId}
                   />
                 ))}
               </div>
@@ -454,6 +451,18 @@ export function SessionReport({ onClose, onEndSession, isEndOfSession = false }:
           )}
         </div>
       </div>
+
+      {selectedPlayerId && (() => {
+        const player = session.players.find(p => p.id === selectedPlayerId);
+        return player ? (
+          <PlayerStatsModal
+            player={player}
+            players={session.players}
+            gamesCompleted={session.gamesCompleted}
+            onClose={() => setSelectedPlayerId(null)}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
