@@ -48,8 +48,8 @@ export function CourtView({ court }: CourtViewProps) {
   // tap another to swap them — mirrors the desktop drag-and-drop swap behavior.
   const [selectedSlot, setSelectedSlot] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
   const [showEndGame, setShowEndGame] = useState(false);
-  const [team1Score, setTeam1Score] = useState('');
-  const [team2Score, setTeam2Score] = useState('');
+  const [team1Score, setTeam1Score] = useState('0');
+  const [team2Score, setTeam2Score] = useState('0');
   const [scoreError, setScoreError] = useState('');
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showMaintenanceMenu, setShowMaintenanceMenu] = useState(false);
@@ -177,15 +177,15 @@ export function CourtView({ court }: CourtViewProps) {
   };
 
   const handleOpenEndGame = () => {
-    setTeam1Score('');
-    setTeam2Score('');
+    setTeam1Score('0');
+    setTeam2Score('0');
     setScoreError('');
     setShowEndGame(true);
   };
 
   const handleCloseEndGame = () => {
-    setTeam1Score('');
-    setTeam2Score('');
+    setTeam1Score('0');
+    setTeam2Score('0');
     setScoreError('');
     setShowEndGame(false);
   };
@@ -213,8 +213,8 @@ export function CourtView({ court }: CourtViewProps) {
     }
     const winner: 'team1' | 'team2' = s1 > s2 ? 'team1' : 'team2';
     endGame(court.id, winner, { team1: s1, team2: s2 });
-    setTeam1Score('');
-    setTeam2Score('');
+    setTeam1Score('0');
+    setTeam2Score('0');
     setScoreError('');
     setShowEndGame(false);
   };
