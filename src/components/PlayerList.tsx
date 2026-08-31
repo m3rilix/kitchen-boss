@@ -462,7 +462,7 @@ export function PlayerList() {
               }`}
             >
               <UserCheck className="w-3.5 h-3.5" />
-              Not Checked In {pendingCount > 0 && `(${pendingCount})`}
+              Check-In {pendingCount > 0 && `(${pendingCount})`}
             </button>
           </div>
         )}
