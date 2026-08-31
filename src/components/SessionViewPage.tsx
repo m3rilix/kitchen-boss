@@ -18,14 +18,18 @@ interface PanelLayout {
   sidebar: PanelId[];
 }
 
+// All 4 panels live in `main` so the stacking order (mobile, and desktop when the
+// sidebar is empty) is always Courts -> Queue -> Players -> Log, matching the mobile
+// bottom nav. `main` always renders fully before `sidebar` in the DOM, so splitting
+// Queue into `sidebar` would put it last on mobile's single-column stack.
 const DEFAULT_LAYOUT: PanelLayout = {
-  main: ['courts', 'players', 'log'],
-  sidebar: ['queue'],
+  main: ['courts', 'queue', 'players', 'log'],
+  sidebar: [],
 };
 
 function loadLayout(): PanelLayout {
   try {
-    const saved = localStorage.getItem('kb-panel-layout-v2');
+    const saved = localStorage.getItem('kb-panel-layout-v3');
     if (!saved) return DEFAULT_LAYOUT;
     const parsed = JSON.parse(saved);
     if (!Array.isArray(parsed.main) || !Array.isArray(parsed.sidebar)) return DEFAULT_LAYOUT;
@@ -88,7 +92,7 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
 
   const saveLayout = (l: PanelLayout) => {
     setLayoutState(l);
-    localStorage.setItem('kb-panel-layout-v2', JSON.stringify(l));
+    localStorage.setItem('kb-panel-layout-v3', JSON.stringify(l));
   };
 
   const handleDrop = (col: 'main' | 'sidebar', idx: number) => {
