@@ -60,9 +60,7 @@ const rotationModes: RotationModeOption[] = [
   {
     value: 'skill_based',
     label: 'Skill-Based',
-    description: 'Balance teams based on skill ratings',
-    disabled: true,
-    status: 'coming-soon',
+    description: 'Similar levels share a court, split into even teams',
   },
 ];
 

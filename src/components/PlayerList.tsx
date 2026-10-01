@@ -5,6 +5,8 @@ import { UserPlus, Trash2, RotateCcw, Users, AlertCircle, FlaskConical, Search, 
 import { PickleballIcon } from './PickleballIcon';
 import { pairDisplayName } from '@/lib/doubles';
 import { PlayerStatsModal } from './PlayerStatsModal';
+import { StarRating } from './StarRating';
+import { DEFAULT_SKILL, MAX_SKILL, MIN_SKILL, isSkillBased, skillOf } from '@/lib/skill';
 import type { Pair } from '@/types';
 
 // Format waiting time - only show "Just joined" for players with 0 games
@@ -21,7 +23,7 @@ const formatWaitTime = (waitingSince: number, gamesPlayed: number = 0): string =
 };
 
 export function PlayerList() {
-  const { session, addPlayer, removePlayer, addToQueue, isNameDuplicate, addPair, removePair, addPairToQueue, setPlayerUnavailable, checkInPlayer, checkInPair } = useSessionStore();
+  const { session, addPlayer, removePlayer, addToQueue, isNameDuplicate, addPair, removePair, addPairToQueue, setPlayerUnavailable, setPlayerSkill, checkInPlayer, checkInPair } = useSessionStore();
   const theme = useThemeClasses();
   const [playerNames, setPlayerNames] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -33,6 +35,8 @@ export function PlayerList() {
   const [statsPlayerId, setStatsPlayerId] = useState<string | null>(null);
   const [checkInFilter, setCheckInFilter] = useState<'all' | 'pending' | 'removed'>('all');
   const [autoCheckIn, setAutoCheckIn] = useState(false);
+  const [newPlayerSkill, setNewPlayerSkill] = useState(DEFAULT_SKILL);
+  const skillMode = isSkillBased(session?.rotationMode);
 
   // Doubles mode — pair creation modal
   const [showPairModal, setShowPairModal] = useState(false);
@@ -54,7 +58,9 @@ export function PlayerList() {
     if (!session) return;
 
     const addAndCheckIn = (name: string) => {
-      addPlayer(name);
+      // Skill mode: spread test players across the scale so balancing is exercised
+      const testSkill = skillMode ? MIN_SKILL + Math.floor(Math.random() * MAX_SKILL) : undefined;
+      addPlayer(name, testSkill);
       // Auto check-in in dev mode — find player by name right after add (zustand is sync)
       const state = useSessionStore.getState();
       const player = state.session?.players.find(p => p.name === name && !p.checkedInAt);
@@ -84,7 +90,7 @@ export function PlayerList() {
   };
 
   const addAndMaybeCheckIn = (name: string) => {
-    addPlayer(name);
+    addPlayer(name, skillMode ? newPlayerSkill : undefined);
     if (!autoCheckIn) return;
     // Auto check-in — find the player by name right after add (zustand is sync)
     const state = useSessionStore.getState();
@@ -559,6 +565,14 @@ export function PlayerList() {
               Check in automatically (adds them straight to the queue)
             </label>
 
+            {skillMode && (
+              <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <span>Skill level</span>
+                <StarRating value={newPlayerSkill} onChange={setNewPlayerSkill} size="md" />
+                <span className="text-xs text-slate-400">applies to everyone in this batch — adjust per player after</span>
+              </div>
+            )}
+
             {/* Duplicate Warning */}
             {duplicatesInInput.length > 0 && (
               <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
@@ -734,7 +748,10 @@ export function PlayerList() {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                  <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                    {skillMode && (
+                      <StarRating value={skillOf(player)} onChange={(v) => setPlayerSkill(player.id, v)} size="xs" />
+                    )}
                     <span className="font-semibold text-slate-700">
                       {player.gamesWon}-{player.gamesPlayed - player.gamesWon}
                     </span>

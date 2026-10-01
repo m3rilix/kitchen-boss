@@ -1,4 +1,5 @@
 import type { Player, MatchHistoryEntry } from '@/types';
+import { skillOf } from './skill';
 
 /**
  * Round Robin Stack Building Algorithm
@@ -398,6 +399,103 @@ export function pickBestTeamSplit(
   return [split[0][0].id, split[0][1].id, split[1][0].id, split[1][1].id];
 }
 
+// ── Skill-Based ──────────────────────────────────────────────────────────────
+//
+// Weights are in the same units as scoreArrangement, where a recent repeat
+// partnership/matchup costs 100. So a 1-star team imbalance (40) is tolerated
+// before repeating a recent team, but a 3-star imbalance (120) is not.
+const SKILL_BALANCE_WEIGHT = 40; // per star of difference between the two team totals
+const SKILL_SPREAD_WEIGHT = 25;  // per star between the strongest and weakest player on the court
+const SKILL_RANK_WEIGHT = 2;     // per queue position skipped to find a closer-level player
+const SKILL_POOL_SIZE = 8;
+
+/** Cost of a 2v2 split: skill imbalance between teams, minus partner/opponent variety. Lower is better. */
+function skillArrangementCost(
+  team1: [Player, Player],
+  team2: [Player, Player],
+  matchHistory: MatchHistoryEntry[]
+): number {
+  const imbalance = Math.abs(
+    skillOf(team1[0]) + skillOf(team1[1]) - skillOf(team2[0]) - skillOf(team2[1])
+  );
+  return imbalance * SKILL_BALANCE_WEIGHT - scoreArrangement(team1, team2, matchHistory);
+}
+
+/**
+ * Given 4 already-selected players, pick the 2v2 split with the most even team skill
+ * totals (e.g. 5+1 vs 4+2), using partner/opponent variety to break ties.
+ */
+export function pickBalancedTeamSplit(
+  players: [Player, Player, Player, Player],
+  matchHistory: MatchHistoryEntry[] = []
+): [string, string, string, string] {
+  const [p0, p1, p2, p3] = players;
+  const splits: [[Player, Player], [Player, Player]][] = [
+    [[p0, p1], [p2, p3]],
+    [[p0, p2], [p1, p3]],
+    [[p0, p3], [p1, p2]],
+  ];
+  let best = splits[0];
+  let bestCost = Infinity;
+  for (const split of splits) {
+    const cost = skillArrangementCost(split[0], split[1], matchHistory);
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = split;
+    }
+  }
+  return [best[0][0].id, best[0][1].id, best[1][0].id, best[1][1].id];
+}
+
+/**
+ * Build the next Skill-Based stack: group players of similar level onto one court,
+ * then split them into the most even teams.
+ *
+ * Fairness guarantee: the highest-priority player (longest wait) is always in the
+ * stack — only their 3 companions are chosen for skill fit, from the next 7 in line.
+ * So nobody at the far end of the skill scale can be skipped indefinitely.
+ *
+ * @param priorityOrdered - waiting players, highest priority first
+ */
+export function buildSkillBalancedStack(
+  priorityOrdered: Player[],
+  matchHistory: MatchHistoryEntry[]
+): [string, string, string, string] | null {
+  const pool = priorityOrdered.filter(p => p.waitingSince > 0).slice(0, SKILL_POOL_SIZE);
+  if (pool.length < 4) return null;
+
+  const anchor = pool[0];
+  let best: [string, string, string, string] | null = null;
+  let bestCost = Infinity;
+
+  // Anchor + every 3-of-7 companion set, × 3 splits = at most 105 arrangements
+  for (let a = 1; a < pool.length - 2; a++) {
+    for (let b = a + 1; b < pool.length - 1; b++) {
+      for (let c = b + 1; c < pool.length; c++) {
+        const group = [anchor, pool[a], pool[b], pool[c]];
+        const skills = group.map(skillOf);
+        const groupCost =
+          (Math.max(...skills) - Math.min(...skills)) * SKILL_SPREAD_WEIGHT +
+          (a + b + c - 6) * SKILL_RANK_WEIGHT; // 0 when taking the next 3 in line
+        const splits: [[Player, Player], [Player, Player]][] = [
+          [[group[0], group[1]], [group[2], group[3]]],
+          [[group[0], group[2]], [group[1], group[3]]],
+          [[group[0], group[3]], [group[1], group[2]]],
+        ];
+        for (const [t1, t2] of splits) {
+          const cost = groupCost + skillArrangementCost(t1, t2, matchHistory);
+          if (cost < bestCost) {
+            bestCost = cost;
+            best = [t1[0].id, t1[1].id, t2[0].id, t2[1].id];
+          }
+        }
+      }
+    }
+  }
+
+  return best;
+}
+
 /**
  * Build the next Round Robin stack of 4 players.
  *
@@ -407,15 +505,18 @@ export function pickBestTeamSplit(
  * just the first — fixing the "Player1 always plays" bias of the old approach.
  *
  * @param respectOrder - If true, takes first 4 in order (used by manual reorder).
+ * @param skillBalanced - Skill-Based mode: group similar levels, split into even teams.
+ *   The input order (respectOrder) or priority score still decides who's next in line.
  */
 export function buildRoundRobinStack(
   waitingPlayers: Player[],
   matchHistory: MatchHistoryEntry[],
-  respectOrder: boolean = false
+  respectOrder: boolean = false,
+  skillBalanced: boolean = false
 ): [string, string, string, string] | null {
   if (waitingPlayers.length < 4) return null;
 
-  if (respectOrder) {
+  if (respectOrder && !skillBalanced) {
     return buildSimpleStack(waitingPlayers);
   }
 
@@ -424,6 +525,13 @@ export function buildRoundRobinStack(
     .filter(p => p.waitingSince > 0)
     .map(p => ({ player: p, score: scorePlayer(p, waitingPlayers, matchHistory).totalScore }))
     .sort((a, b) => b.score - a.score);
+
+  if (skillBalanced) {
+    const priorityOrdered = respectOrder
+      ? waitingPlayers.filter(p => p.waitingSince > 0)
+      : scored.map(s => s.player);
+    return buildSkillBalancedStack(priorityOrdered, matchHistory);
+  }
 
   if (scored.length < 4) return null;
 

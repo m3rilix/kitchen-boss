@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
-import type { Court } from '@/types';
+import type { Court, Player } from '@/types';
+import { usesRoundRobinStacks, isSkillBased, skillOf } from '@/lib/skill';
+import { pickBalancedTeamSplit } from '@/lib/roundRobin';
+import { StarRating } from './StarRating';
 import { Play, Trophy, X, Users, Wrench, Pencil, Check, UserPlus, UserMinus, ChevronDown, Timer, Shuffle } from 'lucide-react';
 
 /** Format elapsed milliseconds as M:SS */
@@ -124,8 +127,11 @@ export function CourtView({ court }: CourtViewProps) {
   const team2Players = court.currentGame?.team2.map(id => getPlayerById(id));
 
   // Check if there's a ready stack (4 players in any stack or combined)
-  const isRoundRobin = session.rotationMode === 'round_robin';
+  const isRoundRobin = usesRoundRobinStacks(session.rotationMode);
   const isDoubles   = session.rotationMode === 'doubles';
+  const skillMode   = isSkillBased(session.rotationMode);
+  const teamSkill = (players?: (Player | undefined)[]) =>
+    (players ?? []).reduce((sum, p) => sum + (p ? skillOf(p) : 0), 0);
 
   let hasReadyStack = false;
   if (isDoubles) {
@@ -378,7 +384,9 @@ export function CourtView({ court }: CourtViewProps) {
             <div className="grid grid-cols-2 gap-2">
               {/* Team 1 */}
               <div className="space-y-1">
-                <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Team 1</div>
+                <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
+                  Team 1{skillMode && <span className="ml-1 normal-case text-amber-600">★ {teamSkill(team1Players)}</span>}
+                </div>
                 {court.currentGame?.team1.map((playerId, i) => {
                   const player = playerId ? getPlayerById(playerId) : null;
                   const isEmpty = !playerId || playerId === '';
@@ -474,6 +482,7 @@ export function CourtView({ court }: CourtViewProps) {
                         {player?.name.charAt(0).toUpperCase()}
                       </div>
                       <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate flex-1">{player?.name}</span>
+                      {skillMode && player && <StarRating value={skillOf(player)} size="xs" />}
                       {maintenanceMode && (
                         <button
                           onClick={(e) => { e.stopPropagation(); removePlayerFromGame(court.id, 'team1', i); }}
@@ -490,7 +499,9 @@ export function CourtView({ court }: CourtViewProps) {
 
               {/* Team 2 */}
               <div className="space-y-1">
-                <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Team 2</div>
+                <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
+                  Team 2{skillMode && <span className="ml-1 normal-case text-amber-600">★ {teamSkill(team2Players)}</span>}
+                </div>
                 {court.currentGame?.team2.map((playerId, i) => {
                   const player = playerId ? getPlayerById(playerId) : null;
                   const isEmpty = !playerId || playerId === '';
@@ -586,6 +597,7 @@ export function CourtView({ court }: CourtViewProps) {
                         {player?.name.charAt(0).toUpperCase()}
                       </div>
                       <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate flex-1">{player?.name}</span>
+                      {skillMode && player && <StarRating value={skillOf(player)} size="xs" />}
                       {maintenanceMode && (
                         <button
                           onClick={(e) => { e.stopPropagation(); removePlayerFromGame(court.id, 'team2', i); }}
@@ -807,10 +819,17 @@ export function CourtView({ court }: CourtViewProps) {
                     const data = JSON.parse(e.dataTransfer.getData('application/json'));
                     if (data.source === 'stack' && data.playerIds?.length === 4) {
                       const stackData = data as StackDragData;
+                      let ids = stackData.playerIds;
+                      if (skillMode) {
+                        const four = ids.map(id => getPlayerById(id)).filter((p): p is Player => !!p);
+                        if (four.length === 4) {
+                          ids = pickBalancedTeamSplit(four as [Player, Player, Player, Player], session.matchHistory);
+                        }
+                      }
                       startGame(
                         court.id,
-                        [stackData.playerIds[0], stackData.playerIds[1]] as [string, string],
-                        [stackData.playerIds[2], stackData.playerIds[3]] as [string, string]
+                        [ids[0], ids[1]] as [string, string],
+                        [ids[2], ids[3]] as [string, string]
                       );
                     }
                   } catch {

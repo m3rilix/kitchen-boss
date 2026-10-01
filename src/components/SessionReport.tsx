@@ -7,6 +7,8 @@ import { analyzeSessionHealth } from '@/lib/sessionHealth';
 import { X, Trophy, Activity, Repeat, Hourglass, Timer, BarChart3 } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { PlayerStatsModal } from './PlayerStatsModal';
+import { StarRating } from './StarRating';
+import { isSkillBased, skillOf } from '@/lib/skill';
 
 // ── Medal badge ───────────────────────────────────────────────────────────────
 
@@ -70,9 +72,10 @@ interface PlayerRowProps {
   player: PlayerWithDiff;
   partnerName?: string;
   onSelect: (playerId: string) => void;
+  showSkill?: boolean;
 }
 
-function PlayerRow({ rank, player, partnerName, onSelect }: PlayerRowProps) {
+function PlayerRow({ rank, player, partnerName, onSelect, showSkill = false }: PlayerRowProps) {
   const losses = player.gamesPlayed - player.gamesWon;
   const isTop3 = rank <= 3;
 
@@ -83,6 +86,7 @@ function PlayerRow({ rank, player, partnerName, onSelect }: PlayerRowProps) {
       </div>
       <button onClick={() => onSelect(player.id)} className="flex-1 min-w-0 text-left">
         <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate hover:underline">{player.name}</p>
+        {showSkill && <StarRating value={skillOf(player)} size="xs" />}
         {partnerName && (
           <p className="text-xs text-slate-400 dark:text-slate-500">with {partnerName}</p>
         )}
@@ -261,6 +265,7 @@ export function SessionReport({ onClose, onEndSession, isEndOfSession = false }:
                     player={player}
                     partnerName={partnerMap.get(player.id)}
                     onSelect={setSelectedPlayerId}
+                    showSkill={isSkillBased(session.rotationMode)}
                   />
                 ))}
               </div>

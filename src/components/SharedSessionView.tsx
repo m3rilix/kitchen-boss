@@ -9,6 +9,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, GripVertical, Activity, Hourglass, Repeat, BarChart3 } from 'lucide-react';
 import { MatchLogList } from './MatchLogList';
 import { PlayerStatsModal } from './PlayerStatsModal';
+import { StarRating } from './StarRating';
+import { usesRoundRobinStacks, isSkillBased, skillOf } from '@/lib/skill';
 
 /** Format elapsed milliseconds as M:SS */
 function formatElapsed(ms: number): string {
@@ -237,6 +239,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
   };
 
   const isDoubles = session?.rotationMode === 'doubles';
+  const skillMode = isSkillBased(session?.rotationMode);
 
   // â”€â”€ Doubles queue display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const doublesQueueSections = useMemo(() => {
@@ -286,7 +289,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
       };
 
       // ── Round Robin: read pre-built stacks from session (same source as PlayerQueue) ──
-      if (session.rotationMode === 'round_robin') {
+      if (usesRoundRobinStacks(session.rotationMode)) {
         const stackCounter = session.stackCounter ?? 0;
         const preBuiltStacks = session.roundRobinStacks || [];
 
@@ -499,7 +502,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
             <div className="p-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {(session?.courts || []).map((court) => (
-                  <ReadOnlyCourtView key={court.id} court={court} getPlayerById={getPlayerById} />
+                  <ReadOnlyCourtView key={court.id} court={court} getPlayerById={getPlayerById} showSkill={skillMode} />
                 ))}
               </div>
             </div>
@@ -609,6 +612,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                                 stack.type === 'winners' ? 'bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-200' : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
                               }`}>{player.name.charAt(0).toUpperCase()}</div>
                               <span className="truncate text-slate-700 dark:text-slate-200">{player.name}</span>
+                              {skillMode && <span className="ml-auto"><StarRating value={skillOf(player)} size="xs" /></span>}
                             </div>
                           ))}
                         </div>
@@ -709,6 +713,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                           )}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+                          {skillMode && <StarRating value={skillOf(player)} size="xs" />}
                           <span>{player.gamesPlayed} games</span>
                           {partner && (<><span>•</span><span className="flex items-center gap-1"><Link2 className="w-3 h-3" />{partner.name}</span></>)}
                           {player.waitingSince > 0 && !isDoubles && (
@@ -1026,6 +1031,7 @@ function LeaderboardPanel({ session, onSelectPlayer }: { session: Session; onSel
                     <div className="w-7 flex items-center justify-center shrink-0"><RankBadge rank={rank} /></div>
                     <button onClick={() => onSelectPlayer(player.id)} className="flex-1 min-w-0 text-left">
                       <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate hover:underline">{player.name}</p>
+                      {isSkillBased(session.rotationMode) && <StarRating value={skillOf(player)} size="xs" />}
                       {partnerMap.get(player.id) && <p className="text-xs text-slate-400">with {partnerMap.get(player.id)}</p>}
                     </button>
                     <div className="flex items-center gap-3 text-sm shrink-0">
@@ -1218,8 +1224,10 @@ function LeaderboardPanel({ session, onSelectPlayer }: { session: Session; onSel
 }
 
 // Read-only court view component
-function ReadOnlyCourtView({ court, getPlayerById }: { court: Court; getPlayerById: (id: string) => Player | undefined }) {
+function ReadOnlyCourtView({ court, getPlayerById, showSkill = false }: { court: Court; getPlayerById: (id: string) => Player | undefined; showSkill?: boolean }) {
   const theme = useThemeClasses();
+  const teamSkill = (players: (Player | undefined)[]) =>
+    players.reduce((sum, p) => sum + (p ? skillOf(p) : 0), 0);
   const isInGame = court.status === 'in_game' && court.currentGame;
   const isMaintenance = court.status === 'maintenance';
 
@@ -1283,26 +1291,32 @@ function ReadOnlyCourtView({ court, getPlayerById }: { court: Court; getPlayerBy
           <div className="grid grid-cols-2 gap-3">
             {/* Team 1 */}
             <div className="space-y-1.5">
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Team 1</div>
+              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                Team 1{showSkill && <span className="ml-1 normal-case text-amber-600">★ {teamSkill(team1Players)}</span>}
+              </div>
               {team1Players.map((player, i) => (
                 <div key={i} className="flex items-center gap-2 p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <div className="w-7 h-7 bg-blue-200 dark:bg-blue-800 rounded-full flex items-center justify-center text-blue-700 dark:text-blue-200 font-semibold text-xs">
                     {player?.name.charAt(0).toUpperCase()}
                   </div>
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{player?.name}</span>
+                  {showSkill && player && <span className="ml-auto"><StarRating value={skillOf(player)} size="xs" /></span>}
                 </div>
               ))}
             </div>
 
             {/* Team 2 */}
             <div className="space-y-1.5">
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Team 2</div>
+              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                Team 2{showSkill && <span className="ml-1 normal-case text-amber-600">★ {teamSkill(team2Players)}</span>}
+              </div>
               {team2Players.map((player, i) => (
                 <div key={i} className="flex items-center gap-2 p-1.5 bg-red-50 dark:bg-red-900/20 rounded-lg">
                   <div className="w-7 h-7 bg-red-200 dark:bg-red-800 rounded-full flex items-center justify-center text-red-700 dark:text-red-200 font-semibold text-xs">
                     {player?.name.charAt(0).toUpperCase()}
                   </div>
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{player?.name}</span>
+                  {showSkill && player && <span className="ml-auto"><StarRating value={skillOf(player)} size="xs" /></span>}
                 </div>
               ))}
             </div>

@@ -4,7 +4,8 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Session, Player, Court, Game, SessionConfig, ActivityLogEntry, ActivityType, Pair } from '@/types';
 import { updateSharedSession } from '@/lib/firebase';
 import { getNextGamePlayers } from '@/lib/smartQueue';
-import { buildRoundRobinStack, pickBestTeamSplit } from '@/lib/roundRobin';
+import { buildRoundRobinStack, pickBestTeamSplit, pickBalancedTeamSplit } from '@/lib/roundRobin';
+import { usesRoundRobinStacks, isSkillBased, MIN_SKILL, MAX_SKILL } from '@/lib/skill';
 import { buildDoublesMatchup, processDoublesGameEnd, processDoublesCancelGame, pairDisplayName } from '@/lib/doubles';
 
 // Helper to generate share code
@@ -86,6 +87,7 @@ interface SessionState {
   removePairFromQueue: (pairId: string) => void;
   promotePairToLoserQueue: (pairId: string) => void;
   setPlayerUnavailable: (playerId: string, unavailable: boolean) => void;
+  setPlayerSkill: (playerId: string, skillLevel: number) => void;
 
   // Validation
   isNameDuplicate: (name: string) => boolean;
@@ -412,7 +414,7 @@ export const useSessionStore = create<SessionState>()(
         });
         // Rebuild stacks based on mode
         const mode = get().session?.rotationMode;
-        if (mode === 'round_robin') {
+        if (usesRoundRobinStacks(mode)) {
           get().addNewRoundRobinStacks();
         } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
           get().addNewWinLoseStacks();
@@ -445,7 +447,7 @@ export const useSessionStore = create<SessionState>()(
         });
         // Build stacks for the current mode
         const mode = get().session?.rotationMode;
-        if (mode === 'round_robin') {
+        if (usesRoundRobinStacks(mode)) {
           get().addNewRoundRobinStacks();
         } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
           get().addNewWinLoseStacks();
@@ -541,7 +543,7 @@ export const useSessionStore = create<SessionState>()(
         });
         // Build new stacks based on mode
         const mode = get().session?.rotationMode;
-        if (mode === 'round_robin') {
+        if (usesRoundRobinStacks(mode)) {
           get().addNewRoundRobinStacks();
         } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
           get().addNewWinLoseStacks();
@@ -621,7 +623,7 @@ export const useSessionStore = create<SessionState>()(
         });
         // Rebuild stacks based on mode
         const mode = get().session?.rotationMode;
-        if (mode === 'round_robin') {
+        if (usesRoundRobinStacks(mode)) {
           get().addNewRoundRobinStacks();
         } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
           get().addNewWinLoseStacks();
@@ -1025,6 +1027,22 @@ export const useSessionStore = create<SessionState>()(
         });
       },
 
+      // Takes effect for stacks built from now on; already-ready stacks aren't reshuffled
+      setPlayerSkill: (playerId, skillLevel) => {
+        const clamped = Math.min(MAX_SKILL, Math.max(MIN_SKILL, Math.round(skillLevel)));
+        set((state) => {
+          if (!state.session) return state;
+          return {
+            session: {
+              ...state.session,
+              players: state.session.players.map(p =>
+                p.id === playerId ? { ...p, skillLevel: clamped } : p
+              ),
+            },
+          };
+        });
+      },
+
       setPlayerUnavailable: (playerId, unavailable) => {
         set((state) => {
           if (!state.session) return state;
@@ -1171,7 +1189,7 @@ export const useSessionStore = create<SessionState>()(
         set((state) => {
           if (!state.session) return state;
           
-          const isRoundRobin = state.session.rotationMode === 'round_robin';
+          const isRoundRobin = usesRoundRobinStacks(state.session.rotationMode);
           
           if (isRoundRobin) {
             // ROUND ROBIN MODE: Collect from roundRobinStacks + waitingStack
@@ -1290,7 +1308,7 @@ export const useSessionStore = create<SessionState>()(
         });
         // Rebuild Round Robin stacks after reorder (only for Round Robin mode)
         const state = get();
-        if (state.session?.rotationMode === 'round_robin') {
+        if (usesRoundRobinStacks(state.session?.rotationMode)) {
           get().rebuildRoundRobinStacks();
         }
       },
@@ -1300,7 +1318,7 @@ export const useSessionStore = create<SessionState>()(
         set((state) => {
           if (!state.session) return state;
           
-          const isRoundRobin = state.session.rotationMode === 'round_robin';
+          const isRoundRobin = usesRoundRobinStacks(state.session.rotationMode);
           
           if (isRoundRobin) {
             // ROUND ROBIN MODE: Collect from roundRobinStacks + waitingStack
@@ -1419,7 +1437,7 @@ export const useSessionStore = create<SessionState>()(
         });
         // Rebuild Round Robin stacks after reorder (only for Round Robin mode)
         const state = get();
-        if (state.session?.rotationMode === 'round_robin') {
+        if (usesRoundRobinStacks(state.session?.rotationMode)) {
           get().rebuildRoundRobinStacks();
         }
       },
@@ -1430,7 +1448,7 @@ export const useSessionStore = create<SessionState>()(
       rebuildRoundRobinStacks: () => {
         set((state) => {
           if (!state.session) return state;
-          if (state.session.rotationMode !== 'round_robin') return state;
+          if (!usesRoundRobinStacks(state.session.rotationMode)) return state;
           
           // Get players currently in games (exclude from rebuild)
           const playersInGames = new Set<string>();
@@ -1487,7 +1505,7 @@ export const useSessionStore = create<SessionState>()(
           
           for (let i = 0; i < stacksNeeded && remainingPlayers.length >= 4; i++) {
             // Use respectOrder: true to take players in the sorted order from reorder functions
-            const stack = buildRoundRobinStack(remainingPlayers, state.session.matchHistory || [], true);
+            const stack = buildRoundRobinStack(remainingPlayers, state.session.matchHistory || [], true, isSkillBased(state.session.rotationMode));
             console.log('[rebuildRoundRobinStacks] built stack:', stack);
             if (stack) {
               newStacks.push(stack);
@@ -1519,7 +1537,7 @@ export const useSessionStore = create<SessionState>()(
       addNewRoundRobinStacks: () => {
         set((state) => {
           if (!state.session) return state;
-          if (state.session.rotationMode !== 'round_robin') return state;
+          if (!usesRoundRobinStacks(state.session.rotationMode)) return state;
           
           // Get players already in existing stacks (these are untouchable)
           const playersInStacks = new Set((state.session.roundRobinStacks || []).flat());
@@ -1566,7 +1584,7 @@ export const useSessionStore = create<SessionState>()(
           
           for (let i = 0; i < newStacksNeeded && remainingPlayers.length >= 4; i++) {
             // Use respectOrder: false so scoring selects best players by wait time + variety
-            const stack = buildRoundRobinStack(remainingPlayers, state.session.matchHistory || [], false);
+            const stack = buildRoundRobinStack(remainingPlayers, state.session.matchHistory || [], false, isSkillBased(state.session.rotationMode));
             console.log('[addNewRoundRobinStacks] built new stack:', stack);
             if (stack) {
               newStacks.push(stack);
@@ -1602,7 +1620,7 @@ export const useSessionStore = create<SessionState>()(
       prepareNextRoundRobinStack: () => {
         set((state) => {
           if (!state.session) return state;
-          if (state.session.rotationMode !== 'round_robin') return state;
+          if (!usesRoundRobinStacks(state.session.rotationMode)) return state;
 
           const playersInStacks = new Set((state.session.roundRobinStacks || []).flat());
           const customStackPlayerIds = new Set((state.session.customStacks || []).flat());
@@ -1614,7 +1632,7 @@ export const useSessionStore = create<SessionState>()(
 
           if (availablePlayers.length < 4) return state;
 
-          const stack = buildRoundRobinStack(availablePlayers, state.session.matchHistory || [], false);
+          const stack = buildRoundRobinStack(availablePlayers, state.session.matchHistory || [], false, isSkillBased(state.session.rotationMode));
           if (!stack) return state;
 
           const usedSet = new Set(stack);
@@ -1633,7 +1651,7 @@ export const useSessionStore = create<SessionState>()(
       smartRebuildStacks: () => {
         set((state) => {
           if (!state.session) return state;
-          if (state.session.rotationMode !== 'round_robin') return state;
+          if (!usesRoundRobinStacks(state.session.rotationMode)) return state;
           
           // Get players currently in games
           const playersInGames = new Set<string>();
@@ -1694,7 +1712,7 @@ export const useSessionStore = create<SessionState>()(
           
           for (let i = 0; i < stacksNeeded && remainingPlayers.length >= 4; i++) {
             // Use respectOrder: true to take players in the smart-sorted order
-            const stack = buildRoundRobinStack(remainingPlayers, state.session.matchHistory || [], true);
+            const stack = buildRoundRobinStack(remainingPlayers, state.session.matchHistory || [], true, isSkillBased(state.session.rotationMode));
             console.log('[smartRebuildStacks] built stack:', stack);
             if (stack) {
               newStacks.push(stack);
@@ -2081,7 +2099,7 @@ export const useSessionStore = create<SessionState>()(
           let newLoserStacks = removePlayersFromStacks(state.session.loserStacks || []);
           let newWaitingStacks = removePlayersFromStacks(state.session.waitingStacks || []);
           
-          if (rotationMode === 'round_robin') {
+          if (usesRoundRobinStacks(rotationMode)) {
             // Round Robin: all players go back to waiting stack at the END (lowest priority)
             newWaitingStack = [...newWaitingStack, ...allPlayerIds];
           } else if (rotationMode === 'win_lose_stack' || rotationMode === 'full_rotation') {
@@ -2203,7 +2221,7 @@ export const useSessionStore = create<SessionState>()(
         });
         // Add new stacks / handle doubles queue routing
         const mode = get().session?.rotationMode;
-        if (mode === 'round_robin') {
+        if (usesRoundRobinStacks(mode)) {
           get().addNewRoundRobinStacks();
         } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
           get().addNewWinLoseStacks();
@@ -2425,9 +2443,11 @@ export const useSessionStore = create<SessionState>()(
             .filter((p): p is Player => p !== undefined);
           if (stackPlayers.length !== 4) return [stackIds[0], stackIds[1], stackIds[2], stackIds[3]];
 
-          // Apply collision-aware pairing with current matchHistory
-          const pairing = pickBestTeamSplit(stackPlayers as [Player, Player, Player, Player], state.session!.matchHistory);
-          return pairing;
+          const four = stackPlayers as [Player, Player, Player, Player];
+          // Skill-Based: most even team totals; otherwise collision-aware pairing
+          return isSkillBased(state.session!.rotationMode)
+            ? pickBalancedTeamSplit(four, state.session!.matchHistory)
+            : pickBestTeamSplit(four, state.session!.matchHistory);
         };
 
         // Check if user manually selected specific players for next game
@@ -2489,7 +2509,7 @@ export const useSessionStore = create<SessionState>()(
 
           // For Round Robin: IGNORE custom stacks, use pre-built roundRobinStacks
           // For other modes: check custom stacks first
-          if (rotationMode === 'round_robin') {
+          if (usesRoundRobinStacks(rotationMode)) {
             // Round Robin: pull from pre-built roundRobinStacks (first available stack)
             const roundRobinStacks = state.session.roundRobinStacks || [];
 

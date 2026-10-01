@@ -4,6 +4,9 @@ import { useThemeClasses } from '@/store/themeStore';
 import { X, Search, Trophy, TrendingDown, Layers, ChevronsUp, ChevronsDown, GripVertical, Star, Users, Zap, Rocket, Play, Clock, Plus, Check, Trash2, RefreshCw } from 'lucide-react';
 import type { Player } from '@/types';
 import { splitStackIntoTeams } from '@/lib/smartQueue';
+import { pickBalancedTeamSplit } from '@/lib/roundRobin';
+import { usesRoundRobinStacks, isSkillBased, skillOf } from '@/lib/skill';
+import { StarRating } from './StarRating';
 
 type StackType = 'ready' | 'forming-winners' | 'forming-losers' | 'forming-free' | 'winners' | 'losers' | 'custom' | 'round-robin';
 
@@ -46,7 +49,7 @@ export function PlayerQueue() {
   const stacks = useMemo(() => {
     if (!session) return [];
     
-    const isRoundRobin = session.rotationMode === 'round_robin';
+    const isRoundRobin = usesRoundRobinStacks(session.rotationMode);
     console.log('[PlayerQueue] rotationMode:', session.rotationMode, 'isRoundRobin:', isRoundRobin);
     
     // Get player IDs already in custom stacks (to exclude from other stacks)
@@ -410,7 +413,8 @@ export function PlayerQueue() {
     })).filter(stack => stack.players.length > 0);
   }, [stacks, searchQuery]);
 
-  const isRoundRobin = session?.rotationMode === 'round_robin';
+  const isRoundRobin = usesRoundRobinStacks(session?.rotationMode);
+  const skillMode = isSkillBased(session?.rotationMode);
   // Count waiting players not yet assigned to a pre-built stack
   const rrWaitingCount = isRoundRobin
     ? (stacks.find(s => s.id === 'rr-forming')?.players.length ?? 0)
@@ -897,9 +901,14 @@ export function PlayerQueue() {
                           e.stopPropagation();
                           // Custom stacks keep manual arrangement; others use smart pairing
                           const playerIds = players.map(p => p.id);
+                          const balanced = skillMode && stack.type !== 'custom'
+                            ? pickBalancedTeamSplit(players as [Player, Player, Player, Player], session.matchHistory)
+                            : null;
                           const { team1, team2 } = stack.type === 'custom'
                             ? { team1: [playerIds[0], playerIds[1]] as [string, string], team2: [playerIds[2], playerIds[3]] as [string, string] }
-                            : splitStackIntoTeams(playerIds, session.players);
+                            : balanced
+                              ? { team1: [balanced[0], balanced[1]] as [string, string], team2: [balanced[2], balanced[3]] as [string, string] }
+                              : splitStackIntoTeams(playerIds, session.players);
                           startGame(
                             availableCourt.id,
                             team1,
@@ -1019,7 +1028,8 @@ export function PlayerQueue() {
                               <TrendingDown className="w-3 h-3 text-orange-600" />
                             )}
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 flex-wrap">
+                            {skillMode && <StarRating value={skillOf(player)} size="xs" />}
                             <span className="font-medium">
                               {player.gamesWon}-{player.gamesPlayed - player.gamesWon}
                             </span>
