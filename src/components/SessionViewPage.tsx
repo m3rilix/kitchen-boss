@@ -8,9 +8,11 @@ import { PlayerQueue } from './PlayerQueue';
 import { DoublesQueue } from './DoublesQueue';
 import { PlayerList } from './PlayerList';
 import { ActivityLog } from './ActivityLog';
-import { Plus, Layers, Users, LayoutGrid, ScrollText, GripVertical } from 'lucide-react';
+import { LeaderboardPanel } from './LeaderboardPanel';
+import { PlayerStatsModal } from './PlayerStatsModal';
+import { Plus, Layers, Users, LayoutGrid, ScrollText, GripVertical, Trophy } from 'lucide-react';
 
-type MobileSection = 'courts' | 'queue' | 'players' | 'log';
+type MobileSection = 'courts' | 'queue' | 'leaderboard' | 'players' | 'log';
 type PanelId = MobileSection;
 
 interface PanelLayout {
@@ -18,12 +20,14 @@ interface PanelLayout {
   sidebar: PanelId[];
 }
 
-// All 4 panels live in `main` so the stacking order (mobile, and desktop when the
-// sidebar is empty) is always Courts -> Queue -> Players -> Log, matching the mobile
-// bottom nav. `main` always renders fully before `sidebar` in the DOM, so splitting
-// Queue into `sidebar` would put it last on mobile's single-column stack.
+const ALL_PANELS: PanelId[] = ['courts', 'queue', 'leaderboard', 'players', 'log'];
+
+// All panels live in `main` so the stacking order (mobile, and desktop when the
+// sidebar is empty) is always Courts -> Queue -> Rankings -> Players -> Log, matching
+// the mobile bottom nav. `main` always renders fully before `sidebar` in the DOM, so
+// splitting Queue into `sidebar` would put it last on mobile's single-column stack.
 const DEFAULT_LAYOUT: PanelLayout = {
-  main: ['courts', 'queue', 'players', 'log'],
+  main: [...ALL_PANELS],
   sidebar: [],
 };
 
@@ -31,12 +35,19 @@ function loadLayout(): PanelLayout {
   try {
     const saved = localStorage.getItem('kb-panel-layout-v3');
     if (!saved) return DEFAULT_LAYOUT;
-    const parsed = JSON.parse(saved);
+    const parsed = JSON.parse(saved) as PanelLayout;
     if (!Array.isArray(parsed.main) || !Array.isArray(parsed.sidebar)) return DEFAULT_LAYOUT;
-    // Make sure all 4 panels are present (handles schema changes)
-    const all: PanelId[] = ['courts', 'queue', 'players', 'log'];
-    const found = new Set([...parsed.main, ...parsed.sidebar]);
-    if (!all.every(p => found.has(p))) return DEFAULT_LAYOUT;
+    // Layouts saved before the Rankings panel existed: keep the user's arrangement and
+    // slot Rankings in right after Queue.
+    const has = (p: PanelId) => parsed.main.includes(p) || parsed.sidebar.includes(p);
+    if (!has('leaderboard')) {
+      const col = parsed.sidebar.includes('queue') ? 'sidebar' : 'main';
+      const at = parsed[col].indexOf('queue');
+      parsed[col].splice(at === -1 ? parsed[col].length : at + 1, 0, 'leaderboard');
+    }
+    // Anything else missing or unknown (schema changes) → fall back to the default
+    const placed = [...parsed.main, ...parsed.sidebar];
+    if (!ALL_PANELS.every(has) || placed.some(p => !ALL_PANELS.includes(p))) return DEFAULT_LAYOUT;
     return parsed;
   } catch {
     return DEFAULT_LAYOUT;
@@ -46,6 +57,7 @@ function loadLayout(): PanelLayout {
 const MOBILE_TABS: { id: MobileSection; label: string; icon: React.ReactNode }[] = [
   { id: 'courts',  label: 'Courts',  icon: <LayoutGrid className="w-5 h-5" /> },
   { id: 'queue',   label: 'Queue',   icon: <Layers className="w-5 h-5" /> },
+  { id: 'leaderboard', label: 'Rankings', icon: <Trophy className="w-5 h-5" /> },
   { id: 'players', label: 'Players', icon: <Users className="w-5 h-5" /> },
   { id: 'log',     label: 'Log',     icon: <ScrollText className="w-5 h-5" /> },
 ];
@@ -87,8 +99,10 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
   const [layout, setLayoutState] = useState<PanelLayout>(loadLayout);
   const [dragging, setDragging] = useState<PanelId | null>(null);
   const [dropTarget, setDropTarget] = useState<{ col: 'main' | 'sidebar'; idx: number } | null>(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   if (!session) return <Navigate to="/create-session" replace />;
+  const selectedPlayer = selectedPlayerId ? session.players.find(p => p.id === selectedPlayerId) : undefined;
 
   const saveLayout = (l: PanelLayout) => {
     setLayoutState(l);
@@ -156,6 +170,8 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
         );
       case 'queue':
         return session.rotationMode === 'doubles' ? <DoublesQueue /> : <PlayerQueue />;
+      case 'leaderboard':
+        return <LeaderboardPanel session={session} onSelectPlayer={setSelectedPlayerId} />;
       case 'players':
         return <PlayerList />;
       case 'log':
@@ -241,6 +257,15 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
           ))}
         </div>
       </nav>
+
+      {selectedPlayer && (
+        <PlayerStatsModal
+          player={selectedPlayer}
+          players={session.players}
+          gamesCompleted={session.gamesCompleted}
+          onClose={() => setSelectedPlayerId(null)}
+        />
+      )}
     </div>
   );
 }

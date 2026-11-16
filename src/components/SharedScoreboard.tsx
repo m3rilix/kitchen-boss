@@ -4,8 +4,8 @@ import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { pairDisplayName } from '@/lib/doubles';
 import { useThemeClasses } from '@/store/themeStore';
-import { rankPlayers, rankPairs, winPct, formatSom, provisionalThreshold, type PlayerWithDiff, type PairWithDiff } from '@/lib/leaderboard';
-import { RankingsColumnHeader, ProvisionalTag, ProvisionalNote } from './RankingHelp';
+import { rankPlayers, rankPairs, provisionalThreshold, type PlayerWithDiff, type PairWithDiff } from '@/lib/leaderboard';
+import { RankingsColumnHeader, RankingStatCells, RANK_ROW, ProvisionalTag, ProvisionalNote } from './RankingHelp';
 import { analyzeSessionHealth } from '@/lib/sessionHealth';
 
 const formatDate = (dateStr?: string) => {
@@ -87,49 +87,19 @@ function Podium({ players }: { players: Player[] }) {
 // ── Player row ─────────────────────────────────────────────────────────────────
 
 function PlayerRow({ rank, player, partnerName }: { rank: number; player: PlayerWithDiff; partnerName?: string }) {
-  const losses = player.gamesPlayed - player.gamesWon;
   const isTop3 = rank <= 3;
   return (
-    <div className={`flex items-center gap-3 px-4 py-2.5 ${isTop3 ? 'bg-yellow-50/40 dark:bg-yellow-900/5' : ''} ${rank % 2 === 0 ? 'bg-slate-50/60 dark:bg-slate-800/30' : ''}`}>
-      <div className="w-8 flex items-center justify-center shrink-0">
+    <div className={`${RANK_ROW} ${isTop3 ? 'bg-yellow-50/40 dark:bg-yellow-900/5' : ''} ${rank % 2 === 0 ? 'bg-slate-50/60 dark:bg-slate-800/30' : ''}`}>
+      <div className="w-6 flex items-center justify-center shrink-0">
         <RankBadge rank={rank} />
-      </div>
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm shrink-0 ${
-        rank === 1 ? 'bg-yellow-200 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100' :
-        rank === 2 ? 'bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-100' :
-        rank === 3 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200' :
-        'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-      }`}>
-        {player.name.charAt(0).toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
         <p className="flex items-center min-w-0 font-medium text-slate-800 dark:text-slate-100 text-sm">
           <span className="truncate">{player.name}</span>{player.isProvisional && <ProvisionalTag />}
         </p>
-        {partnerName && <p className="text-xs text-slate-400 dark:text-slate-500">with {partnerName}</p>}
+        {partnerName && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">with {partnerName}</p>}
       </div>
-      <div className="flex items-center gap-4 text-sm shrink-0">
-        <div className="text-center min-w-[40px]">
-          <p className="font-bold text-green-600 dark:text-green-400">{player.gamesWon}</p>
-          <p className="text-xs text-slate-400">W</p>
-        </div>
-        <div className="text-center min-w-[40px]">
-          <p className="font-bold text-red-500 dark:text-red-400">{losses}</p>
-          <p className="text-xs text-slate-400">L</p>
-        </div>
-        <div className="text-center min-w-[40px]">
-          <p className="font-semibold text-slate-700 dark:text-slate-300">{winPct(player.gamesWon, player.gamesPlayed)}</p>
-          <p className="text-xs text-slate-400">Win%</p>
-        </div>
-        <div className="text-center min-w-[40px]">
-          <p className="font-medium text-slate-600 dark:text-slate-400">{formatSom(player.somScore, player.gamesPlayed)}</p>
-          <p className="text-xs text-slate-400">SOM</p>
-        </div>
-        <div className="text-center min-w-[40px]">
-          <p className="font-medium text-slate-600 dark:text-slate-400">{player.gamesPlayed}</p>
-          <p className="text-xs text-slate-400">GP</p>
-        </div>
-      </div>
+      <RankingStatCells won={player.gamesWon} played={player.gamesPlayed} som={player.somScore} />
     </div>
   );
 }
@@ -137,44 +107,19 @@ function PlayerRow({ rank, player, partnerName }: { rank: number; player: Player
 // ── Pair row ───────────────────────────────────────────────────────────────────
 
 function PairRow({ rank, pair, players }: { rank: number; pair: PairWithDiff; players: Player[] }) {
-  const losses = pair.gamesPlayed - pair.gamesWon;
   const isTop3 = rank <= 3;
   const name = pairDisplayName(pair, players);
   return (
-    <div className={`flex items-center gap-3 px-4 py-2.5 ${isTop3 ? 'bg-yellow-50/40 dark:bg-yellow-900/5' : ''} ${rank % 2 === 0 ? 'bg-slate-50/60 dark:bg-slate-800/30' : ''}`}>
-      <div className="w-8 flex items-center justify-center shrink-0">
+    <div className={`${RANK_ROW} ${isTop3 ? 'bg-yellow-50/40 dark:bg-yellow-900/5' : ''} ${rank % 2 === 0 ? 'bg-slate-50/60 dark:bg-slate-800/30' : ''}`}>
+      <div className="w-6 flex items-center justify-center shrink-0">
         <RankBadge rank={rank} />
-      </div>
-      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold">
-        2s
       </div>
       <div className="flex-1 min-w-0">
         <p className="flex items-center min-w-0 font-medium text-slate-800 dark:text-slate-100 text-sm">
           <span className="truncate">{name}</span>{pair.isProvisional && <ProvisionalTag />}
         </p>
       </div>
-      <div className="flex items-center gap-4 text-sm shrink-0">
-        <div className="text-center min-w-[40px]">
-          <p className="font-bold text-green-600 dark:text-green-400">{pair.gamesWon}</p>
-          <p className="text-xs text-slate-400">W</p>
-        </div>
-        <div className="text-center min-w-[40px]">
-          <p className="font-bold text-red-500 dark:text-red-400">{losses}</p>
-          <p className="text-xs text-slate-400">L</p>
-        </div>
-        <div className="text-center min-w-[40px]">
-          <p className="font-semibold text-slate-700 dark:text-slate-300">{winPct(pair.gamesWon, pair.gamesPlayed)}</p>
-          <p className="text-xs text-slate-400">Win%</p>
-        </div>
-        <div className="text-center min-w-[40px]">
-          <p className="font-medium text-slate-600 dark:text-slate-400">{formatSom(pair.somScore, pair.gamesPlayed)}</p>
-          <p className="text-xs text-slate-400">SOM</p>
-        </div>
-        <div className="text-center min-w-[40px]">
-          <p className="font-medium text-slate-600 dark:text-slate-400">{pair.gamesPlayed}</p>
-          <p className="text-xs text-slate-400">GP</p>
-        </div>
-      </div>
+      <RankingStatCells won={pair.gamesWon} played={pair.gamesPlayed} som={pair.somScore} />
     </div>
   );
 }
