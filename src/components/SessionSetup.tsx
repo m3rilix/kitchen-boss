@@ -3,10 +3,11 @@ import { useSessionStore } from '@/store/sessionStore';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeClasses } from '@/store/themeStore';
 import type { RotationMode } from '@/types';
-import { Users, RotateCcw, MapPin, Calendar, Clock, Shield, LogOut, ChevronDown, Lock } from 'lucide-react';
+import { Users, RotateCcw, MapPin, Calendar, Clock, Shield, LogOut, ChevronDown, Lock, ClipboardPaste } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { BetaBanner } from './BetaBanner';
+import { parseReclubInvite } from '@/lib/reclubInvite';
 
 interface SessionSetupProps {
   onAdminClick?: () => void;
@@ -64,6 +65,14 @@ const rotationModes: RotationModeOption[] = [
   },
 ];
 
+type InviteField = 'name' | 'location' | 'dateTime' | 'courts';
+const FIELD_LABELS: Record<InviteField, string> = {
+  name: 'session name',
+  location: 'location',
+  dateTime: 'date & time',
+  courts: 'number of courts',
+};
+
 // Get today's date in YYYY-MM-DD format
 const getTodayDate = () => {
   const today = new Date();
@@ -88,6 +97,38 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
   const [rotationMode, setRotationMode] = useState<RotationMode>('full_rotation');
   const [subMode, setSubMode] = useState<SubMode>('round_robin');
   const [expandedMode, setExpandedMode] = useState<RotationMode | null>('full_rotation');
+
+  // Reclub invite paste
+  const [inviteText, setInviteText] = useState('');
+  const [inviteNotice, setInviteNotice] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
+  const [missingFields, setMissingFields] = useState<Set<InviteField>>(new Set());
+
+  const clearMissing = (field: InviteField) =>
+    setMissingFields(prev => {
+      if (!prev.has(field)) return prev;
+      const next = new Set(prev);
+      next.delete(field);
+      return next;
+    });
+
+  const handleFillFromInvite = () => {
+    const parsed = parseReclubInvite(inviteText);
+    const missing = new Set<InviteField>();
+    if (parsed.name) setName(parsed.name); else missing.add('name');
+    if (parsed.location) setLocation(parsed.location); else missing.add('location');
+    if (parsed.date && parsed.time) { setDate(parsed.date); setTime(parsed.time); } else missing.add('dateTime');
+    if (parsed.courtCount) setCourtCount(parsed.courtCount); else missing.add('courts');
+    setMissingFields(missing);
+
+    const notes: string[] = [];
+    if (missing.size === 0) notes.push('Details filled in — check them below before starting.');
+    else notes.push(`Couldn't find: ${[...missing].map(f => FIELD_LABELS[f]).join(', ')}. Fill ${missing.size === 1 ? 'it' : 'them'} in below.`);
+    if (parsed.extraInvitesIgnored) notes.push('More than one invite was pasted — only the first was used.');
+    setInviteNotice({ tone: missing.size === 0 && !parsed.extraInvitesIgnored ? 'ok' : 'warn', text: notes.join(' ') });
+  };
+
+  const missingClass = (field: InviteField) =>
+    missingFields.has(field) ? 'border-amber-400 ring-2 ring-amber-200' : 'border-slate-300';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,6 +218,38 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Paste Reclub invite */}
+          <div className="p-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40 space-y-2">
+            <label htmlFor="reclub-invite" className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+              <ClipboardPaste className="w-4 h-4 inline mr-2" />
+              Paste Reclub invite <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <textarea
+              id="reclub-invite"
+              value={inviteText}
+              onChange={(e) => { setInviteText(e.target.value); setInviteNotice(null); }}
+              rows={4}
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition resize-none bg-white dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600"
+              placeholder={'3C•4H•28P - Open Play\n⏰ Sun, Sept 25 7:00 PM\n📍 Open Play Court'}
+            />
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400">Fills in the name, location, date, time and courts.</p>
+              <button
+                type="button"
+                onClick={handleFillFromInvite}
+                disabled={!inviteText.trim()}
+                className={`shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg transition ${theme.textButton} ${theme.bgButton} disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Fill in details
+              </button>
+            </div>
+            {inviteNotice && (
+              <p className={`text-xs ${inviteNotice.tone === 'ok' ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                {inviteNotice.text}
+              </p>
+            )}
+          </div>
+
           {/* Session Name */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -185,8 +258,8 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+              onChange={(e) => { setName(e.target.value); clearMissing('name'); }}
+              className={`w-full px-4 py-3 border ${missingClass('name')} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
               placeholder="e.g., Saturday Morning Open Play"
             />
           </div>
@@ -200,8 +273,8 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
             <input
               type="text"
               value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+              onChange={(e) => { setLocation(e.target.value); clearMissing('location'); }}
+              className={`w-full px-4 py-3 border ${missingClass('location')} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
               placeholder="e.g., Community Center, Park Name"
             />
           </div>
@@ -216,8 +289,8 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
               <input
                 type="date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                onChange={(e) => { setDate(e.target.value); clearMissing('dateTime'); }}
+                className={`w-full px-4 py-3 border ${missingClass('dateTime')} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
               />
             </div>
             <div>
@@ -228,8 +301,8 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
               <input
                 type="time"
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                onChange={(e) => { setTime(e.target.value); clearMissing('dateTime'); }}
+                className={`w-full px-4 py-3 border ${missingClass('dateTime')} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition`}
               />
             </div>
           </div>
@@ -240,10 +313,10 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
               <Users className="w-4 h-4 inline mr-2" />
               Number of Courts
             </label>
-            <div className="flex items-center gap-4">
+            <div className={`flex items-center gap-4 w-fit rounded-lg ${missingFields.has('courts') ? 'ring-2 ring-amber-300 p-1' : ''}`}>
               <button
                 type="button"
-                onClick={() => setCourtCount(Math.max(1, courtCount - 1))}
+                onClick={() => { setCourtCount(Math.max(1, courtCount - 1)); clearMissing('courts'); }}
                 className="w-12 h-12 rounded-lg border border-slate-300 text-xl font-bold hover:bg-slate-50 transition"
               >
                 -
@@ -253,7 +326,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
               </span>
               <button
                 type="button"
-                onClick={() => setCourtCount(Math.min(10, courtCount + 1))}
+                onClick={() => { setCourtCount(Math.min(10, courtCount + 1)); clearMissing('courts'); }}
                 className="w-12 h-12 rounded-lg border border-slate-300 text-xl font-bold hover:bg-slate-50 transition"
               >
                 +
