@@ -4,7 +4,8 @@ import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { pairDisplayName } from '@/lib/doubles';
 import { useThemeClasses } from '@/store/themeStore';
-import { rankPlayers, rankPairs, winPct, formatDiff, type PlayerWithDiff, type PairWithDiff } from '@/lib/leaderboard';
+import { rankPlayers, rankPairs, winPct, formatSom, provisionalThreshold, type PlayerWithDiff, type PairWithDiff } from '@/lib/leaderboard';
+import { RankingsColumnHeader, ProvisionalTag, ProvisionalNote } from './RankingHelp';
 import { analyzeSessionHealth } from '@/lib/sessionHealth';
 
 const formatDate = (dateStr?: string) => {
@@ -102,7 +103,9 @@ function PlayerRow({ rank, player, partnerName }: { rank: number; player: Player
         {player.name.charAt(0).toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate">{player.name}</p>
+        <p className="flex items-center min-w-0 font-medium text-slate-800 dark:text-slate-100 text-sm">
+          <span className="truncate">{player.name}</span>{player.isProvisional && <ProvisionalTag />}
+        </p>
         {partnerName && <p className="text-xs text-slate-400 dark:text-slate-500">with {partnerName}</p>}
       </div>
       <div className="flex items-center gap-4 text-sm shrink-0">
@@ -119,8 +122,8 @@ function PlayerRow({ rank, player, partnerName }: { rank: number; player: Player
           <p className="text-xs text-slate-400">Win%</p>
         </div>
         <div className="text-center min-w-[40px]">
-          <p className={`font-medium ${player.pointDiff > 0 ? 'text-green-600 dark:text-green-400' : player.pointDiff < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>{formatDiff(player.pointDiff)}</p>
-          <p className="text-xs text-slate-400">+/-</p>
+          <p className="font-medium text-slate-600 dark:text-slate-400">{formatSom(player.somScore, player.gamesPlayed)}</p>
+          <p className="text-xs text-slate-400">SOM</p>
         </div>
         <div className="text-center min-w-[40px]">
           <p className="font-medium text-slate-600 dark:text-slate-400">{player.gamesPlayed}</p>
@@ -146,7 +149,9 @@ function PairRow({ rank, pair, players }: { rank: number; pair: PairWithDiff; pl
         2s
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate">{name}</p>
+        <p className="flex items-center min-w-0 font-medium text-slate-800 dark:text-slate-100 text-sm">
+          <span className="truncate">{name}</span>{pair.isProvisional && <ProvisionalTag />}
+        </p>
       </div>
       <div className="flex items-center gap-4 text-sm shrink-0">
         <div className="text-center min-w-[40px]">
@@ -162,8 +167,8 @@ function PairRow({ rank, pair, players }: { rank: number; pair: PairWithDiff; pl
           <p className="text-xs text-slate-400">Win%</p>
         </div>
         <div className="text-center min-w-[40px]">
-          <p className={`font-medium ${pair.pointDiff > 0 ? 'text-green-600 dark:text-green-400' : pair.pointDiff < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>{formatDiff(pair.pointDiff)}</p>
-          <p className="text-xs text-slate-400">+/-</p>
+          <p className="font-medium text-slate-600 dark:text-slate-400">{formatSom(pair.somScore, pair.gamesPlayed)}</p>
+          <p className="text-xs text-slate-400">SOM</p>
         </div>
         <div className="text-center min-w-[40px]">
           <p className="font-medium text-slate-600 dark:text-slate-400">{pair.gamesPlayed}</p>
@@ -280,20 +285,7 @@ export function SharedScoreboard({ session }: SharedScoreboardProps) {
 
               {/* Player Rankings */}
               <div>
-                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                      Player Rankings
-                    </p>
-                    <div className="flex items-center gap-4 text-xs text-slate-400 pr-1">
-                      <span className="w-[40px] text-center">W</span>
-                      <span className="w-[40px] text-center">L</span>
-                      <span className="w-[40px] text-center">Win%</span>
-                      <span className="w-[40px] text-center">+/-</span>
-                      <span className="w-[40px] text-center">GP</span>
-                    </div>
-                  </div>
-                </div>
+                <RankingsColumnHeader title="Player Rankings" className="border-b border-slate-100 dark:border-slate-700" />
                 {rankedPlayers.map((player, idx) => (
                   <PlayerRow
                     key={player.id}
@@ -302,28 +294,21 @@ export function SharedScoreboard({ session }: SharedScoreboardProps) {
                     partnerName={partnerMap.get(player.id)}
                   />
                 ))}
+                {rankedPlayers.some(p => p.isProvisional) && (
+                  <ProvisionalNote threshold={provisionalThreshold(rankedPlayers.map(p => p.gamesPlayed))} />
+                )}
               </div>
 
               {/* Pair Rankings (doubles only) */}
               {isDoubles && rankedPairs.length > 0 && (
                 <div className="mt-2 border-t border-slate-100 dark:border-slate-700">
-                  <div className="px-4 py-2 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                        Pair Rankings
-                      </p>
-                      <div className="flex items-center gap-4 text-xs text-slate-400 pr-1">
-                        <span className="w-[40px] text-center">W</span>
-                        <span className="w-[40px] text-center">L</span>
-                        <span className="w-[40px] text-center">Win%</span>
-                        <span className="w-[40px] text-center">+/-</span>
-                        <span className="w-[40px] text-center">GP</span>
-                      </div>
-                    </div>
-                  </div>
+                  <RankingsColumnHeader title="Pair Rankings" className="border-b border-slate-100 dark:border-slate-700" />
                   {rankedPairs.map((pair, idx) => (
                     <PairRow key={pair.id} rank={idx + 1} pair={pair} players={session.players} />
                   ))}
+                  {rankedPairs.some(p => p.isProvisional) && (
+                    <ProvisionalNote threshold={provisionalThreshold(rankedPairs.map(p => p.gamesPlayed))} />
+                  )}
                 </div>
               )}
 

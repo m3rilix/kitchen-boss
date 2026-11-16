@@ -3,7 +3,8 @@ import { useThemeClasses } from '@/store/themeStore';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
 import { pairDisplayName } from '@/lib/doubles';
-import { rankPlayers, rankPairs, winPct, formatDiff } from '@/lib/leaderboard';
+import { rankPlayers, rankPairs, winPct, formatSom, provisionalThreshold } from '@/lib/leaderboard';
+import { RankingsColumnHeader, ProvisionalTag, ProvisionalNote } from './RankingHelp';
 import { analyzeSessionHealth } from '@/lib/sessionHealth';
 import { useState, useMemo, useEffect } from 'react';
 import { Users, Clock, Wifi, Trophy, UserPlus, Play, UserMinus, History, Rocket, Search, ArrowUpDown, ArrowUp, ArrowDown, Layers, Link2, Timer, LayoutGrid, ScrollText, GripVertical, Activity, Hourglass, Repeat, BarChart3 } from 'lucide-react';
@@ -1013,16 +1014,7 @@ function LeaderboardPanel({ session, onSelectPlayer }: { session: Session; onSel
           ) : (
             <>
               {/* Player Rankings */}
-              <div className="px-4 py-2 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Player Rankings</p>
-                <div className="flex items-center gap-3 text-xs text-slate-400 pr-1">
-                  <span className="w-8 text-center">W</span>
-                  <span className="w-8 text-center">L</span>
-                  <span className="w-10 text-center">Win%</span>
-                  <span className="w-10 text-center">+/-</span>
-                  <span className="w-8 text-center">GP</span>
-                </div>
-              </div>
+              <RankingsColumnHeader title="Player Rankings" compact className="border-b border-slate-100 dark:border-slate-700" />
               {rankedPlayers.map((player, idx) => {
                 const rank = idx + 1;
                 const losses = player.gamesPlayed - player.gamesWon;
@@ -1030,7 +1022,9 @@ function LeaderboardPanel({ session, onSelectPlayer }: { session: Session; onSel
                   <div key={player.id} className={`flex items-center gap-3 px-4 py-2.5 ${rank <= 3 ? 'bg-yellow-50/40 dark:bg-yellow-900/5' : ''} ${rank % 2 === 0 ? 'bg-slate-50/60 dark:bg-slate-800/30' : ''}`}>
                     <div className="w-7 flex items-center justify-center shrink-0"><RankBadge rank={rank} /></div>
                     <button onClick={() => onSelectPlayer(player.id)} className="flex-1 min-w-0 text-left">
-                      <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate hover:underline">{player.name}</p>
+                      <p className="flex items-center min-w-0 font-medium text-slate-800 dark:text-slate-100 text-sm">
+                        <span className="truncate hover:underline">{player.name}</span>{player.isProvisional && <ProvisionalTag />}
+                      </p>
                       {isSkillBased(session.rotationMode) && <StarRating value={skillOf(player)} size="xs" />}
                       {partnerMap.get(player.id) && <p className="text-xs text-slate-400">with {partnerMap.get(player.id)}</p>}
                     </button>
@@ -1038,26 +1032,20 @@ function LeaderboardPanel({ session, onSelectPlayer }: { session: Session; onSel
                       <span className="w-8 text-center font-bold text-green-600 dark:text-green-400">{player.gamesWon}</span>
                       <span className="w-8 text-center font-bold text-red-500 dark:text-red-400">{losses}</span>
                       <span className="w-10 text-center font-semibold text-slate-700 dark:text-slate-300">{winPct(player.gamesWon, player.gamesPlayed)}</span>
-                      <span className={`w-10 text-center font-medium ${player.pointDiff > 0 ? 'text-green-600 dark:text-green-400' : player.pointDiff < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>{formatDiff(player.pointDiff)}</span>
+                      <span className="w-10 text-center font-medium text-slate-600 dark:text-slate-400">{formatSom(player.somScore, player.gamesPlayed)}</span>
                       <span className="w-8 text-center text-slate-500 dark:text-slate-400">{player.gamesPlayed}</span>
                     </div>
                   </div>
                 );
               })}
+              {rankedPlayers.some(p => p.isProvisional) && (
+                <ProvisionalNote threshold={provisionalThreshold(rankedPlayers.map(p => p.gamesPlayed))} />
+              )}
 
               {/* Pair Rankings (doubles only) */}
               {isDoubles && rankedPairs.length > 0 && (
                 <>
-                  <div className="px-4 py-2 mt-2 bg-slate-50 dark:bg-slate-700/50 border-y border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Pair Rankings</p>
-                    <div className="flex items-center gap-3 text-xs text-slate-400 pr-1">
-                      <span className="w-8 text-center">W</span>
-                      <span className="w-8 text-center">L</span>
-                      <span className="w-10 text-center">Win%</span>
-                      <span className="w-10 text-center">+/-</span>
-                      <span className="w-8 text-center">GP</span>
-                    </div>
-                  </div>
+                  <RankingsColumnHeader title="Pair Rankings" compact className="mt-2 border-y border-slate-100 dark:border-slate-700" />
                   {rankedPairs.map((pair, idx) => {
                     const rank = idx + 1;
                     const losses = pair.gamesPlayed - pair.gamesWon;
@@ -1067,18 +1055,23 @@ function LeaderboardPanel({ session, onSelectPlayer }: { session: Session; onSel
                         <div className="w-7 flex items-center justify-center shrink-0"><RankBadge rank={rank} /></div>
                         <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold">2s</div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate">{name}</p>
+                          <p className="flex items-center min-w-0 font-medium text-slate-800 dark:text-slate-100 text-sm">
+                            <span className="truncate">{name}</span>{pair.isProvisional && <ProvisionalTag />}
+                          </p>
                         </div>
                         <div className="flex items-center gap-3 text-sm shrink-0">
                           <span className="w-8 text-center font-bold text-green-600 dark:text-green-400">{pair.gamesWon}</span>
                           <span className="w-8 text-center font-bold text-red-500 dark:text-red-400">{losses}</span>
                           <span className="w-10 text-center font-semibold text-slate-700 dark:text-slate-300">{winPct(pair.gamesWon, pair.gamesPlayed)}</span>
-                          <span className={`w-10 text-center font-medium ${pair.pointDiff > 0 ? 'text-green-600 dark:text-green-400' : pair.pointDiff < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>{formatDiff(pair.pointDiff)}</span>
+                          <span className="w-10 text-center font-medium text-slate-600 dark:text-slate-400">{formatSom(pair.somScore, pair.gamesPlayed)}</span>
                           <span className="w-8 text-center text-slate-500 dark:text-slate-400">{pair.gamesPlayed}</span>
                         </div>
                       </div>
                     );
                   })}
+                  {rankedPairs.some(p => p.isProvisional) && (
+                    <ProvisionalNote threshold={provisionalThreshold(rankedPairs.map(p => p.gamesPlayed))} />
+                  )}
                 </>
               )}
 
