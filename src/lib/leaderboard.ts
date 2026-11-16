@@ -16,8 +16,11 @@ export interface RankingMetrics {
 export type PlayerWithDiff = Player & RankingMetrics;
 export type PairWithDiff = Pair & RankingMetrics;
 
-/** How much opponent strength shifts win rate. SOM spans ~0.3–0.75 in practice → about ±12 points. */
-const SOM_WEIGHT = 0.5;
+/**
+ * How much opponent strength shifts win rate. SOM spans ~0.3–0.75 in practice → about ±6 points:
+ * enough to separate near-identical records, not enough to overturn a clear win-rate lead.
+ */
+const SOM_WEIGHT = 0.25;
 /** Provisional threshold = this fraction of the average games played (rounded), never below MIN. */
 const PROVISIONAL_FRACTION = 0.75;
 const PROVISIONAL_MIN_GAMES = 2;
