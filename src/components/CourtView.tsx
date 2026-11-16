@@ -51,8 +51,8 @@ export function CourtView({ court }: CourtViewProps) {
   // tap another to swap them — mirrors the desktop drag-and-drop swap behavior.
   const [selectedSlot, setSelectedSlot] = useState<{ team: 'team1' | 'team2'; index: number } | null>(null);
   const [showEndGame, setShowEndGame] = useState(false);
-  const [team1Score, setTeam1Score] = useState('0');
-  const [team2Score, setTeam2Score] = useState('0');
+  const [team1Score, setTeam1Score] = useState('');
+  const [team2Score, setTeam2Score] = useState('');
   const [scoreError, setScoreError] = useState('');
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showMaintenanceMenu, setShowMaintenanceMenu] = useState(false);
@@ -183,15 +183,15 @@ export function CourtView({ court }: CourtViewProps) {
   };
 
   const handleOpenEndGame = () => {
-    setTeam1Score('0');
-    setTeam2Score('0');
+    setTeam1Score('');
+    setTeam2Score('');
     setScoreError('');
     setShowEndGame(true);
   };
 
   const handleCloseEndGame = () => {
-    setTeam1Score('0');
-    setTeam2Score('0');
+    setTeam1Score('');
+    setTeam2Score('');
     setScoreError('');
     setShowEndGame(false);
   };
@@ -205,13 +205,17 @@ export function CourtView({ court }: CourtViewProps) {
     const winningScore = Math.max(s1, s2);
     const margin = Math.abs(s1 - s2);
     if (winningScore < MIN_WINNING_SCORE) return `Winning score must be at least ${MIN_WINNING_SCORE}`;
-    if (margin < MIN_WIN_MARGIN) return `Must win by at least ${MIN_WIN_MARGIN} points`;
+    // Win-by-2 only applies past 11 (deuce); a game to 11 can end 11-10
+    if (winningScore > MIN_WINNING_SCORE && margin < MIN_WIN_MARGIN) {
+      return `Past ${MIN_WINNING_SCORE}, must win by at least ${MIN_WIN_MARGIN} points`;
+    }
     return null;
   };
 
   const handleSubmitScore = () => {
-    const s1 = parseInt(team1Score, 10);
-    const s2 = parseInt(team2Score, 10);
+    // A blank field counts as 0 (e.g. an 11-0 shutout only needs the winning score typed)
+    const s1 = team1Score.trim() === '' ? 0 : parseInt(team1Score, 10);
+    const s2 = team2Score.trim() === '' ? 0 : parseInt(team2Score, 10);
     const error = validateScore(s1, s2);
     if (error) {
       setScoreError(error);
@@ -219,8 +223,8 @@ export function CourtView({ court }: CourtViewProps) {
     }
     const winner: 'team1' | 'team2' = s1 > s2 ? 'team1' : 'team2';
     endGame(court.id, winner, { team1: s1, team2: s2 });
-    setTeam1Score('0');
-    setTeam2Score('0');
+    setTeam1Score('');
+    setTeam2Score('');
     setScoreError('');
     setShowEndGame(false);
   };
