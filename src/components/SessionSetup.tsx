@@ -60,6 +60,8 @@ const rotationModes: RotationModeOption[] = [
     value: 'skill_based',
     label: 'Skill-Based',
     description: 'Similar levels share a court, split into even teams',
+    disabled: true,
+    status: 'under-maintenance',
   },
 ];
 
