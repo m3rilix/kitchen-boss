@@ -46,17 +46,10 @@ export function PlayerStatsModal({ player, session, onClose, hideDetailsByDefaul
   const hasDetails = stats.partners.length > 0 || stats.opponents.length > 0 || stats.history.length > 0;
 
   return (
-    <div
-      className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center z-50 ${
-        // Share view: centered on phones too, so the card screenshots cleanly
-        hideDetailsByDefault ? 'items-center p-4' : 'items-end sm:items-center p-0 sm:p-4'
-      }`}
-      onClick={onClose}
-    >
+    // Centered on every screen size so the card screenshots cleanly (expanded details scroll inside)
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className={`bg-slate-100 dark:bg-slate-900 shadow-2xl w-full sm:max-w-md max-h-[92vh] flex flex-col overflow-hidden ${
-          hideDetailsByDefault ? 'max-w-md rounded-2xl' : 'rounded-t-2xl sm:rounded-2xl'
-        }`}
+        className="bg-slate-100 dark:bg-slate-900 shadow-2xl w-full max-w-md max-h-[92vh] flex flex-col overflow-hidden rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-1 overflow-y-auto">
