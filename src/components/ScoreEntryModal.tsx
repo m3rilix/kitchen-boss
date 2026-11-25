@@ -151,7 +151,7 @@ export function ScoreEntryModal({ court, onClose }: ScoreEntryModalProps) {
         {import.meta.env.DEV && (
           <button
             onClick={submitRandom}
-            className="flex items-center justify-center gap-2 w-full py-2 text-sm font-medium text-purple-700 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 rounded-lg hover:bg-purple-200 transition"
+            className="flex items-center justify-center gap-2 w-full py-2 text-sm font-medium text-purple-700 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 rounded-lg hover:bg-purple-200 transition dark:hover:bg-purple-900/40"
             title="End with a random valid score (dev only)"
           >
             <Shuffle className="w-4 h-4" />

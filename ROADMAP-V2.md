@@ -11,8 +11,8 @@ _Last updated: 2026-11-26_
 | 3 | Score Pop-up & Court Border (E) | Phase 2 | ✅ Live |
 | 4 | Player Ranking Card (C) | — (can run in parallel with Phases 1–3) | ✅ Live |
 | 5 | Large-Screen 3-Panel Layout (B) | Phases 1–3 | ✅ Live |
-| 6 | Court Board / Court View (G) | Phase 5 (builds on the new court panel) | ⏳ Next |
-| 7 | Dark Mode & Color Themes (D) | Last, so it covers all new panels | ⏳ |
+| 6 | Court Board / Court View (G) | Phase 5 (builds on the new court panel) | 🧪 Built locally |
+| 7 | Dark Mode & Color Themes (D) | Last, so it covers all new panels | 🧪 Built locally |
 | 8 | Re-order Stacks by Wins / Losses | — | 💭 Planning |
 
 ---
@@ -66,20 +66,24 @@ On computer / laptop / tablet (768px and wider, manager view), the layout uses o
 
 Final shape: queue stacks are compact cards in a wrapping grid (4 per row on a laptop, 2 on a tablet). Panel drag-to-rearrange was removed. Phones keep the stacked layout with bottom tabs.
 
-### 6. Court Board / Court View (G)
+### 6. Court Board / Court View (G) 🧪
 Add a **[Court View]** panel above the courts that controls how the court panel is displayed. **Start N ready courts** button sits between this panel and the courts.
-- [ ] Show counts: N courts active, ready, waiting
-- [ ] Order courts by: active or default
-- [ ] Court view toggle:
-  - [ ] **Grid** — default (current layout)
-  - [ ] **Compact** — courts in rows with compact info instead of a grid
-  - [ ] **Table** — columns: court, status, match-up players, timer, actions (Start, End, Return to Ready, Cancel Game)
-- [ ] **Maintenance** remains a per-court control (each court keeps its own Maintenance button)
-- [ ] Add court
+- [x] Show counts: N courts active, ready, waiting
+- [x] Order courts by: active or default
+- [x] Court view toggle:
+  - [x] **Grid** — default (current layout)
+  - [x] **Compact** — courts in rows with compact info instead of a grid
+  - [x] **Table** — columns: court, status, match-up players, timer, actions (Start, End, Return to Ready, Cancel Game)
+- [x] **Maintenance** remains a per-court control (each court keeps its own Maintenance button)
+- [x] Add court
 
-### 7. Dark Mode & Color Themes (D)
-- [ ] Theme button to toggle dark mode, making sure all panels work fine
-- [ ] 4 selectable color themes: Blue and Green (existing) plus White and Purple (new)
+Built: counts also show maintenance courts when any exist; view and order are remembered per device; Table is tablet+ (phones fall back to Compact); Compact/Table rows also have **Next** and **Maintenance / Available**; swapping players and renaming stay on the Grid cards.
+
+### 7. Dark Mode & Color Themes (D) 🧪
+- [x] Theme button to toggle dark mode, making sure all panels work fine
+- [x] 4 selectable color themes: Blue and Green (existing) plus White and Purple (new)
+
+Built: the palette button (and the header menu) offers Light / Dark / Auto (follows the device) and Blue / Green / White / Purple. White is monochrome (near-black accents in light mode, white accents in dark mode).
 
 ### 8. Re-order Stacks by Wins / Losses 💭 (planning)
 Add **By Wins** and **By Losses** to the queue's **Re-order** menu. When the manager clicks one, waiting players are regrouped into stacks sorted by their session record, so players with similar records play together.

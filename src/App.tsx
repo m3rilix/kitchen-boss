@@ -28,7 +28,7 @@ class ShareViewErrorBoundary extends Component<{ children: ReactNode }, { hasErr
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl p-6 max-w-md text-center">
             <h2 className="text-xl font-bold text-red-600 mb-2">Share View Error</h2>
             <p className="text-slate-600 mb-2">Something went wrong rendering the shared session.</p>
@@ -134,7 +134,7 @@ function App() {
     if (!sharedSession) {
       // Loading state while fetching from Firebase
       return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-slate-600">Loading session...</p>

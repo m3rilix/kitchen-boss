@@ -50,7 +50,7 @@ export function LoginPage() {
   const displayError = localError || error;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -67,20 +67,20 @@ export function LoginPage() {
           <div className={`hidden w-20 h-20 ${theme.bg100} rounded-full flex items-center justify-center mx-auto mb-4`}>
             <PickleballIcon className={`w-12 h-12 ${theme.text}`} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
             Kitchen Boss
           </h1>
-          <p className="text-slate-500 mt-1">
+          <p className="text-slate-500 mt-1 dark:text-slate-400">
             {isRegister ? 'Create your account' : 'Sign in to continue'}
           </p>
         </div>
 
         {/* Form */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 dark:bg-slate-800 dark:border-slate-700">
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1 dark:text-slate-200">
                   Name
                 </label>
                 <div className="relative">
@@ -90,14 +90,14 @@ export function LoginPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Your name"
-                    className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                    className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1 dark:text-slate-200">
                 Email
               </label>
               <div className="relative">
@@ -107,13 +107,13 @@ export function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="user@kitchenboss.app"
-                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1 dark:text-slate-200">
                 Password
               </label>
               <div className="relative">
@@ -123,15 +123,15 @@ export function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
             </div>
 
             {displayError && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg dark:bg-red-900/20 dark:border-red-800">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                <p className="text-sm text-red-600">{displayError}</p>
+                <p className="text-sm text-red-600 dark:text-red-300">{displayError}</p>
               </div>
             )}
 
@@ -159,10 +159,10 @@ export function LoginPage() {
           {/* Divider */}
           <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200"></div>
+              <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-slate-500">or</span>
+              <span className="px-2 bg-white text-slate-500 dark:bg-slate-800 dark:text-slate-400">or</span>
             </div>
           </div>
 
@@ -176,7 +176,7 @@ export function LoginPage() {
               }
             }}
             disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 py-2.5 border border-slate-300 rounded-lg hover:bg-slate-50 transition disabled:opacity-50 font-medium"
+            className="w-full flex items-center justify-center gap-2 py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition disabled:opacity-50 font-medium dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -195,7 +195,7 @@ export function LoginPage() {
                 setIsRegister(!isRegister);
                 setLocalError('');
               }}
-              className="text-sm text-slate-600 hover:text-slate-800 transition"
+              className="text-sm text-slate-600 hover:text-slate-800 transition dark:text-slate-300"
             >
               {isRegister ? (
                 <>Already have an account? <span className={theme.text}>Sign in</span></>
@@ -208,9 +208,9 @@ export function LoginPage() {
 
         {/* Demo credentials - only show in development */}
         {import.meta.env.DEV && (
-          <div className="mt-4 p-3 bg-slate-100 rounded-lg border border-slate-200 space-y-2">
-            <p className="text-xs text-slate-600 text-center font-medium">Demo Accounts</p>
-            <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
+          <div className="mt-4 p-3 bg-slate-100 rounded-lg border border-slate-200 space-y-2 dark:bg-slate-700 dark:border-slate-700">
+            <p className="text-xs text-slate-600 text-center font-medium dark:text-slate-300">Demo Accounts</p>
+            <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 dark:text-slate-400">
               <div className="text-center">
                 <p className="font-medium">demo1@kitchenboss.app</p>
                 <p className="text-slate-400">Kb7xP2m (30 days)</p>
@@ -229,8 +229,8 @@ export function LoginPage() {
               </div>
             </div>
             {/* Admin credentials */}
-            <div className="pt-2 border-t border-slate-200 text-center">
-              <p className="text-xs text-orange-600">
+            <div className="pt-2 border-t border-slate-200 text-center dark:border-slate-700">
+              <p className="text-xs text-orange-600 dark:text-orange-300">
                 <span className="font-medium">Dev Admin:</span> admin@kitchenboss.app / admin123!!
               </p>
             </div>

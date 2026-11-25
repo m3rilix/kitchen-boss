@@ -187,7 +187,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
             {/* Logout */}
             <button
               onClick={async () => await logout()}
-              className="p-2 text-slate-500 hover:text-red-500 transition"
+              className="p-2 text-slate-500 hover:text-red-500 transition dark:text-slate-400"
               title="Sign Out"
             >
               <LogOut className="w-5 h-5" />
@@ -252,7 +252,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
 
           {/* Session Name */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2 dark:text-slate-200">
               Session Name
             </label>
             <input
@@ -266,7 +266,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
 
           {/* Location */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2 dark:text-slate-200">
               <MapPin className="w-4 h-4 inline mr-2" />
               Location / Venue
             </label>
@@ -282,7 +282,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
           {/* Date and Time */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2 dark:text-slate-200">
                 <Calendar className="w-4 h-4 inline mr-2" />
                 Date
               </label>
@@ -294,7 +294,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2 dark:text-slate-200">
                 <Clock className="w-4 h-4 inline mr-2" />
                 Start Time
               </label>
@@ -309,7 +309,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
 
           {/* Court Count */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2 dark:text-slate-200">
               <Users className="w-4 h-4 inline mr-2" />
               Number of Courts
             </label>
@@ -317,17 +317,17 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
               <button
                 type="button"
                 onClick={() => { setCourtCount(Math.max(1, courtCount - 1)); clearMissing('courts'); }}
-                className="w-12 h-12 rounded-lg border border-slate-300 text-xl font-bold hover:bg-slate-50 transition"
+                className="w-12 h-12 rounded-lg border border-slate-300 text-xl font-bold hover:bg-slate-50 transition dark:border-slate-600 dark:hover:bg-slate-700"
               >
                 -
               </button>
-              <span className="text-3xl font-bold text-slate-800 w-12 text-center">
+              <span className="text-3xl font-bold text-slate-800 w-12 text-center dark:text-slate-100">
                 {courtCount}
               </span>
               <button
                 type="button"
                 onClick={() => { setCourtCount(Math.min(10, courtCount + 1)); clearMissing('courts'); }}
-                className="w-12 h-12 rounded-lg border border-slate-300 text-xl font-bold hover:bg-slate-50 transition"
+                className="w-12 h-12 rounded-lg border border-slate-300 text-xl font-bold hover:bg-slate-50 transition dark:border-slate-600 dark:hover:bg-slate-700"
               >
                 +
               </button>
@@ -336,7 +336,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
 
           {/* Rotation Mode */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2 dark:text-slate-200">
               <RotateCcw className="w-4 h-4 inline mr-2" />
               Rotation Mode
             </label>
@@ -356,10 +356,10 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
                     }}
                     className={`flex items-start p-3 border rounded-lg transition ${
                       mode.disabled 
-                        ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-60'
+                        ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-60 dark:border-slate-700 dark:bg-slate-700/50'
                         : rotationMode === mode.value
-                          ? 'border-blue-500 bg-blue-50 cursor-pointer'
-                          : 'border-slate-200 hover:border-slate-300 cursor-pointer'
+                          ? 'border-blue-500 bg-blue-50 cursor-pointer dark:bg-blue-900/20'
+                          : 'border-slate-200 hover:border-slate-300 cursor-pointer dark:border-slate-700'
                     }`}
                   >
                     <input
@@ -369,11 +369,11 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
                       checked={rotationMode === mode.value}
                       disabled={mode.disabled}
                       onChange={() => {}}
-                      className="mt-1 text-blue-600 focus:ring-blue-500"
+                      className="mt-1 text-blue-600 focus:ring-blue-500 dark:text-blue-300"
                     />
                     <div className="ml-3 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className={`font-medium ${mode.disabled ? 'text-slate-400' : 'text-slate-800'}`}>
+                        <span className={`font-medium ${mode.disabled ? 'text-slate-400' : 'text-slate-800 dark:text-slate-100'}`}>
                           {mode.label}
                         </span>
                         {mode.disabled && (
@@ -388,7 +388,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
                           }`} />
                         )}
                       </div>
-                      <p className={`text-sm ${mode.disabled ? 'text-slate-400' : 'text-slate-500'}`}>
+                      <p className={`text-sm ${mode.disabled ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'}`}>
                         {mode.description}
                       </p>
                     </div>
@@ -396,17 +396,17 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
                   
                   {/* Sub-modes */}
                   {mode.hasSubModes && expandedMode === mode.value && mode.subModes && (
-                    <div className="ml-6 mt-2 space-y-2 border-l-2 border-blue-200 pl-4">
+                    <div className="ml-6 mt-2 space-y-2 border-l-2 border-blue-200 pl-4 dark:border-blue-800">
                       {mode.subModes.map((sub) => (
                         <div
                           key={sub.value}
                           onClick={() => !sub.disabled && setSubMode(sub.value)}
                           className={`flex items-start p-2 border rounded-lg transition ${
                             sub.disabled
-                              ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-60'
+                              ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-60 dark:border-slate-700 dark:bg-slate-700/50'
                               : subMode === sub.value
-                                ? 'border-blue-400 bg-blue-50 cursor-pointer'
-                                : 'border-slate-200 hover:border-slate-300 cursor-pointer'
+                                ? 'border-blue-400 bg-blue-50 cursor-pointer dark:bg-blue-900/20'
+                                : 'border-slate-200 hover:border-slate-300 cursor-pointer dark:border-slate-700'
                           }`}
                         >
                           <input
@@ -416,11 +416,11 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
                             checked={subMode === sub.value}
                             disabled={sub.disabled}
                             onChange={() => {}}
-                            className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                            className="mt-0.5 text-blue-600 focus:ring-blue-500 dark:text-blue-300"
                           />
                           <div className="ml-2 flex-1">
                             <div className="flex items-center gap-2">
-                              <span className={`font-medium text-sm ${sub.disabled ? 'text-slate-400' : 'text-slate-700'}`}>
+                              <span className={`font-medium text-sm ${sub.disabled ? 'text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>
                                 {sub.label}
                               </span>
                               {sub.disabled && (
@@ -430,7 +430,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
                                 </span>
                               )}
                             </div>
-                            <p className={`text-xs ${sub.disabled ? 'text-slate-400' : 'text-slate-500'}`}>
+                            <p className={`text-xs ${sub.disabled ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'}`}>
                               {sub.description}
                             </p>
                           </div>

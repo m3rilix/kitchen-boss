@@ -72,7 +72,7 @@ function PairCard({ pair, queueType, isInGame, onRemoveFromQueue, onPromote }: P
               onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setIsEditing(false); }}
               className="flex-1 px-1.5 py-0.5 text-sm border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
-            <button onClick={handleRename} className="p-0.5 text-green-600 hover:text-green-700">
+            <button onClick={handleRename} className="p-0.5 text-green-600 hover:text-green-700 dark:text-green-300">
               <Check className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -93,7 +93,7 @@ function PairCard({ pair, queueType, isInGame, onRemoveFromQueue, onPromote }: P
             {pair.gamesWon}W–{losses}L
           </span>
           {(p1?.unavailable || p2?.unavailable) && (
-            <span className="px-1 py-0.5 bg-red-100 text-red-600 rounded text-xs font-medium">
+            <span className="px-1 py-0.5 bg-red-100 text-red-600 rounded text-xs font-medium dark:bg-red-900/30 dark:text-red-300">
               {p1?.unavailable ? p1.name : p2?.name} out
             </span>
           )}
@@ -104,7 +104,7 @@ function PairCard({ pair, queueType, isInGame, onRemoveFromQueue, onPromote }: P
             </span>
           )}
           {isInGame && (
-            <span className="px-1 py-0.5 bg-blue-100 text-blue-600 rounded text-xs font-medium">Playing</span>
+            <span className="px-1 py-0.5 bg-blue-100 text-blue-600 rounded text-xs font-medium dark:bg-blue-900/30 dark:text-blue-300">Playing</span>
           )}
         </div>
       </div>
@@ -281,7 +281,7 @@ export function DoublesQueue() {
       {nextMatchup && (
         <div className="mx-4 mt-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/60 dark:to-slate-700/40 p-3">
           <div className="flex items-center gap-1.5 mb-2.5">
-            <Swords className="w-3.5 h-3.5 text-slate-500" />
+            <Swords className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Next Match</span>
           </div>
           <div className="flex items-center gap-2">

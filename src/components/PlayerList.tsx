@@ -240,7 +240,7 @@ export function PlayerList() {
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
             <div>
               <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-base">Create New Pair</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
                 {selectedForPair
                   ? `Selected: ${session.players.find(p => p.id === selectedForPair)?.name} — now pick a partner`
                   : 'Select the first player'}
@@ -300,9 +300,9 @@ export function PlayerList() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{player.name}</p>
-                        <p className="text-xs text-slate-500">{player.gamesWon}W–{player.gamesPlayed - player.gamesWon}L</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{player.gamesWon}W–{player.gamesPlayed - player.gamesWon}L</p>
                       </div>
-                      {isSelected && <Check className="w-4 h-4 text-green-600 ml-auto flex-shrink-0" />}
+                      {isSelected && <Check className="w-4 h-4 text-green-600 ml-auto flex-shrink-0 dark:text-green-300" />}
                     </button>
                   );
                 })}
@@ -319,7 +319,7 @@ export function PlayerList() {
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
         <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-          <Link2 className="w-4 h-4 text-green-600" />
+          <Link2 className="w-4 h-4 text-green-600 dark:text-green-300" />
           Teams ({(session.pairs ?? []).length})
         </h3>
         <button
@@ -361,7 +361,7 @@ export function PlayerList() {
                     </p>
                     {inGame && <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded">Playing</span>}
                     {inQueue && !inGame && <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 rounded">Queued</span>}
-                    {isPairPending && !inGame && !inQueue && <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded">Pending</span>}
+                    {isPairPending && !inGame && !inQueue && <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded dark:bg-amber-900/30 dark:text-amber-300">Pending</span>}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     <span className="font-semibold text-slate-700 dark:text-slate-300">{pair.gamesWon}W–{losses}L</span>
@@ -375,7 +375,7 @@ export function PlayerList() {
                   {!inGame && !inQueue && isPairPending && (
                     <button
                       onClick={() => checkInPair(pair.id)}
-                      className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg shadow-sm transition"
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg shadow-sm transition dark:text-amber-300 dark:bg-amber-900/30 dark:border-amber-800 dark:hover:bg-amber-900/40"
                       title="Check in pair"
                     >
                       <UserCheck className="w-4 h-4" />
@@ -416,27 +416,27 @@ export function PlayerList() {
               <div className="relative">
                 <button
                   onClick={() => setShowDevMenu(!showDevMenu)}
-                  className="flex items-center gap-1 px-2 py-1 text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 rounded-lg transition"
+                  className="flex items-center gap-1 px-2 py-1 text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 rounded-lg transition dark:text-purple-300 dark:bg-purple-900/30 dark:hover:bg-purple-900/40"
                   title="Add test players (dev only)"
                 >
                   <FlaskConical className="w-4 h-4" />
                   +Dev
                 </button>
                 {showDevMenu && (
-                  <div className="absolute right-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1">
+                  <div className="absolute right-0 mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1 dark:bg-slate-800 dark:border-slate-700">
                     {[1, 2, 3, 4].map(count => (
                       <button
                         key={count}
                         onClick={() => handleAddTestPlayers(count)}
-                        className="w-full px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-700"
+                        className="w-full px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-700 dark:text-slate-200 dark:hover:bg-purple-900/40"
                       >
                         +{count} Player{count > 1 ? 's' : ''}
                       </button>
                     ))}
-                    <hr className="my-1 border-slate-200" />
+                    <hr className="my-1 border-slate-200 dark:border-slate-700" />
                     <button
                       onClick={() => handleAddTestPlayers('all')}
-                      className="w-full px-3 py-1.5 text-left text-sm text-purple-700 font-medium hover:bg-purple-50"
+                      className="w-full px-3 py-1.5 text-left text-sm text-purple-700 font-medium hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-900/40"
                     >
                       Add All Radiants ({ALL_RADIANTS.length})
                     </button>
@@ -496,26 +496,26 @@ export function PlayerList() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search players..."
-                className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none dark:border-slate-600"
               />
             </div>
             <div className="relative flex items-center gap-1">
               <button
                 onClick={() => setShowSortMenu(!showSortMenu)}
-                className="flex items-center gap-1 px-2 py-1.5 text-sm text-slate-600 bg-white border border-slate-300 rounded-l-lg hover:bg-slate-50"
+                className="flex items-center gap-1 px-2 py-1.5 text-sm text-slate-600 bg-white border border-slate-300 rounded-l-lg hover:bg-slate-50 dark:text-slate-300 dark:bg-slate-800 dark:border-slate-600 dark:hover:bg-slate-700"
               >
                 <ArrowUpDown className="w-4 h-4" />
                 {sortOptions.find(o => o.value === sortBy)?.label}
               </button>
               <button
                 onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
-                className="flex items-center px-2 py-1.5 text-sm text-slate-600 bg-white border border-l-0 border-slate-300 rounded-r-lg hover:bg-slate-50"
+                className="flex items-center px-2 py-1.5 text-sm text-slate-600 bg-white border border-l-0 border-slate-300 rounded-r-lg hover:bg-slate-50 dark:text-slate-300 dark:bg-slate-800 dark:border-slate-600 dark:hover:bg-slate-700"
                 title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
               >
                 {sortDir === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
               </button>
               {showSortMenu && (
-                <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1">
+                <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1 dark:bg-slate-800 dark:border-slate-700">
                   {sortOptions.map(option => (
                     <button
                       key={option.value}
@@ -523,8 +523,8 @@ export function PlayerList() {
                         setSortBy(option.value);
                         setShowSortMenu(false);
                       }}
-                      className={`w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50 ${
-                        sortBy === option.value ? 'text-blue-600 font-medium' : 'text-slate-700'
+                      className={`w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${
+                        sortBy === option.value ? 'text-blue-600 font-medium dark:text-blue-300' : 'text-slate-700 dark:text-slate-200'
                       }`}
                     >
                       {option.label}
@@ -539,7 +539,7 @@ export function PlayerList() {
 
       {/* Add Players Form */}
       {showAddForm && (
-        <form onSubmit={handleAddPlayers} className="p-3 border-b border-slate-100 bg-slate-50">
+        <form onSubmit={handleAddPlayers} className="p-3 border-b border-slate-100 bg-slate-50 dark:border-slate-700 dark:bg-slate-700/50">
           <div className="space-y-2">
             <textarea
               value={playerNames}
@@ -549,7 +549,7 @@ export function PlayerList() {
               }}
               placeholder="Enter player names (one per line, or separated by commas)&#10;&#10;Example:&#10;Totskie&#10;Clare&#10;Mingkie, Paul"
               className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none ${
-                duplicatesInInput.length > 0 ? 'border-amber-400' : 'border-slate-300'
+                duplicatesInInput.length > 0 ? 'border-amber-400' : 'border-slate-300 dark:border-slate-600'
               }`}
               rows={5}
               autoFocus
@@ -560,7 +560,7 @@ export function PlayerList() {
                 type="checkbox"
                 checked={autoCheckIn}
                 onChange={(e) => setAutoCheckIn(e.target.checked)}
-                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:text-blue-300"
               />
               Check in automatically (adds them straight to the queue)
             </label>
@@ -575,21 +575,21 @@ export function PlayerList() {
 
             {/* Duplicate Warning */}
             {duplicatesInInput.length > 0 && (
-              <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg dark:bg-amber-900/20 dark:border-amber-800">
                 <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                <div className="text-xs text-amber-700">
+                <div className="text-xs text-amber-700 dark:text-amber-300">
                   <span className="font-medium">Duplicate names:</span>{' '}
                   {duplicatesInInput.join(', ')}
-                  <p className="text-amber-600 mt-0.5">These players already exist and will be skipped.</p>
+                  <p className="text-amber-600 mt-0.5 dark:text-amber-300">These players already exist and will be skipped.</p>
                 </div>
               </div>
             )}
             
             {/* Post-submit warning */}
             {duplicateWarning.length > 0 && (
-              <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg dark:bg-amber-900/20 dark:border-amber-800">
                 <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                <div className="text-xs text-amber-700">
+                <div className="text-xs text-amber-700 dark:text-amber-300">
                   <span className="font-medium">Skipped duplicates:</span>{' '}
                   {duplicateWarning.join(', ')}
                   <button
@@ -607,11 +607,11 @@ export function PlayerList() {
             )}
             
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-500 flex items-center gap-1">
+              <span className="text-xs text-slate-500 flex items-center gap-1 dark:text-slate-400">
                 <Users className="w-3 h-3" />
                 {nameCount} new player{nameCount !== 1 ? 's' : ''} to add
                 {duplicatesInInput.length > 0 && (
-                  <span className="text-amber-600">
+                  <span className="text-amber-600 dark:text-amber-300">
                     ({duplicatesInInput.length} duplicate{duplicatesInInput.length !== 1 ? 's' : ''})
                   </span>
                 )}
@@ -624,7 +624,7 @@ export function PlayerList() {
                     setShowAddForm(false);
                     setDuplicateWarning([]);
                   }}
-                  className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition"
+                  className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition dark:text-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600"
                 >
                   Cancel
                 </button>
@@ -642,9 +642,9 @@ export function PlayerList() {
       )}
 
       {/* Player List */}
-      <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+      <div className="divide-y divide-slate-100 dark:divide-slate-700 max-h-96 overflow-y-auto">
         {filteredAndSortedPlayers.length === 0 ? (
-          <div className="p-6 text-center text-slate-500">
+          <div className="p-6 text-center text-slate-500 dark:text-slate-400">
             {session.players.length === 0 ? (
               <>
                 <p className="text-sm">No players yet</p>
@@ -665,7 +665,7 @@ export function PlayerList() {
                 <p className="text-sm">No players match "{searchQuery}"</p>
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="text-xs text-blue-600 hover:underline mt-1"
+                  className="text-xs text-blue-600 hover:underline mt-1 dark:text-blue-300"
                 >
                   Clear search
                 </button>
@@ -689,7 +689,7 @@ export function PlayerList() {
               <div
                 key={player.id}
                 className={`flex items-center gap-3 p-3 transition ${
-                  isInGame ? 'bg-blue-50' : ''
+                  isInGame ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                 }`}
               >
                 {/* Avatar */}
@@ -698,10 +698,10 @@ export function PlayerList() {
                   title="View player stats"
                   className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm shrink-0 ${
                   isInGame
-                    ? 'bg-blue-200 text-blue-700'
+                    ? 'bg-blue-200 text-blue-700 dark:bg-blue-800/50 dark:text-blue-300'
                     : player.unavailable
-                      ? 'bg-red-100 text-red-500'
-                      : 'bg-slate-200 text-slate-600'
+                      ? 'bg-red-100 text-red-500 dark:bg-red-900/30'
+                      : 'bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-300'
                 }`}>
                   {player.unavailable
                     ? <BanIcon className="w-4 h-4" />
@@ -713,27 +713,27 @@ export function PlayerList() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setStatsPlayerId(player.id)}
-                      className={`font-medium truncate hover:underline text-left ${player.unavailable ? 'text-red-500 line-through' : 'text-slate-800'}`}
+                      className={`font-medium truncate hover:underline text-left ${player.unavailable ? 'text-red-500 line-through' : 'text-slate-800 dark:text-slate-100'}`}
                     >
                       {player.name}
                     </button>
                     {isInGame && (
-                      <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded dark:bg-blue-900/30 dark:text-blue-300">
                         Playing
                       </span>
                     )}
                     {player.unavailable && !isInGame && (
-                      <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded">
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-500 rounded dark:bg-red-900/30">
                         Unavailable
                       </span>
                     )}
                     {isDoubles && hasPair && (
-                      <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded flex items-center gap-0.5">
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded flex items-center gap-0.5 dark:bg-green-900/30 dark:text-green-300">
                         <Link2 className="w-2.5 h-2.5" /> Paired
                       </span>
                     )}
                     {isPending && !isInGame && (
-                      <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded">
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded dark:bg-amber-900/30 dark:text-amber-300">
                         Pending
                       </span>
                     )}
@@ -743,16 +743,16 @@ export function PlayerList() {
                       </span>
                     )}
                     {waitingTooLong && !isInGame && (
-                      <span className="flex items-center gap-1 text-red-600" title="Waiting over 15 minutes">
+                      <span className="flex items-center gap-1 text-red-600 dark:text-red-300" title="Waiting over 15 minutes">
                         <AlertTriangle className="w-3.5 h-3.5" />
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                  <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap dark:text-slate-400">
                     {skillMode && (
                       <StarRating value={skillOf(player)} onChange={(v) => setPlayerSkill(player.id, v)} size="xs" />
                     )}
-                    <span className="font-semibold text-slate-700">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">
                       {player.gamesWon}-{player.gamesPlayed - player.gamesWon}
                     </span>
                     <span className="flex items-center gap-1">
@@ -760,7 +760,7 @@ export function PlayerList() {
                       {player.gamesPlayed} games
                     </span>
                     {player.waitingSince > 0 && (
-                      <span className="flex items-center gap-1 text-amber-600">
+                      <span className="flex items-center gap-1 text-amber-600 dark:text-amber-300">
                         <Clock className="w-3 h-3" />
                         {formatWaitTime(player.waitingSince, player.gamesPlayed)}
                       </span>
@@ -803,7 +803,7 @@ export function PlayerList() {
                       {!isInGame && isPending && (
                         <button
                           onClick={() => checkInPlayer(player.id)}
-                          className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg shadow-sm transition"
+                          className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg shadow-sm transition dark:text-amber-300 dark:bg-amber-900/30 dark:border-amber-800 dark:hover:bg-amber-900/40"
                           title="Check in player"
                         >
                           <UserCheck className="w-4 h-4" />
@@ -813,7 +813,7 @@ export function PlayerList() {
                       {!isInGame && !isInQueue && !isPending && (
                         <button
                           onClick={() => addToQueue(player.id)}
-                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition"
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition dark:text-blue-300 dark:bg-blue-900/30 dark:hover:bg-blue-900/40"
                           title="Add back to queue"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />

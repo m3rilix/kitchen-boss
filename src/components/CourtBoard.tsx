@@ -105,7 +105,7 @@ function CourtActions({ court, session }: { court: Court; session: Session }) {
   }
 
   const cancelBtn = (
-    <button onClick={() => setConfirmCancel(true)} className={`${btn} text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-300 hover:bg-red-100`} title="Cancel: no result, players go back to the front of the queue">
+    <button onClick={() => setConfirmCancel(true)} className={`${btn} text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40`} title="Cancel: no result, players go back to the front of the queue">
       <X className="w-3.5 h-3.5" />Cancel
     </button>
   );
@@ -122,7 +122,7 @@ function CourtActions({ court, session }: { court: Court; session: Session }) {
           >
             <SkipForward className="w-3.5 h-3.5" />Next
           </button>
-          <button onClick={() => setCourtStatus(court.id, 'maintenance')} className={`${btn} text-orange-600 bg-orange-50 dark:bg-orange-900/20 dark:text-orange-300 hover:bg-orange-100`} title="Mark maintenance">
+          <button onClick={() => setCourtStatus(court.id, 'maintenance')} className={`${btn} text-orange-600 bg-orange-50 dark:bg-orange-900/20 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900/40`} title="Mark maintenance">
             <Wrench className="w-3.5 h-3.5" />
           </button>
         </>
@@ -140,14 +140,14 @@ function CourtActions({ court, session }: { court: Court; session: Session }) {
           <button onClick={() => setScoring(true)} className={`${btn} bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 hover:opacity-90`}>
             End
           </button>
-          <button onClick={() => returnToReady(court.id)} className={`${btn} text-amber-700 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300 hover:bg-amber-100`} title="Return to Ready: keep players, reset the timer">
+          <button onClick={() => returnToReady(court.id)} className={`${btn} text-amber-700 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40`} title="Return to Ready: keep players, reset the timer">
             <RotateCcw className="w-3.5 h-3.5" />Ready
           </button>
           {cancelBtn}
         </>
       )}
       {state === 'maintenance' && (
-        <button onClick={() => setCourtStatus(court.id, 'available')} className={`${btn} text-green-700 bg-green-50 dark:bg-green-900/20 dark:text-green-300 hover:bg-green-100`}>
+        <button onClick={() => setCourtStatus(court.id, 'available')} className={`${btn} text-green-700 bg-green-50 dark:bg-green-900/20 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40`}>
           <Check className="w-3.5 h-3.5" />Available
         </button>
       )}

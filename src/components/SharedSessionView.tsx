@@ -456,7 +456,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-slate-500">Session not found</p>
+          <p className="text-slate-500 dark:text-slate-400">Session not found</p>
         </div>
       </div>
     );
@@ -502,7 +502,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
             <div className="p-3 max-h-80 overflow-y-auto">
               {isDoubles ? (
                 doublesQueueSections && doublesQueueSections.every(s => s.pairs.length === 0) ? (
-                  <p className="text-sm text-slate-500 text-center py-4">No pairs queued</p>
+                  <p className="text-sm text-slate-500 text-center py-4 dark:text-slate-400">No pairs queued</p>
                 ) : (
                   <div className="space-y-4">
                     {doublesQueueSections?.map((section) => section.pairs.length === 0 ? null : (
@@ -560,7 +560,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                 )
               ) : (
                 stackQueue.length === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-4">No players waiting</p>
+                  <p className="text-sm text-slate-500 text-center py-4 dark:text-slate-400">No players waiting</p>
                 ) : (
                   <div className="space-y-3">
                     {stackQueue.map((stack) => (
@@ -661,7 +661,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                         key={option.value}
                         onClick={() => { setSortBy(option.value); setShowSortMenu(false); }}
                         className={`w-full px-3 py-1 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-700 ${
-                          sortBy === option.value ? 'text-blue-600 font-medium' : 'text-slate-700 dark:text-slate-300'
+                          sortBy === option.value ? 'text-blue-600 font-medium dark:text-blue-300' : 'text-slate-700 dark:text-slate-300'
                         }`}
                       >
                         {option.label}
@@ -703,7 +703,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                             <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded">Playing</span>
                           )}
                           {status === 'unavailable' && (
-                            <span className="px-1.5 py-0.5 text-xs font-medium bg-slate-200 dark:bg-slate-700 text-slate-500 rounded">Unavailable</span>
+                            <span className="px-1.5 py-0.5 text-xs font-medium bg-slate-200 dark:bg-slate-700 text-slate-500 rounded dark:text-slate-400">Unavailable</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
@@ -760,7 +760,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
               <>
                 <div className="p-4 max-h-48 overflow-y-auto">
                   {(session?.activityLog?.length || 0) === 0 ? (
-                    <p className="text-sm text-slate-500 text-center py-4">No activity yet</p>
+                    <p className="text-sm text-slate-500 text-center py-4 dark:text-slate-400">No activity yet</p>
                   ) : (
                     <div className="space-y-2">
                       {(session?.activityLog || []).slice(0, activityShowCount).map((entry) => (
@@ -859,7 +859,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h1 className="font-bold text-slate-800 dark:text-slate-100 truncate">{session.name}</h1>
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/30 rounded-full">
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/30 rounded-full dark:text-green-300">
                     <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                     <Wifi className="w-3 h-3" />
                     <span>Live</span>
@@ -1038,8 +1038,8 @@ function ReadOnlyCourtView({ court, getPlayerById, showSkill = false }: { court:
           <div className="grid grid-cols-2 gap-3">
             {/* Team 1 */}
             <div className="space-y-1.5">
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                Team 1{showSkill && <span className="ml-1 normal-case text-amber-600">★ {teamSkill(team1Players)}</span>}
+              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide dark:text-slate-400">
+                Team 1{showSkill && <span className="ml-1 normal-case text-amber-600 dark:text-amber-300">★ {teamSkill(team1Players)}</span>}
               </div>
               {team1Players.map((player, i) => (
                 <div key={i} className="flex items-center gap-2 p-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
@@ -1054,8 +1054,8 @@ function ReadOnlyCourtView({ court, getPlayerById, showSkill = false }: { court:
 
             {/* Team 2 */}
             <div className="space-y-1.5">
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                Team 2{showSkill && <span className="ml-1 normal-case text-amber-600">★ {teamSkill(team2Players)}</span>}
+              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide dark:text-slate-400">
+                Team 2{showSkill && <span className="ml-1 normal-case text-amber-600 dark:text-amber-300">★ {teamSkill(team2Players)}</span>}
               </div>
               {team2Players.map((player, i) => (
                 <div key={i} className="flex items-center gap-2 p-1.5 bg-red-50 dark:bg-red-900/20 rounded-lg">
@@ -1074,7 +1074,7 @@ function ReadOnlyCourtView({ court, getPlayerById, showSkill = false }: { court:
           </div>
         ) : (
           <div className="text-center py-4">
-            <p className="text-sm text-slate-500">Waiting for players</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Waiting for players</p>
           </div>
         )}
       </div>

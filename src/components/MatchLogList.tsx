@@ -19,7 +19,7 @@ export function MatchLogList({ gamesCompleted, players, editable, onEdit, maxHei
   const getNames = (ids: string[]) => ids.map(id => nameById.get(id) || 'Unknown').join(' & ');
 
   if (gamesCompleted.length === 0) {
-    return <p className="text-sm text-slate-500 text-center py-6">No matches played yet</p>;
+    return <p className="text-sm text-slate-500 text-center py-6 dark:text-slate-400">No matches played yet</p>;
   }
 
   // Most recent first

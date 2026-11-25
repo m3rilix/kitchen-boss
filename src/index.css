@@ -2,6 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Dark mode: form fields without their own colours default to the dark surface. :where() keeps
+   this at minimum specificity so any bg-/text- utility on the element still wins. */
+@layer base {
+  .dark body {
+    background-color: theme("colors.slate.900");
+    color: theme("colors.slate.100");
+    color-scheme: dark;
+  }
+  .dark :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
+    background-color: theme("colors.slate.800");
+    color: theme("colors.slate.100");
+    border-color: theme("colors.slate.600");
+  }
+  .dark :where(input, textarea)::placeholder {
+    color: theme("colors.slate.500");
+  }
+  .dark :where(select) option {
+    background-color: theme("colors.slate.800");
+    color: theme("colors.slate.100");
+  }
+}
+
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

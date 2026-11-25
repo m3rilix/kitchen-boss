@@ -448,18 +448,18 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
     switch (type) {
       case 'winners': 
       case 'forming-winners': 
-        return <Trophy className="w-4 h-4 text-green-600" />;
+        return <Trophy className="w-4 h-4 text-green-600 dark:text-green-300" />;
       case 'losers': 
       case 'forming-losers': 
-        return <TrendingDown className="w-4 h-4 text-orange-600" />;
+        return <TrendingDown className="w-4 h-4 text-orange-600 dark:text-orange-300" />;
       case 'ready':
-        return <Zap className="w-4 h-4 text-blue-600" />; // Blue zap for ready stacks
+        return <Zap className="w-4 h-4 text-blue-600 dark:text-blue-300" />; // Blue zap for ready stacks
       case 'forming-free': 
         return <Users className="w-4 h-4 text-slate-400" />; // Gray users for mixed forming
       case 'custom':
-        return <Star className="w-4 h-4 text-purple-600" />; // Purple star for custom stacks
+        return <Star className="w-4 h-4 text-purple-600 dark:text-purple-300" />; // Purple star for custom stacks
       case 'round-robin':
-        return <RefreshCw className="w-4 h-4 text-cyan-600" />; // Cyan refresh for Round Robin stacks
+        return <RefreshCw className="w-4 h-4 text-cyan-600 dark:text-cyan-300" />; // Cyan refresh for Round Robin stacks
       default: 
         return <Layers className={`w-4 h-4 ${theme.text}`} />;
     }
@@ -739,8 +739,8 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
                       disabled={customStackSelection.length !== 4}
                       className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition ${
                         customStackSelection.length === 4
-                          ? 'text-green-600 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:bg-green-900/20'
-                          : 'text-slate-400 bg-slate-100 cursor-not-allowed'
+                          ? 'text-green-600 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:bg-green-900/20 dark:hover:bg-green-900/40'
+                          : 'text-slate-400 bg-slate-100 cursor-not-allowed dark:bg-slate-700'
                       }`}
                     >
                       <Check className="w-3 h-3" />
@@ -763,14 +763,14 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
               <div className="flex gap-2 flex-shrink-0">
                 <button
                   onClick={expandAll}
-                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1 whitespace-nowrap"
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1 whitespace-nowrap dark:text-slate-400"
                 >
                   <ChevronsDown className="w-3 h-3" />
                   Expand
                 </button>
                 <button
                   onClick={collapseAll}
-                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1 whitespace-nowrap"
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1 whitespace-nowrap dark:text-slate-400"
                 >
                   <ChevronsUp className="w-3 h-3" />
                   Collapse
@@ -784,17 +784,17 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
       {/* Stacks */}
       <div className={wide ? 'p-4 space-y-4' : 'p-3 space-y-3 max-h-[500px] overflow-y-auto'}>
         {filteredStacks.length === 0 && queuedPlayers.length === 0 ? (
-          <div className="p-6 text-center text-slate-500">
+          <div className="p-6 text-center text-slate-500 dark:text-slate-400">
             <Layers className="w-8 h-8 mx-auto mb-2 text-slate-300" />
             <p className="text-sm">No players in queue</p>
             <p className="text-xs mt-1">Add players to form stacks</p>
           </div>
         ) : filteredStacks.length === 0 ? (
-          <div className="p-6 text-center text-slate-500">
+          <div className="p-6 text-center text-slate-500 dark:text-slate-400">
             <p className="text-sm">No players match "{searchQuery}"</p>
             <button
               onClick={() => setSearchQuery('')}
-              className="text-xs text-blue-600 hover:underline mt-1"
+              className="text-xs text-blue-600 hover:underline mt-1 dark:text-blue-300"
             >
               Clear search
             </button>
@@ -899,11 +899,11 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
                           key={p.id}
                           className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                             isInGame
-                              ? 'bg-blue-200 text-blue-700 opacity-50'
+                              ? 'bg-blue-200 text-blue-700 opacity-50 dark:bg-blue-800/50 dark:text-blue-300'
                               : getPlayerStatus(p.id) === 'winner'
-                                ? 'bg-green-200 text-green-700'
+                                ? 'bg-green-200 text-green-700 dark:bg-green-800/50 dark:text-green-300'
                                 : getPlayerStatus(p.id) === 'loser'
-                                  ? 'bg-orange-200 text-orange-700'
+                                  ? 'bg-orange-200 text-orange-700 dark:bg-orange-800/50 dark:text-orange-300'
                                   : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
                           }`}
                           title={isInGame ? `${p.name} (Playing)` : p.name}
@@ -1049,11 +1049,11 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
                         
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                           isPlayerInGame
-                            ? 'bg-blue-200 text-blue-700'
+                            ? 'bg-blue-200 text-blue-700 dark:bg-blue-800/50 dark:text-blue-300'
                             : getPlayerStatus(player.id) === 'winner' 
-                              ? 'bg-green-200 text-green-700'
+                              ? 'bg-green-200 text-green-700 dark:bg-green-800/50 dark:text-green-300'
                               : getPlayerStatus(player.id) === 'loser'
-                                ? 'bg-orange-200 text-orange-700'
+                                ? 'bg-orange-200 text-orange-700 dark:bg-orange-800/50 dark:text-orange-300'
                                 : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
                         }`}>
                           {player.name.charAt(0).toUpperCase()}
@@ -1069,10 +1069,10 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
                               </span>
                             )}
                             {!isPlayerInGame && getPlayerStatus(player.id) === 'winner' && (
-                              <Trophy className="w-3 h-3 text-green-600" />
+                              <Trophy className="w-3 h-3 text-green-600 dark:text-green-300" />
                             )}
                             {!isPlayerInGame && getPlayerStatus(player.id) === 'loser' && (
-                              <TrendingDown className="w-3 h-3 text-orange-600" />
+                              <TrendingDown className="w-3 h-3 text-orange-600 dark:text-orange-300" />
                             )}
                           </div>
                           <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 flex-wrap">
@@ -1081,7 +1081,7 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
                               {player.gamesWon}-{player.gamesPlayed - player.gamesWon}
                             </span>
                             {' • '}{player.gamesPlayed} games
-                            {(player.winStreak ?? 0) > 0 && <span className="text-green-600 ml-1">🔥{player.winStreak}</span>}
+                            {(player.winStreak ?? 0) > 0 && <span className="text-green-600 ml-1 dark:text-green-300">🔥{player.winStreak}</span>}
                           </p>
                         </div>
                         

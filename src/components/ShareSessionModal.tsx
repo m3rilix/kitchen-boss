@@ -56,10 +56,10 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-md overflow-hidden">
+      <div className="bg-white rounded-xl w-full max-w-md overflow-hidden dark:bg-slate-800">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-800">Share Session</h3>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">Share Session</h3>
           <button
             onClick={onClose}
             className="p-1 text-slate-400 hover:text-slate-600 transition"
@@ -73,16 +73,16 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
           {isSharing ? (
             <div className="flex items-center justify-center gap-3 p-6">
               <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
-              <span className="text-slate-600">Creating share link...</span>
+              <span className="text-slate-600 dark:text-slate-300">Creating share link...</span>
             </div>
           ) : (
             <>
           {/* Info */}
-          <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+          <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg dark:bg-green-900/20">
             <Wifi className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-green-700">
+            <div className="text-sm text-green-700 dark:text-green-300">
               <p className="font-medium">Real-Time Sync</p>
-              <p className="text-green-600 mt-0.5">
+              <p className="text-green-600 mt-0.5 dark:text-green-300">
                 Viewers will see live updates as games progress. No need to re-share!
               </p>
             </div>
@@ -90,7 +90,7 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
 
           {/* URL */}
           <div>
-            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide dark:text-slate-400">
               Share Link
             </label>
             <div className="mt-2 flex gap-2">
@@ -98,7 +98,7 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
                 type="text"
                 value={shareUrl}
                 readOnly
-                className="flex-1 px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-600 truncate"
+                className="flex-1 px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-600 truncate dark:bg-slate-700/50 dark:border-slate-700 dark:text-slate-300"
               />
               <button
                 onClick={handleCopy}
@@ -127,14 +127,14 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
           <div>
             <button
               onClick={() => setShowQR(!showQR)}
-              className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition"
+              className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition dark:text-slate-300"
             >
               <QrCode className="w-4 h-4" />
               {showQR ? 'Hide QR Code' : 'Show QR Code'}
             </button>
 
             {showQR && (
-              <div className="mt-3 flex justify-center p-4 bg-white border border-slate-200 rounded-lg">
+              <div className="mt-3 flex justify-center p-4 bg-white border border-slate-200 rounded-lg dark:bg-slate-800 dark:border-slate-700">
                 <img
                   src={qrCodeUrl}
                   alt="Session QR Code"
@@ -145,16 +145,16 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
           </div>
 
           {/* Session Info */}
-          <div className="pt-3 border-t border-slate-100">
-            <p className="text-xs text-slate-500">
-              Session: <span className="font-medium text-slate-700">{session.name}</span>
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Session: <span className="font-medium text-slate-700 dark:text-slate-200">{session.name}</span>
             </p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 mt-1 dark:text-slate-400">
               {session.players.length} players • {session.courts.length} courts
             </p>
             {shareCode && (
-              <p className="text-xs text-slate-500 mt-1">
-                Code: <span className="font-mono font-medium text-slate-700">{shareCode}</span>
+              <p className="text-xs text-slate-500 mt-1 dark:text-slate-400">
+                Code: <span className="font-mono font-medium text-slate-700 dark:text-slate-200">{shareCode}</span>
               </p>
             )}
           </div>
@@ -163,10 +163,10 @@ export function ShareSessionModal({ isOpen, onClose }: ShareSessionModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 bg-slate-50 border-t border-slate-100">
+        <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 dark:bg-slate-700/50 dark:border-slate-700">
           <button
             onClick={onClose}
-            className="w-full py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+            className="w-full py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition dark:text-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700"
           >
             Close
           </button>

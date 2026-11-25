@@ -51,12 +51,12 @@ function Podium({ players }: PodiumProps) {
         const rank = top3.indexOf(player) + 1;
         return (
           <div key={player.id} className="flex flex-col items-center gap-1">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm border-2 ${colorMap[player.name] || 'bg-slate-100 border-slate-300'}`}>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm border-2 ${colorMap[player.name] || 'bg-slate-100 border-slate-300 dark:bg-slate-700 dark:border-slate-600'}`}>
               {player.name.charAt(0).toUpperCase()}
             </div>
             <p className="text-xs font-medium text-slate-700 dark:text-slate-300 max-w-[64px] truncate text-center">{player.name}</p>
             <p className="text-xs text-slate-500 dark:text-slate-400">{player.gamesWon}W</p>
-            <div className={`w-16 ${heightMap[player.name] || heights[0]} rounded-t-lg border-t border-x flex items-center justify-center ${colorMap[player.name] || 'bg-slate-100 border-slate-300'}`}>
+            <div className={`w-16 ${heightMap[player.name] || heights[0]} rounded-t-lg border-t border-x flex items-center justify-center ${colorMap[player.name] || 'bg-slate-100 border-slate-300 dark:bg-slate-700 dark:border-slate-600'}`}>
               <RankBadge rank={rank} />
             </div>
           </div>

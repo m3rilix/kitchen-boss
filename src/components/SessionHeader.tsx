@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '@/store/sessionStore';
-import { useThemeClasses, useThemeStore } from '@/store/themeStore';
+import { useThemeClasses } from '@/store/themeStore';
+import { ThemeOptions } from './ThemeOptions';
 import { useAuthStore } from '@/store/authStore';
 import { LogOut, Users, Clock, Shield, Share2, RotateCcw, Pencil, Check, X, XCircle, User, MoreVertical, Palette, Trophy } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
@@ -17,7 +18,6 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
   const { session, endSession, resetSession, updateSessionName } = useSessionStore();
   const { currentUser, logout, getTimeRemaining, isAdmin } = useAuthStore();
   const theme = useThemeClasses();
-  const { colorTheme, setColorTheme } = useThemeStore();
   const [showShareModal, setShowShareModal] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
@@ -126,7 +126,7 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
                       updateSessionName(editName);
                       setIsEditingName(false);
                     }}
-                    className="p-1 text-green-600 hover:text-green-700"
+                    className="p-1 text-green-600 hover:text-green-700 dark:text-green-300"
                   >
                     <Check className="w-4 h-4" />
                   </button>
@@ -306,30 +306,7 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
                       <Palette className="w-3 h-3" />
                       Theme
                     </p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setColorTheme('blue')}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                          colorTheme === 'blue'
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                        }`}
-                      >
-                        <span className="w-3 h-3 rounded-full bg-blue-500 border border-white/50" />
-                        Blue
-                      </button>
-                      <button
-                        onClick={() => setColorTheme('green')}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                          colorTheme === 'green'
-                            ? 'bg-green-500 text-white'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                        }`}
-                      >
-                        <span className="w-3 h-3 rounded-full bg-green-500 border border-white/50" />
-                        Green
-                      </button>
-                    </div>
+                    <ThemeOptions compact />
                   </div>
                   {/* Leaderboard + End session + Sign out */}
                   <div className="border-t border-slate-100 dark:border-slate-700">
