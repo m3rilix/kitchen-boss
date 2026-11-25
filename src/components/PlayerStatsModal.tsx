@@ -46,9 +46,17 @@ export function PlayerStatsModal({ player, session, onClose, hideDetailsByDefaul
   const hasDetails = stats.partners.length > 0 || stats.opponents.length > 0 || stats.history.length > 0;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={onClose}>
+    <div
+      className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center z-50 ${
+        // Share view: centered on phones too, so the card screenshots cleanly
+        hideDetailsByDefault ? 'items-center p-4' : 'items-end sm:items-center p-0 sm:p-4'
+      }`}
+      onClick={onClose}
+    >
       <div
-        className="bg-slate-100 dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[92vh] flex flex-col overflow-hidden"
+        className={`bg-slate-100 dark:bg-slate-900 shadow-2xl w-full sm:max-w-md max-h-[92vh] flex flex-col overflow-hidden ${
+          hideDetailsByDefault ? 'max-w-md rounded-2xl' : 'rounded-t-2xl sm:rounded-2xl'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-1 overflow-y-auto">
@@ -126,14 +134,17 @@ export function PlayerStatsModal({ player, session, onClose, hideDetailsByDefaul
           </div>
 
           {/* ── Details (partners / opponents / history) ───────────────── */}
-          {hasDetails && !showDetails && (
-            <div className="px-3 pb-4">
+          {/* Expand / collapse toggle (share view only — managers always see details) */}
+          {hasDetails && hideDetailsByDefault && (
+            <div className="flex justify-center pb-3">
               <button
-                onClick={() => setShowDetails(true)}
-                className="w-full py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition inline-flex items-center justify-center gap-1.5"
+                onClick={() => setShowDetails(v => !v)}
+                aria-expanded={showDetails}
+                aria-label={showDetails ? 'Hide partners, opponents and matches' : 'Show partners, opponents and matches'}
+                title={showDetails ? 'Hide details' : 'Partners, opponents & matches'}
+                className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white hover:shadow transition flex items-center justify-center"
               >
-                Partners, opponents &amp; matches
-                <ChevronDown className="w-4 h-4" />
+                <ChevronDown className={`w-5 h-5 transition-transform duration-200 ${showDetails ? 'rotate-180' : ''}`} />
               </button>
             </div>
           )}
