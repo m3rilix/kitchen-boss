@@ -581,17 +581,15 @@ export const useSessionStore = create<SessionState>()(
             stacks.map(stack => stack.filter(id => id !== playerId));
           
           // Consolidate incomplete stacks: flatten all incomplete stacks, re-chunk into groups of 4
-          // This ensures that after removal, e.g. a 3/4 stack + 1/4 stack merge into a 4/4 stack.
+          // so e.g. a 3/4 stack + 1/4 stack merge into a 4/4 stack. Any leftover (<4) stays as a
+          // forming stack — it must never be dropped, or those players vanish from the queue.
           // Pairing will be determined at game start time.
           const consolidateStacks = (stacks: string[][]): string[][] => {
             const complete = stacks.filter(s => s.length >= 4);
             const incompletePlayers = stacks.filter(s => s.length > 0 && s.length < 4).flat();
             const rechunked: string[][] = [];
             for (let i = 0; i < incompletePlayers.length; i += 4) {
-              const chunkIds = incompletePlayers.slice(i, i + 4);
-              if (chunkIds.length === 4) {
-                rechunked.push(chunkIds);
-              }
+              rechunked.push(incompletePlayers.slice(i, i + 4));
             }
             return [...complete, ...rechunked];
           };
@@ -1830,16 +1828,25 @@ export const useSessionStore = create<SessionState>()(
           // Get players already in stacks
           const playersInStacks = new Set<string>();
           [...state.session.winnerStacks, ...state.session.loserStacks, ...state.session.waitingStacks].flat().forEach(id => playersInStacks.add(id));
-          
-          // Available players from waitingStack (FIFO order)
-          const availablePlayers = state.session.waitingStack.filter(id => 
-            !playersInGames.has(id) && !playersInStacks.has(id)
-          );
-          
+
+          // Available players from waitingStack (FIFO order), then — as a safety net — anyone
+          // still marked as queued who has fallen out of every stack. Without this, players
+          // could end up "in the queue" but invisible: not in any stack and not in the
+          // "Not in Queue" list either, with no way to bring them back.
+          const isFree = (id: string) => !playersInGames.has(id) && !playersInStacks.has(id);
+          const fromWaiting = state.session.waitingStack.filter(isFree);
+          const waitingSet = new Set(fromWaiting);
+          const stranded = state.session.queue.filter(id => {
+            if (!isFree(id) || waitingSet.has(id)) return false;
+            const p = state.session!.players.find(pl => pl.id === id);
+            return !!p && p.isActive && p.waitingSince >= 0;
+          });
+          const availablePlayers = [...new Set([...fromWaiting, ...stranded])];
+
           if (availablePlayers.length === 0) {
             return state;
           }
-          
+
           let updatedWaitingStacks = [...state.session.waitingStacks];
           let updatedLoserStacks = [...state.session.loserStacks];
           let updatedWinnerStacks = [...state.session.winnerStacks];
@@ -2474,6 +2481,21 @@ export const useSessionStore = create<SessionState>()(
             allPlayerIds.includes(p.id) ? { ...p, waitingSince: Date.now() } : p
           );
 
+          // Win-Lose: the same four go back as a full Regular stack at the very front, so they
+          // play next (Regular stacks always go before winner/loser stacks). Only when all four
+          // slots are filled — otherwise they rejoin as waiting players and stacks are rebuilt.
+          const isWinLose = state.session.rotationMode === 'win_lose_stack' || state.session.rotationMode === 'full_rotation';
+          const returning = new Set(allPlayerIds);
+          const withoutReturning = (stacks: string[][]) =>
+            stacks.map(s => s.filter(id => !returning.has(id))).filter(s => s.length > 0);
+          const winLoseStacks = isWinLose && allPlayerIds.length === 4 && allPlayerIds.every(Boolean)
+            ? {
+                waitingStacks: [allPlayerIds, ...withoutReturning(state.session.waitingStacks || [])],
+                winnerStacks: withoutReturning(state.session.winnerStacks || []),
+                loserStacks: withoutReturning(state.session.loserStacks || []),
+              }
+            : {};
+
           return {
             session: {
               ...state.session,
@@ -2481,6 +2503,7 @@ export const useSessionStore = create<SessionState>()(
               courts: updatedCourts,
               queue: newQueue,
               waitingStack: newWaitingStack,
+              ...winLoseStacks,
               matchHistory: newMatchHistory,
               activityLog: [logEntry, ...state.session.activityLog],
             },
@@ -2488,8 +2511,10 @@ export const useSessionStore = create<SessionState>()(
         });
         // Add new stacks without touching existing ones (players returned to waiting)
         const mode = get().session?.rotationMode;
-        if (mode !== 'doubles') {
+        if (usesRoundRobinStacks(mode)) {
           get().addNewRoundRobinStacks();
+        } else if (mode === 'win_lose_stack' || mode === 'full_rotation') {
+          get().addNewWinLoseStacks();
         }
       },
 
