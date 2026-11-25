@@ -12,7 +12,7 @@ interface PlayerStatsModalProps {
   player: Player;
   session: Session;
   onClose: () => void;
-  /** Share view: partners / opponents / match history sit behind a "Show details" button. */
+  /** Share view: partners / opponents / match history start collapsed (managers see them open). */
   hideDetailsByDefault?: boolean;
 }
 
@@ -134,8 +134,8 @@ export function PlayerStatsModal({ player, session, onClose, hideDetailsByDefaul
           </div>
 
           {/* ── Details (partners / opponents / history) ───────────────── */}
-          {/* Expand / collapse toggle (share view only — managers always see details) */}
-          {hasDetails && hideDetailsByDefault && (
+          {/* Expand / collapse toggle: starts open for managers, closed in the share view */}
+          {hasDetails && (
             <div className="flex justify-center pb-3">
               <button
                 onClick={() => setShowDetails(v => !v)}
