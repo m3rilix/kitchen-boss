@@ -87,6 +87,8 @@ interface SessionState {
   // Win-Lose Stack functions
   buildWinLoseStacks: () => void;
   addNewWinLoseStacks: () => void;
+  /** Win-Lose: put a player into an empty slot of a specific stack (moving them from another stack, or back into the queue). */
+  fillWinLoseStackSlot: (kind: 'winner' | 'loser' | 'waiting', stackIndex: number, playerId: string) => void;
 
   // Doubles mode — pair management
   addPair: (player1Id: string, player2Id: string, name?: string) => void;
@@ -1806,6 +1808,49 @@ export const useSessionStore = create<SessionState>()(
        * Add new Win-Lose stacks - adds new players to forming stacks
        * Priority: Regular forming → Loser forming → Winner forming
        */
+      fillWinLoseStackSlot: (kind, stackIndex, playerId) => {
+        set((state) => {
+          if (!state.session) return state;
+          const s = state.session;
+          const player = s.players.find(p => p.id === playerId);
+          const key = kind === 'winner' ? 'winnerStacks' : kind === 'loser' ? 'loserStacks' : 'waitingStacks';
+          const target = (s[key] || [])[stackIndex];
+          if (!player || !target || target.length >= 4 || target.includes(playerId)) return state;
+          const onCourt = s.courts.some(c => c.currentGame && [...c.currentGame.team1, ...c.currentGame.team2].includes(playerId));
+          if (onCourt) return state;
+
+          // Take the player out of whatever stack they're in, add them to the target slot,
+          // then drop stacks that became empty (after the add, so indexes stay valid).
+          const pull = (stacks: string[][]) => stacks.map(st => st.filter(id => id !== playerId));
+          const stacks = {
+            winnerStacks: pull(s.winnerStacks || []),
+            loserStacks: pull(s.loserStacks || []),
+            waitingStacks: pull(s.waitingStacks || []),
+          };
+          stacks[key][stackIndex] = [...stacks[key][stackIndex], playerId];
+          const prune = (st: string[][]) => st.filter(x => x.length > 0);
+
+          const wasQueued = s.queue.includes(playerId);
+          return {
+            session: {
+              ...s,
+              winnerStacks: prune(stacks.winnerStacks),
+              loserStacks: prune(stacks.loserStacks),
+              waitingStacks: prune(stacks.waitingStacks),
+              queue: wasQueued ? s.queue : [...s.queue, playerId],
+              waitingStack: s.waitingStack.includes(playerId) ? s.waitingStack : [...s.waitingStack, playerId],
+              players: s.players.map(p =>
+                p.id === playerId && p.waitingSince <= 0 ? { ...p, waitingSince: Date.now() } : p
+              ),
+              activityLog: [
+                createLogEntry('player_moved', `${player.name} placed into an open stack slot`, { playerNames: [player.name] }),
+                ...s.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
       addNewWinLoseStacks: () => {
         set((state) => {
           if (!state.session) return state;

@@ -25,7 +25,7 @@ interface PlayerQueueProps {
 }
 
 export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
-  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, assignGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime, reshuffleByGamesPlayed, smartRebuildStacks, prepareNextRoundRobinStack } = useSessionStore();
+  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, assignGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime, reshuffleByGamesPlayed, smartRebuildStacks, prepareNextRoundRobinStack, fillWinLoseStackSlot } = useSessionStore();
   const theme = useThemeClasses();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set(['forming-winners', 'forming-losers', 'forming-free', 'forming-mixed']));
@@ -569,6 +569,27 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
     setDraggedPlayerId(null);
   };
 
+  /** Maps a Win-Lose stack's display id ("winner-2", "loser-0", "waiting-1") to its store slot. */
+  const winLoseStackTarget = (stackId: string): { kind: 'winner' | 'loser' | 'waiting'; index: number } | null => {
+    if (session.rotationMode !== 'win_lose_stack' && session.rotationMode !== 'full_rotation') return null;
+    const m = /^(winner|loser|waiting)-(\d+)$/.exec(stackId);
+    return m ? { kind: m[1] as 'winner' | 'loser' | 'waiting', index: Number(m[2]) } : null;
+  };
+
+  /**
+   * Who can fill an empty slot: checked-in, available players who aren't on a court or already
+   * in this stack. Players not in any stack come first; others show which stack they'd leave.
+   */
+  const slotCandidates = (stack: StackGroup) => {
+    const inThisStack = new Set(stack.players.map(p => p.id));
+    const whereById = new Map<string, string>();
+    stacks.forEach(s => { if (s.id !== stack.id && s.type !== 'custom') s.players.forEach(p => whereById.set(p.id, s.label)); });
+    return session.players
+      .filter(p => p.isActive && !p.unavailable && !!p.checkedInAt && !playersInGame.has(p.id) && !inThisStack.has(p.id))
+      .map(p => ({ player: p, where: whereById.get(p.id) ?? (p.waitingSince < 0 ? 'not in queue' : '') }))
+      .sort((a, b) => Number(whereById.has(a.player.id)) - Number(whereById.has(b.player.id)) || a.player.name.localeCompare(b.player.name));
+  };
+
   /**
    * Wide mode: full (ready) stacks in a responsive grid, then players still waiting for a
    * full stack in their own section below. Narrow mode keeps the single list.
@@ -957,7 +978,7 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
               </div>
 
               {/* Expanded Player List - first ready stack is always expanded, custom stacks can be expanded */}
-              {(wide || expandedStacks.has(stack.id) || (!stack.isForming && stack.players.length === 4 && stackIdx === 0)) && (
+              {(wide || stack.isForming || expandedStacks.has(stack.id) || (!stack.isForming && stack.players.length === 4 && stackIdx === 0)) && (
                 <div className="border-t border-slate-200 dark:border-slate-600 bg-white/50 dark:bg-slate-800/50">
                   {stack.players.map((player) => {
                     const globalIdx = getGlobalIndex(player.id);
@@ -1082,6 +1103,37 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
                       </div>
                     );
                   })}
+                  {/* Empty slots (Win-Lose stacks): dashed placeholder; pick a player to fill it */}
+                  {(() => {
+                    const target = winLoseStackTarget(stack.id);
+                    if (!target || isCreatingCustomStack || stack.players.length >= 4) return null;
+                    const candidates = slotCandidates(stack);
+                    return Array.from({ length: 4 - stack.players.length }, (_, i) => (
+                      <label
+                        key={`empty-${i}`}
+                        className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-700 last:border-b-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/30"
+                      >
+                        <div className="w-4 h-4 flex-shrink-0" />
+                        <div className="w-6 h-6 rounded-md border-2 border-dashed border-slate-300 dark:border-slate-500 flex-shrink-0" aria-hidden="true" />
+                        <select
+                          value=""
+                          disabled={candidates.length === 0}
+                          onChange={(e) => {
+                            if (e.target.value) fillWinLoseStackSlot(target.kind, target.index, e.target.value);
+                          }}
+                          aria-label="Fill empty slot"
+                          className={`flex-1 min-w-0 bg-transparent ${wide ? 'text-base' : 'text-sm'} italic text-slate-400 dark:text-slate-500 cursor-pointer outline-none disabled:cursor-not-allowed`}
+                        >
+                          <option value="">{candidates.length === 0 ? 'Empty slot (no one available)' : 'Empty slot: tap to fill'}</option>
+                          {candidates.map(c => (
+                            <option key={c.player.id} value={c.player.id}>
+                              {c.player.name}{c.where ? ` (${c.where})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ));
+                  })()}
                 </div>
               )}
             </div>
