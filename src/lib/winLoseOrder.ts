@@ -7,6 +7,8 @@ export interface WinLoseStackRef {
   /** Index into session.waitingStacks / winnerStacks / loserStacks */
   index: number;
   playerIds: string[];
+  /** A player was removed: the stack keeps its place but can't start until the slot is filled. */
+  hasGap: boolean;
 }
 
 type StackType = 'regular' | 'winner' | 'loser';
@@ -25,8 +27,9 @@ const KEY: Record<WinLoseKind, 'waitingStacks' | 'winnerStacks' | 'loserStacks'>
  * stack starts, a Winner stack is next; after a Winner stack, a Loser stack. If one type runs out,
  * the other continues. Only full (4-player) stacks whose players are all off-court are included.
  *
- * The first entry is exactly what Next will start. Later entries are a forecast: finished games
- * add new winner/loser stacks that slot into the alternation.
+ * Stacks with an empty slot (hasGap) keep their place in the order but can't start; Next takes
+ * the first entry without a gap (see nextPlayableWinLoseStack). Later entries are a forecast:
+ * finished games add new winner/loser stacks that slot into the alternation.
  */
 export function orderReadyWinLoseStacks(session: Session): WinLoseStackRef[] {
   const onCourt = new Set(
@@ -34,7 +37,7 @@ export function orderReadyWinLoseStacks(session: Session): WinLoseStackRef[] {
   );
   const ready = (kind: WinLoseKind): WinLoseStackRef[] =>
     (session[KEY[kind]] || [])
-      .map((playerIds, index) => ({ kind, index, playerIds }))
+      .map((playerIds, index) => ({ kind, index, playerIds, hasGap: playerIds.includes('') }))
       .filter(s => s.playerIds.length === 4 && s.playerIds.every(id => !onCourt.has(id)));
 
   const regular = ready('waiting');
@@ -63,7 +66,12 @@ export function orderReadyWinLoseStacks(session: Session): WinLoseStackRef[] {
 export function formingWinLoseStacks(session: Session): WinLoseStackRef[] {
   return (['waiting', 'loser', 'winner'] as WinLoseKind[]).flatMap(kind =>
     (session[KEY[kind]] || [])
-      .map((playerIds, index) => ({ kind, index, playerIds }))
+      .map((playerIds, index) => ({ kind, index, playerIds, hasGap: false }))
       .filter(s => s.playerIds.length > 0 && s.playerIds.length < 4)
   );
+}
+
+/** The stack the Next button starts: first in play order with all four slots filled. */
+export function nextPlayableWinLoseStack(session: Session): WinLoseStackRef | undefined {
+  return orderReadyWinLoseStacks(session).find(s => !s.hasGap);
 }

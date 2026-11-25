@@ -329,13 +329,15 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
         .filter((p): p is Player => p !== undefined && p.isActive);
       const typeOf = (kind: string) => (kind === 'winner' ? 'winners' : kind === 'loser' ? 'losers' : 'mixed') as StackGroup['type'];
       const stackCounter = session.stackCounter ?? 0;
-      const readyStacks: StackGroup[] = orderReadyWinLoseStacks(session).map((ref, i) => ({
+      const ordered = orderReadyWinLoseStacks(session);
+      const nextIdx = ordered.findIndex(ref => !ref.hasGap);
+      const readyStacks: StackGroup[] = ordered.map((ref, i) => ({
         id: `${ref.kind}-${ref.index}`,
         players: toPlayers(ref.playerIds),
         type: typeOf(ref.kind),
         label: `Stack ${stackCounter + i + 1}`,
         isReady: true,
-        isNext: i === 0,
+        isNext: i === nextIdx,
       }));
       const formingLabel = (kind: string) => (kind === 'winner' ? 'Winners' : kind === 'loser' ? 'Losers' : 'Regular');
       const formingStacks: StackGroup[] = formingWinLoseStacks(session).map(ref => ({
@@ -577,6 +579,10 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                             <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-600 text-white">
                               <Play className="w-3 h-3" />Next
                             </span>
+                          ) : stack.isReady && stack.players.length < 4 ? (
+                            <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                              {4 - stack.players.length} open slot{4 - stack.players.length !== 1 ? 's' : ''}
+                            </span>
                           ) : stack.isReady && (
                             <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                               <Play className="w-3 h-3" />Ready
@@ -595,6 +601,12 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                               }`}>{player.name.charAt(0).toUpperCase()}</div>
                               <span className="truncate text-slate-700 dark:text-slate-200">{player.name}</span>
                               {skillMode && <span className="ml-auto"><StarRating value={skillOf(player)} size="xs" /></span>}
+                            </div>
+                          ))}
+                          {stack.isReady && Array.from({ length: Math.max(0, 4 - stack.players.length) }, (_, i) => (
+                            <div key={`open-${i}`} className="flex items-center gap-2 p-1.5 rounded-lg text-xs border border-dashed border-slate-300 dark:border-slate-600">
+                              <div className="w-5 h-5 rounded-md border-2 border-dashed border-slate-300 dark:border-slate-500 flex-shrink-0" />
+                              <span className="italic text-slate-400 dark:text-slate-500">Open slot</span>
                             </div>
                           ))}
                         </div>

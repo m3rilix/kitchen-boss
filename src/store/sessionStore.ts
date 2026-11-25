@@ -6,7 +6,7 @@ import { updateSharedSession } from '@/lib/firebase';
 import { getNextGamePlayers } from '@/lib/smartQueue';
 import { buildRoundRobinStack, pickBestTeamSplit, pickBalancedTeamSplit } from '@/lib/roundRobin';
 import { usesRoundRobinStacks, isSkillBased, MIN_SKILL, MAX_SKILL } from '@/lib/skill';
-import { orderReadyWinLoseStacks } from '@/lib/winLoseOrder';
+import { nextPlayableWinLoseStack } from '@/lib/winLoseOrder';
 import { buildDoublesMatchup, processDoublesGameEnd, processDoublesCancelGame, pairDisplayName } from '@/lib/doubles';
 
 // Helper to generate share code
@@ -610,9 +610,19 @@ export const useSessionStore = create<SessionState>()(
 
           const isWinLose = state.session.rotationMode === 'win_lose_stack' || state.session.rotationMode === 'full_rotation';
           
-          const rawWinnerStacks = removeFromNestedStacks(state.session.winnerStacks || []);
-          const rawLoserStacks = removeFromNestedStacks(state.session.loserStacks || []);
-          const rawWaitingStacks = removeFromNestedStacks(state.session.waitingStacks || []);
+          // Win-Lose: a formed (4-slot) stack keeps its place in line — the removed player's spot
+          // becomes an empty slot ('') to be filled, instead of the stack dropping to the back.
+          // Stacks still forming (<4) just shrink. A stack left with no players is dropped.
+          const vacateInPlace = (stacks: string[][]) =>
+            stacks
+              .map(stack => stack.length === 4
+                ? stack.map(id => (id === playerId ? '' : id))
+                : stack.filter(id => id !== playerId))
+              .filter(stack => stack.some(Boolean));
+          const removeWinLose = isWinLose ? vacateInPlace : removeFromNestedStacks;
+          const rawWinnerStacks = removeWinLose(state.session.winnerStacks || []);
+          const rawLoserStacks = removeWinLose(state.session.loserStacks || []);
+          const rawWaitingStacks = removeWinLose(state.session.waitingStacks || []);
           const rawCustomStacks = removeFromNestedStacks(state.session.customStacks || []);
           
           // For Win-Lose mode, consolidate incomplete stacks after removal
@@ -1816,20 +1826,25 @@ export const useSessionStore = create<SessionState>()(
           const player = s.players.find(p => p.id === playerId);
           const key = kind === 'winner' ? 'winnerStacks' : kind === 'loser' ? 'loserStacks' : 'waitingStacks';
           const target = (s[key] || [])[stackIndex];
-          if (!player || !target || target.length >= 4 || target.includes(playerId)) return state;
+          const hasOpenSlot = !!target && (target.length < 4 || target.includes(''));
+          if (!player || !hasOpenSlot || target.includes(playerId)) return state;
           const onCourt = s.courts.some(c => c.currentGame && [...c.currentGame.team1, ...c.currentGame.team2].includes(playerId));
           if (onCourt) return state;
 
-          // Take the player out of whatever stack they're in, add them to the target slot,
-          // then drop stacks that became empty (after the add, so indexes stay valid).
-          const pull = (stacks: string[][]) => stacks.map(st => st.filter(id => id !== playerId));
+          // Take the player out of whatever stack they're in (a formed 4-slot stack keeps their
+          // spot as an empty slot so it holds its place in line), put them in the target's empty
+          // slot, then drop stacks with nobody left (after the add, so indexes stay valid).
+          const pull = (stacks: string[][]) =>
+            stacks.map(st => (st.length === 4 ? st.map(id => (id === playerId ? '' : id)) : st.filter(id => id !== playerId)));
           const stacks = {
             winnerStacks: pull(s.winnerStacks || []),
             loserStacks: pull(s.loserStacks || []),
             waitingStacks: pull(s.waitingStacks || []),
           };
-          stacks[key][stackIndex] = [...stacks[key][stackIndex], playerId];
-          const prune = (st: string[][]) => st.filter(x => x.length > 0);
+          const t = stacks[key][stackIndex];
+          const gap = t.indexOf('');
+          stacks[key][stackIndex] = gap >= 0 ? t.map((id, i) => (i === gap ? playerId : id)) : [...t, playerId];
+          const prune = (st: string[][]) => st.filter(x => x.some(Boolean));
 
           const wasQueued = s.queue.includes(playerId);
           return {
@@ -2675,7 +2690,7 @@ export const useSessionStore = create<SessionState>()(
             // Win-Lose: the shared play order (Regular first, then Winner/Loser alternating) decides,
             // so the Next button always starts exactly the stack shown at the top of the queue.
             // NOTE: Custom stacks are IGNORED by autoAssignNextGame - they must be manually started
-            const nextStack = orderReadyWinLoseStacks(state.session)[0];
+            const nextStack = nextPlayableWinLoseStack(state.session);
             if (nextStack) {
               const pairing = applyCollisionAwarePairing(nextStack.playerIds);
               team1 = [pairing[0], pairing[1]];

@@ -866,12 +866,21 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
                     const availableReadyStacks = filteredStacks.filter(s => 
                       !s.isForming && 
                       s.type !== 'custom' &&
+                      s.players.length === 4 && // a stack with an open slot holds its place but can't start
                       !s.players.some(p => playersInGame.has(p.id))
                     );
                     
                     // The first available stack is "Next" (order already matches game selection priority)
                     const isNextStack = availableReadyStacks.length > 0 && availableReadyStacks[0].id === stack.id;
                     
+                    if (stack.players.length < 4) {
+                      const open = 4 - stack.players.length;
+                      return (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 whitespace-nowrap">
+                          {open} open slot{open !== 1 ? 's' : ''}
+                        </span>
+                      );
+                    }
                     return isNextStack ? (
                       <span className={`text-xs px-1.5 py-0.5 rounded ${theme.bg600} text-white flex items-center gap-1`}>
                         <Star className="w-3 h-3" />
@@ -969,7 +978,7 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
               </div>
 
               {/* Expanded Player List - first ready stack is always expanded, custom stacks can be expanded */}
-              {(wide || stack.isForming || expandedStacks.has(stack.id) || (!stack.isForming && stack.players.length === 4 && stackIdx === 0)) && (
+              {(wide || stack.isForming || (stack.type !== 'custom' && stack.players.length < 4) || expandedStacks.has(stack.id) || (!stack.isForming && stack.players.length === 4 && stackIdx === 0)) && (
                 <div className="border-t border-slate-200 dark:border-slate-600 bg-white/50 dark:bg-slate-800/50">
                   {stack.players.map((player) => {
                     const globalIdx = getGlobalIndex(player.id);
