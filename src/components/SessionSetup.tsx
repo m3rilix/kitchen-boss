@@ -152,7 +152,7 @@ export function SessionSetup({ onAdminClick }: SessionSetupProps) {
             <img 
               src="/kitchen-boss-logo.png" 
               alt="Kitchen Boss" 
-              className="w-10 h-10"
+              className="h-10 w-auto max-w-[72px] object-contain rounded-md"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
                 const fallback = e.currentTarget.nextElementSibling;

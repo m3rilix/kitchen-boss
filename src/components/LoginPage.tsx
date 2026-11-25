@@ -57,7 +57,7 @@ export function LoginPage() {
           <img 
             src="/kitchen-boss-logo.png" 
             alt="Kitchen Boss Logo" 
-            className="w-32 h-32 mx-auto mb-4"
+            className="h-28 w-auto max-w-[240px] mx-auto mb-4 object-contain rounded-xl"
             onError={(e) => {
               // Fallback to icon if image not found
               e.currentTarget.style.display = 'none';

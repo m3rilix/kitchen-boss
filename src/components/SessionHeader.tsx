@@ -93,7 +93,7 @@ export function SessionHeader({ onAdminClick }: SessionHeaderProps) {
             <img 
               src="/kitchen-boss-logo.png" 
               alt="Kitchen Boss" 
-              className="w-12 h-12 flex-shrink-0"
+              className="h-10 sm:h-12 w-auto max-w-[84px] flex-shrink-0 object-contain rounded-md"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
                 const fallback = e.currentTarget.nextElementSibling;
