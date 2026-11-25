@@ -6,6 +6,7 @@ import { updateSharedSession } from '@/lib/firebase';
 import { getNextGamePlayers } from '@/lib/smartQueue';
 import { buildRoundRobinStack, pickBestTeamSplit, pickBalancedTeamSplit } from '@/lib/roundRobin';
 import { usesRoundRobinStacks, isSkillBased, MIN_SKILL, MAX_SKILL } from '@/lib/skill';
+import { orderReadyWinLoseStacks } from '@/lib/winLoseOrder';
 import { buildDoublesMatchup, processDoublesGameEnd, processDoublesCancelGame, pairDisplayName } from '@/lib/doubles';
 
 // Helper to generate share code
@@ -2671,61 +2672,14 @@ export const useSessionStore = create<SessionState>()(
               }
             }
           } else if (rotationMode === 'win_lose_stack' || rotationMode === 'full_rotation') {
-            // Win-Lose Stack: Regular → Alternating (Win/Lose)
+            // Win-Lose: the shared play order (Regular first, then Winner/Loser alternating) decides,
+            // so the Next button always starts exactly the stack shown at the top of the queue.
             // NOTE: Custom stacks are IGNORED by autoAssignNextGame - they must be manually started
-
-            // Priority 1: Regular stacks (always first before win/lose)
-            const regularStacks = state.session.waitingStacks.filter(s => s.length === 4);
-            for (const stack of regularStacks) {
-              const allAvailable = stack.every(id => !playersInGames.has(id));
-              if (allAvailable) {
-                const pairing = applyCollisionAwarePairing(stack);
-                team1 = [pairing[0], pairing[1]];
-                team2 = [pairing[2], pairing[3]];
-                break;
-              }
-            }
-
-            // Priority 2: Alternate between Winner and Loser stacks
-            if (!team1 || !team2) {
-              const lastType = state.session.lastStackType;
-              const winnerStacks = state.session.winnerStacks.filter(s => s.length === 4);
-              const loserStacks = state.session.loserStacks.filter(s => s.length === 4);
-
-              // Helper to find first available stack
-              const findAvailableStack = (stacks: string[][]) => {
-                for (const stack of stacks) {
-                  const allAvailable = stack.every(id => !playersInGames.has(id));
-                  if (allAvailable) return stack;
-                }
-                return null;
-              };
-
-              // Determine which type to try first based on alternating logic
-              // If last was 'loser' or 'regular', try winner first
-              // If last was 'winner', try loser first
-              // If no last type, try loser first (give losers priority initially)
-              const tryWinnerFirst = lastType === 'loser' || lastType === 'regular';
-
-              let selectedStack: string[] | null = null;
-
-              if (tryWinnerFirst) {
-                selectedStack = findAvailableStack(winnerStacks);
-                if (!selectedStack) {
-                  selectedStack = findAvailableStack(loserStacks);
-                }
-              } else {
-                selectedStack = findAvailableStack(loserStacks);
-                if (!selectedStack) {
-                  selectedStack = findAvailableStack(winnerStacks);
-                }
-              }
-
-              if (selectedStack) {
-                const pairing = applyCollisionAwarePairing(selectedStack);
-                team1 = [pairing[0], pairing[1]];
-                team2 = [pairing[2], pairing[3]];
-              }
+            const nextStack = orderReadyWinLoseStacks(state.session)[0];
+            if (nextStack) {
+              const pairing = applyCollisionAwarePairing(nextStack.playerIds);
+              team1 = [pairing[0], pairing[1]];
+              team2 = [pairing[2], pairing[3]];
             }
           } else {
             // Other modes: check custom stacks first

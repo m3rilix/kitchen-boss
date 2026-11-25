@@ -4,6 +4,7 @@ import { useThemeClasses } from '@/store/themeStore';
 import { X, Search, Trophy, TrendingDown, Layers, ChevronsUp, ChevronsDown, GripVertical, Star, Users, Zap, Rocket, Play, Clock, Plus, Check, Trash2, RefreshCw } from 'lucide-react';
 import type { Player } from '@/types';
 import { splitStackIntoTeams } from '@/lib/smartQueue';
+import { orderReadyWinLoseStacks } from '@/lib/winLoseOrder';
 import { pickBalancedTeamSplit } from '@/lib/roundRobin';
 import { usesRoundRobinStacks, isSkillBased, skillOf } from '@/lib/skill';
 import { StarRating } from './StarRating';
@@ -171,30 +172,19 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
         customIndex: idx,
       })).filter(stack => stack.players.length === 4);
       
-      // Get ready stacks by type - preserve array order (FIFO)
-      const readyRegular = waitingStackGroups.filter(s => !s.isForming);
-      const readyLoser = loserStackGroups.filter(s => !s.isForming);
-      const readyWinner = winnerStackGroups.filter(s => !s.isForming);
-      
-      // Determine alternating order based on lastStackType
-      // This ONLY changes when a game STARTS (not when it ends)
-      // If last was 'loser' or 'regular', winner is next; otherwise loser is next
-      const lastType = session.lastStackType;
-      const tryWinnerFirst = lastType === 'loser' || lastType === 'regular';
-      
-      // Build ordered ready stacks: Regular first, then alternating win/lose
-      // The order is stable - it only changes when lastStackType changes (in assignGame)
-      let orderedWinLoseStacks: StackGroup[] = [];
-      if (tryWinnerFirst) {
-        orderedWinLoseStacks = [...readyWinner, ...readyLoser];
-      } else {
-        orderedWinLoseStacks = [...readyLoser, ...readyWinner];
-      }
-      
-      const allReadyStacks = [
-        ...readyRegular,      // Regular always first
-        ...orderedWinLoseStacks,
-      ];
+      // Ready stacks in the real play order (Regular first, then Winner/Loser alternating) —
+      // the same order the court's Next button uses, so the top stack is always the next one.
+      const groupById = new Map(
+        [...waitingStackGroups, ...loserStackGroups, ...winnerStackGroups].map(g => [g.id, g])
+      );
+      const allReadyStacks = orderReadyWinLoseStacks(session)
+        .map(ref => groupById.get(`${ref.kind}-${ref.index}`))
+        .filter((g): g is StackGroup => !!g);
+      // Full stacks with someone currently on court aren't playable yet; keep them visible after
+      const orderedIds = new Set(allReadyStacks.map(g => g.id));
+      allReadyStacks.push(
+        ...[...waitingStackGroups, ...loserStackGroups, ...winnerStackGroups].filter(g => !g.isForming && !orderedIds.has(g.id))
+      );
       
       const allFormingStacks = [
         ...waitingStackGroups.filter(s => s.isForming),
@@ -400,7 +390,8 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
     session?.winnerStacks, 
     session?.loserStacks, 
     session?.waitingStacks, 
-    session?.lastStackType,  // Visual order ONLY changes when this changes (in assignGame)
+    session?.lastStackType,  // Win-Lose play order alternates on this
+    session?.courts,         // ...and skips stacks with someone on court
     session?.customStacks, 
     session?.roundRobinStacks, 
     session?.rotationMode, 

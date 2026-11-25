@@ -9,6 +9,7 @@ import { MatchLogList } from './MatchLogList';
 import { PlayerStatsModal } from './PlayerStatsModal';
 import { StarRating } from './StarRating';
 import { LeaderboardPanel } from './LeaderboardPanel';
+import { orderReadyWinLoseStacks, formingWinLoseStacks } from '@/lib/winLoseOrder';
 import { usesRoundRobinStacks, isSkillBased, skillOf } from '@/lib/skill';
 
 /** Format elapsed milliseconds as M:SS */
@@ -275,9 +276,11 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
       type StackGroup = {
         id: string;
         players: Player[];
-        type: 'winners' | 'mixed' | 'forming';
+        type: 'winners' | 'losers' | 'mixed' | 'forming';
         label: string;
         isReady: boolean;
+        /** Win-Lose: the stack the Next button will start */
+        isNext?: boolean;
       };
 
       // ── Round Robin: read pre-built stacks from session (same source as PlayerQueue) ──
@@ -319,57 +322,35 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
         return result;
       }
 
-      // ── Win-Lose / Full Rotation: use pre-built stacks arrays ──
-      const getPlayersInStackOrder = (stackIds: string[]): Player[] => {
-        return (stackIds || [])
-          .map(id => session.players.find(p => p.id === id))
-          .filter((p): p is Player => p !== undefined && p.isActive);
-      };
-
-      const winners = getPlayersInStackOrder(session.winnerStack ?? []);
-      const losers = getPlayersInStackOrder(session.loserStack ?? []);
-      const free = getPlayersInStackOrder(session.waitingStack ?? []);
-
-      const allLosersAndFree = [...losers, ...free].sort((a, b) => {
-        const aWait = a?.waitingSince ?? 0;
-        const bWait = b?.waitingSince ?? 0;
-        if (aWait === 0 && bWait === 0) return 0;
-        if (aWait === 0) return 1;
-        if (bWait === 0) return -1;
-        return aWait - bWait;
-      });
-
-      const winnerReadyStacks: StackGroup[] = [];
-      const winnerReadyCount = Math.floor(winners.length / 4);
-      for (let i = 0; i < winnerReadyCount; i++) {
-        winnerReadyStacks.push({ id: `winners-${i}`, players: winners.slice(i * 4, (i + 1) * 4), type: 'winners', label: '', isReady: true });
-      }
-
-      const mixedReadyStacks: StackGroup[] = [];
-      const mixedReadyCount = Math.floor(allLosersAndFree.length / 4);
-      for (let i = 0; i < mixedReadyCount; i++) {
-        mixedReadyStacks.push({ id: `mixed-${i}`, players: allLosersAndFree.slice(i * 4, (i + 1) * 4), type: 'mixed', label: '', isReady: true });
-      }
-
-      const allReadyStacks = [...winnerReadyStacks, ...mixedReadyStacks].sort((a, b) => {
-        if (!a.players.length) return 1;
-        if (!b.players.length) return -1;
-        return Math.min(...a.players.map(p => p?.waitingSince ?? Infinity)) - Math.min(...b.players.map(p => p?.waitingSince ?? Infinity));
-      });
-      allReadyStacks.forEach((stack, idx) => { stack.label = `Stack ${idx + 1}`; });
-
-      const formingStacks: StackGroup[] = [];
-      const remainingWinners = winners.slice(winnerReadyCount * 4);
-      const remainingMixed = allLosersAndFree.slice(mixedReadyCount * 4);
-      if (remainingWinners.length > 0) formingStacks.push({ id: 'forming-winners', players: remainingWinners, type: 'forming', label: `Winners Forming (${remainingWinners.length}/4)`, isReady: false });
-      if (remainingMixed.length > 0) formingStacks.push({ id: 'forming-mixed', players: remainingMixed, type: 'forming', label: `Forming (${remainingMixed.length}/4)`, isReady: false });
-
-      return [...allReadyStacks, ...formingStacks];
+      // ── Win-Lose: exactly the manager's stacks, in the real play order ──
+      // (Regular first, then Winner/Loser alternating — same function the Next button uses)
+      const toPlayers = (ids: string[]) => ids
+        .map(id => session.players.find(p => p.id === id))
+        .filter((p): p is Player => p !== undefined && p.isActive);
+      const typeOf = (kind: string) => (kind === 'winner' ? 'winners' : kind === 'loser' ? 'losers' : 'mixed') as StackGroup['type'];
+      const stackCounter = session.stackCounter ?? 0;
+      const readyStacks: StackGroup[] = orderReadyWinLoseStacks(session).map((ref, i) => ({
+        id: `${ref.kind}-${ref.index}`,
+        players: toPlayers(ref.playerIds),
+        type: typeOf(ref.kind),
+        label: `Stack ${stackCounter + i + 1}`,
+        isReady: true,
+        isNext: i === 0,
+      }));
+      const formingLabel = (kind: string) => (kind === 'winner' ? 'Winners' : kind === 'loser' ? 'Losers' : 'Regular');
+      const formingStacks: StackGroup[] = formingWinLoseStacks(session).map(ref => ({
+        id: `${ref.kind}-${ref.index}`,
+        players: toPlayers(ref.playerIds),
+        type: 'forming' as const,
+        label: `${formingLabel(ref.kind)} Forming (${ref.playerIds.length}/4)`,
+        isReady: false,
+      }));
+      return [...readyStacks, ...formingStacks];
     } catch (e) {
       console.error('Error in stackQueue computation:', e);
       return [];
     }
-  }, [session?.players, session?.rotationMode, session?.roundRobinStacks, session?.stackCounter, session?.winnerStack, session?.loserStack, session?.waitingStack]);
+  }, [session?.players, session?.rotationMode, session?.roundRobinStacks, session?.stackCounter, session?.winnerStacks, session?.loserStacks, session?.waitingStacks, session?.lastStackType, session?.courts]);
 
   // Count players in games
   const playersInGame = session?.courts?.reduce((count, court) => {
@@ -400,8 +381,8 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
         return 'waiting';
       }
 
-      if (session?.winnerStack?.includes(playerId)) return 'winner';
-      if (session?.loserStack?.includes(playerId)) return 'loser';
+      if ((session?.winnerStacks ?? []).some(s => s.includes(playerId))) return 'winner';
+      if ((session?.loserStacks ?? []).some(s => s.includes(playerId))) return 'loser';
       return 'waiting';
     } catch (e) {
       console.error('Error in getPlayerStatus:', e);
@@ -583,12 +564,20 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                     {stackQueue.map((stack) => (
                       <div key={stack.id} className="space-y-1">
                         <div className={`flex items-center justify-between px-2 py-1 rounded-lg ${
-                          stack.isReady ? stack.type === 'winners' ? 'bg-green-100 dark:bg-green-900/30' : 'bg-blue-100 dark:bg-blue-900/30' : 'bg-slate-100 dark:bg-slate-700'
+                          stack.isReady ? stack.type === 'winners' ? 'bg-green-100 dark:bg-green-900/30' : stack.type === 'losers' ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-blue-100 dark:bg-blue-900/30' : 'bg-slate-100 dark:bg-slate-700'
                         }`}>
                           <span className={`text-xs font-semibold ${
-                            stack.isReady ? stack.type === 'winners' ? 'text-green-700 dark:text-green-300' : 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'
-                          }`}>{stack.label}</span>
-                          {stack.isReady && (
+                            stack.isReady ? stack.type === 'winners' ? 'text-green-700 dark:text-green-300' : stack.type === 'losers' ? 'text-orange-700 dark:text-orange-300' : 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'
+                          }`}>
+                            {stack.label}
+                            {stack.type === 'winners' && stack.isReady && <span className="ml-1.5 font-medium opacity-75">· Winners</span>}
+                            {stack.type === 'losers' && stack.isReady && <span className="ml-1.5 font-medium opacity-75">· Losers</span>}
+                          </span>
+                          {stack.isNext ? (
+                            <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-600 text-white">
+                              <Play className="w-3 h-3" />Next
+                            </span>
+                          ) : stack.isReady && (
                             <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                               <Play className="w-3 h-3" />Ready
                             </span>
@@ -598,6 +587,7 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
                           {stack.players.map((player) => (
                             <div key={player.id} className={`flex items-center gap-2 p-1.5 rounded-lg text-xs ${
                               stack.type === 'winners' ? 'bg-green-50 dark:bg-green-900/20' :
+                              stack.type === 'losers' ? 'bg-orange-50 dark:bg-orange-900/20' :
                               stack.isReady ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-slate-50 dark:bg-slate-700/50'
                             }`}>
                               <div className={`w-5 h-5 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 ${
