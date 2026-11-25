@@ -19,7 +19,12 @@ interface StackGroup {
   customIndex?: number; // For custom stacks
 }
 
-export function PlayerQueue() {
+interface PlayerQueueProps {
+  /** Large-screen layout: stacks in a grid, all expanded, bigger text; unstacked players listed below. */
+  wide?: boolean;
+}
+
+export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
   const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, assignGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime, reshuffleByGamesPlayed, smartRebuildStacks, prepareNextRoundRobinStack } = useSessionStore();
   const theme = useThemeClasses();
   const [searchQuery, setSearchQuery] = useState('');
@@ -564,6 +569,27 @@ export function PlayerQueue() {
     setDraggedPlayerId(null);
   };
 
+  /**
+   * Wide mode: full (ready) stacks in a responsive grid, then players still waiting for a
+   * full stack in their own section below. Narrow mode keeps the single list.
+   */
+  const arrangeStacks = (nodes: React.ReactNode[]) => {
+    if (!wide) return nodes;
+    const ready = nodes.filter((_, i) => !filteredStacks[i].isForming);
+    const forming = nodes.filter((_, i) => filteredStacks[i].isForming);
+    return (
+      <>
+        {ready.length > 0 && <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">{ready}</div>}
+        {forming.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Waiting: not in a full stack yet</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">{forming}</div>
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
       {/* Header */}
@@ -744,7 +770,7 @@ export function PlayerQueue() {
       </div>
 
       {/* Stacks */}
-      <div className="p-3 space-y-3 max-h-[500px] overflow-y-auto">
+      <div className={wide ? 'p-4 space-y-4' : 'p-3 space-y-3 max-h-[500px] overflow-y-auto'}>
         {filteredStacks.length === 0 && queuedPlayers.length === 0 ? (
           <div className="p-6 text-center text-slate-500">
             <Layers className="w-8 h-8 mx-auto mb-2 text-slate-300" />
@@ -762,7 +788,7 @@ export function PlayerQueue() {
             </button>
           </div>
         ) : (
-          filteredStacks.map((stack, stackIdx) => (
+          arrangeStacks(filteredStacks.map((stack, stackIdx) => (
             <div
               key={stack.id}
               className={`rounded-lg border-2 overflow-hidden transition-all group ${getStackColor(stack.type)}`}
@@ -810,7 +836,7 @@ export function PlayerQueue() {
               >
                 <div className="flex items-center gap-2">
                   {getStackIcon(stack.type)}
-                  <span className="font-medium text-sm text-slate-700 dark:text-slate-200">
+                  <span className={`font-medium ${wide ? 'text-base' : 'text-sm'} text-slate-700 dark:text-slate-200`}>
                     {stack.label}
                   </span>
                   {stack.players.length < 4 && draggedPlayerId && (
@@ -931,7 +957,7 @@ export function PlayerQueue() {
               </div>
 
               {/* Expanded Player List - first ready stack is always expanded, custom stacks can be expanded */}
-              {(expandedStacks.has(stack.id) || (!stack.isForming && stack.players.length === 4 && stackIdx === 0)) && (
+              {(wide || expandedStacks.has(stack.id) || (!stack.isForming && stack.players.length === 4 && stackIdx === 0)) && (
                 <div className="border-t border-slate-200 dark:border-slate-600 bg-white/50 dark:bg-slate-800/50">
                   {stack.players.map((player) => {
                     const globalIdx = getGlobalIndex(player.id);
@@ -1013,7 +1039,7 @@ export function PlayerQueue() {
                         </div>
                         <div className={`flex-1 min-w-0 ${isPlayerInGame ? 'opacity-50' : ''}`}>
                           <div className="flex items-center gap-2">
-                            <span className={`font-medium text-sm truncate ${isPlayerInGame ? 'text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
+                            <span className={`font-medium ${wide ? 'text-base' : 'text-sm'} truncate ${isPlayerInGame ? 'text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
                               {player.name}
                             </span>
                             {isPlayerInGame && (
@@ -1059,7 +1085,7 @@ export function PlayerQueue() {
                 </div>
               )}
             </div>
-          ))
+          )))
         )}
       </div>
 
@@ -1069,7 +1095,7 @@ export function PlayerQueue() {
           <p className={`text-xs ${theme.textDark} text-center font-medium`}>
             {stacks[0]?.isForming 
               ? `Need ${4 - stacks[0].players.length} more player${4 - stacks[0].players.length > 1 ? 's' : ''} to form a stack`
-              : 'Click "Start Game" on a court to play the next stack'
+              : 'Tap "Next" on a court (or Play on a stack), then Start'
             }
           </p>
         </div>

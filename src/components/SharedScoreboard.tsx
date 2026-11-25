@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { Session, Player } from '@/types';
+import { PlayerStatsModal } from './PlayerStatsModal';
 import { Trophy, Activity, Repeat, Hourglass, Timer, BarChart3 } from 'lucide-react';
 import { PickleballIcon } from './PickleballIcon';
 import { SettingsDropdown } from './SettingsDropdown';
@@ -86,19 +88,19 @@ function Podium({ players }: { players: Player[] }) {
 
 // ── Player row ─────────────────────────────────────────────────────────────────
 
-function PlayerRow({ rank, player, partnerName }: { rank: number; player: PlayerWithDiff; partnerName?: string }) {
+function PlayerRow({ rank, player, partnerName, onSelect }: { rank: number; player: PlayerWithDiff; partnerName?: string; onSelect: (id: string) => void }) {
   const isTop3 = rank <= 3;
   return (
     <div className={`${RANK_ROW} ${isTop3 ? 'bg-yellow-50/40 dark:bg-yellow-900/5' : ''} ${rank % 2 === 0 ? 'bg-slate-50/60 dark:bg-slate-800/30' : ''}`}>
       <div className="w-6 flex items-center justify-center shrink-0">
         <RankBadge rank={rank} />
       </div>
-      <div className="flex-1 min-w-0">
+      <button onClick={() => onSelect(player.id)} className="flex-1 min-w-0 text-left">
         <p className="flex items-center min-w-0 font-medium text-slate-800 dark:text-slate-100 text-sm">
-          <span className="truncate">{player.name}</span>{player.isProvisional && <ProvisionalTag />}
+          <span className="truncate hover:underline">{player.name}</span>{player.isProvisional && <ProvisionalTag />}
         </p>
         {partnerName && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">with {partnerName}</p>}
-      </div>
+      </button>
       <RankingStatCells won={player.gamesWon} played={player.gamesPlayed} som={player.somScore} />
     </div>
   );
@@ -132,6 +134,8 @@ interface SharedScoreboardProps {
 
 export function SharedScoreboard({ session }: SharedScoreboardProps) {
   const theme = useThemeClasses();
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const selectedPlayer = selectedPlayerId ? session.players.find(p => p.id === selectedPlayerId) : undefined;
   const isDoubles = session.rotationMode === 'doubles';
   const rankedPlayers = rankPlayers(session.players, session.gamesCompleted);
   const rankedPairs = isDoubles ? rankPairs(session.pairs ?? [], session.gamesCompleted) : [];
@@ -237,6 +241,7 @@ export function SharedScoreboard({ session }: SharedScoreboardProps) {
                     rank={idx + 1}
                     player={player}
                     partnerName={partnerMap.get(player.id)}
+                    onSelect={setSelectedPlayerId}
                   />
                 ))}
                 {rankedPlayers.some(p => p.isProvisional) && (
@@ -379,6 +384,15 @@ export function SharedScoreboard({ session }: SharedScoreboardProps) {
           )}
         </div>
       </main>
+
+      {selectedPlayer && (
+        <PlayerStatsModal
+          player={selectedPlayer}
+          session={session}
+          onClose={() => setSelectedPlayerId(null)}
+          hideDetailsByDefault
+        />
+      )}
     </div>
   );
 }

@@ -953,8 +953,8 @@ export function SharedSessionView({ session, onExit }: SharedSessionViewProps) {
         return player ? (
           <PlayerStatsModal
             player={player}
-            players={session.players}
-            gamesCompleted={session.gamesCompleted}
+            session={session}
+            hideDetailsByDefault
             onClose={() => setSelectedPlayerId(null)}
           />
         ) : null;

@@ -375,10 +375,10 @@ export function PlayerList() {
                   {!inGame && !inQueue && isPairPending && (
                     <button
                       onClick={() => checkInPair(pair.id)}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg transition"
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg shadow-sm transition"
                       title="Check in pair"
                     >
-                      <UserCheck className="w-3.5 h-3.5" />
+                      <UserCheck className="w-4 h-4" />
                       Check-in
                     </button>
                   )}
@@ -803,10 +803,10 @@ export function PlayerList() {
                       {!isInGame && isPending && (
                         <button
                           onClick={() => checkInPlayer(player.id)}
-                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg transition"
+                          className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg shadow-sm transition"
                           title="Check in player"
                         >
-                          <UserCheck className="w-3.5 h-3.5" />
+                          <UserCheck className="w-4 h-4" />
                           Check-in
                         </button>
                       )}
@@ -857,8 +857,7 @@ export function PlayerList() {
       return statsPlayer ? (
         <PlayerStatsModal
           player={statsPlayer}
-          players={session.players}
-          gamesCompleted={session.gamesCompleted}
+          session={session}
           onClose={() => setStatsPlayerId(null)}
         />
       ) : null;

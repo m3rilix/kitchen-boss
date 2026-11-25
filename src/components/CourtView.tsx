@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import type { Court, Player } from '@/types';
@@ -297,7 +298,7 @@ export function CourtView({ court }: CourtViewProps) {
 
   return (
     <div className={`bg-white dark:bg-slate-800 rounded-xl border-2 transition-all ${
-      isInGame ? `${theme.border}` :
+      isInGame ? `border-[3px] ${theme.border} ring-4 ${theme.badgeRing} shadow-lg` :
       isReady ? 'border-amber-300 dark:border-amber-600' :
       isMaintenance ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' :
       'border-slate-200 dark:border-slate-700'
@@ -674,7 +675,7 @@ export function CourtView({ court }: CourtViewProps) {
             )}
 
             {/* Game Controls */}
-            {!showEndGame && !showCancelConfirm && !showMaintenanceMenu ? (
+            {!showCancelConfirm && !showMaintenanceMenu ? (
               isReady ? (
                 <div className="flex gap-2">
                   <button
@@ -819,67 +820,7 @@ export function CourtView({ court }: CourtViewProps) {
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-center text-slate-600">Enter final score</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex flex-col items-center gap-1">
-                    <label className="text-xs font-medium text-blue-700">Team 1</label>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={MAX_SCORE}
-                      value={team1Score}
-                      onChange={(e) => { setTeam1Score(e.target.value); setScoreError(''); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitScore(); }}
-                      placeholder="0"
-                      className="w-full px-2 py-2 text-center text-lg font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    />
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <label className="text-xs font-medium text-red-700">Team 2</label>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={MAX_SCORE}
-                      value={team2Score}
-                      onChange={(e) => { setTeam2Score(e.target.value); setScoreError(''); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitScore(); }}
-                      placeholder="0"
-                      className="w-full px-2 py-2 text-center text-lg font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
-                    />
-                  </div>
-                </div>
-                {scoreError && (
-                  <p className="text-xs text-center text-red-600">{scoreError}</p>
-                )}
-                <button
-                  onClick={handleSubmitScore}
-                  className="flex items-center justify-center gap-2 w-full py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition"
-                >
-                  <Trophy className="w-4 h-4" />
-                  Submit Score
-                </button>
-                {import.meta.env.DEV && (
-                  <button
-                    onClick={handleRandomScore}
-                    className="flex items-center justify-center gap-2 w-full py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200 transition"
-                    title="End with a random valid score (dev only)"
-                  >
-                    <Shuffle className="w-4 h-4" />
-                    Random Score (Dev)
-                  </button>
-                )}
-                <button
-                  onClick={handleCloseEndGame}
-                  className="w-full py-1 text-xs text-slate-500 hover:text-slate-700"
-                >
-                  Back
-                </button>
-              </div>
-            )}
+            ) : null}
           </div>
         ) : (
           <div className="text-center py-4">
@@ -952,6 +893,89 @@ export function CourtView({ court }: CourtViewProps) {
           </div>
         )}
       </div>
+
+      {/* Score entry pop-up */}
+      {showEndGame && court.currentGame && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
+          onClick={handleCloseEndGame}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Final score for ${court.name}`}
+            className="w-full sm:max-w-md bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">Final score</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{court.name}</p>
+              </div>
+              <button onClick={handleCloseEndGame} className="p-2 -mr-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg" aria-label="Close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+              {([
+                { key: 'team1', label: 'Team A', players: team1Players, value: team1Score, set: setTeam1Score, tone: 'blue' },
+                null,
+                { key: 'team2', label: 'Team B', players: team2Players, value: team2Score, set: setTeam2Score, tone: 'red' },
+              ] as const).map((t, idx) => t === null ? (
+                <div key="vs" className="pt-10 text-sm font-bold text-slate-400">vs</div>
+              ) : (
+                <div key={t.key} className="flex flex-col items-center gap-2 min-w-0">
+                  <div className={`w-full text-center rounded-lg px-2 py-2 ${t.tone === 'blue' ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                    <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.tone === 'blue' ? 'text-blue-700 dark:text-blue-300' : 'text-red-700 dark:text-red-300'}`}>{t.label}</p>
+                    {(t.players ?? []).map((p, i) => (
+                      <p key={i} className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{p?.name ?? '—'}</p>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={MAX_SCORE}
+                    autoFocus={idx === 0}
+                    value={t.value}
+                    onChange={(e) => { t.set(e.target.value); setScoreError(''); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitScore(); }}
+                    placeholder="0"
+                    aria-label={`${t.label} score`}
+                    className={`w-full px-2 py-3 text-center text-3xl font-bold rounded-xl border-2 outline-none focus:ring-4 ${
+                      t.tone === 'blue'
+                        ? 'text-blue-700 dark:text-blue-300 bg-white dark:bg-slate-900 border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-blue-500/20'
+                        : 'text-red-700 dark:text-red-300 bg-white dark:bg-slate-900 border-red-200 dark:border-red-800 focus:border-red-500 focus:ring-red-500/20'
+                    }`}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {scoreError && <p className="text-sm text-center text-red-600 dark:text-red-400">{scoreError}</p>}
+
+            <button
+              onClick={handleSubmitScore}
+              className="flex items-center justify-center gap-2 w-full py-3 text-base font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 transition"
+            >
+              <Trophy className="w-5 h-5" />
+              Submit Score
+            </button>
+            {import.meta.env.DEV && (
+              <button
+                onClick={handleRandomScore}
+                className="flex items-center justify-center gap-2 w-full py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200 transition"
+                title="End with a random valid score (dev only)"
+              >
+                <Shuffle className="w-4 h-4" />
+                Random Score (Dev)
+              </button>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

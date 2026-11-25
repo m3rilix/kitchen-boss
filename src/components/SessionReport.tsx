@@ -400,8 +400,7 @@ export function SessionReport({ onClose, onEndSession, isEndOfSession = false }:
         return player ? (
           <PlayerStatsModal
             player={player}
-            players={session.players}
-            gamesCompleted={session.gamesCompleted}
+            session={session}
             onClose={() => setSelectedPlayerId(null)}
           />
         ) : null;
