@@ -600,11 +600,11 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
     const forming = nodes.filter((_, i) => filteredStacks[i].isForming);
     return (
       <>
-        {ready.length > 0 && <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">{ready}</div>}
+        {ready.length > 0 && <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3 items-start">{ready}</div>}
         {forming.length > 0 && (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Waiting: not in a full stack yet</p>
-            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 items-start">{forming}</div>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3 items-start">{forming}</div>
           </div>
         )}
       </>
@@ -890,8 +890,8 @@ export function PlayerQueue({ wide = false }: PlayerQueueProps = {}) {
                   })()}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* Avatar strip — hidden on mobile to prevent overflow */}
-                  <div className="hidden sm:flex items-center gap-1">
+                  {/* Avatar strip — hidden on mobile and in wide mode (players are listed below) */}
+                  <div className={wide ? 'hidden' : 'hidden sm:flex items-center gap-1'}>
                     {stack.players.slice(0, 4).map((p) => {
                       const isInGame = playersInGame.has(p.id);
                       return (
