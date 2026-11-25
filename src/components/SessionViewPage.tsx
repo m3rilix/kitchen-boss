@@ -3,14 +3,14 @@ import { Navigate } from 'react-router-dom';
 import { useSessionStore } from '@/store/sessionStore';
 import { useThemeClasses } from '@/store/themeStore';
 import { SessionHeader } from './SessionHeader';
-import { CourtView } from './CourtView';
+import { CourtBoard } from './CourtBoard';
 import { PlayerQueue } from './PlayerQueue';
 import { DoublesQueue } from './DoublesQueue';
 import { PlayerList } from './PlayerList';
 import { ActivityLog } from './ActivityLog';
 import { LeaderboardPanel } from './LeaderboardPanel';
 import { PlayerStatsModal } from './PlayerStatsModal';
-import { Plus, Layers, Users, LayoutGrid, ScrollText, Trophy, Play } from 'lucide-react';
+import { Layers, Users, LayoutGrid, ScrollText, Trophy } from 'lucide-react';
 
 type Section = 'courts' | 'queue' | 'leaderboard' | 'players' | 'log';
 type BottomTab = 'leaderboard' | 'players' | 'log';
@@ -58,7 +58,7 @@ interface SessionViewPageProps {
 }
 
 export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
-  const { session, addCourt, startAllReadyCourts } = useSessionStore();
+  const { session } = useSessionStore();
   const theme = useThemeClasses();
   const isLarge = useIsLargeScreen();
   const [activeTab, setActiveTab] = useState<Section>('courts');
@@ -67,7 +67,6 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
 
   if (!session) return <Navigate to="/create-session" replace />;
   const selectedPlayer = selectedPlayerId ? session.players.find(p => p.id === selectedPlayerId) : undefined;
-  const readyCourtCount = session.courts.filter(c => c.status === 'ready').length;
 
   const setBottomTab = (t: BottomTab) => {
     setBottomTabState(t);
@@ -79,39 +78,7 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
     document.getElementById(`section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const courtsPanel = (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-        <h2 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-          <LayoutGrid className="w-4 h-4 text-blue-500" />
-          Courts ({session.courts.length})
-        </h2>
-        <button
-          onClick={addCourt}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium ${theme.textButton} ${theme.bgButton} rounded-lg transition`}
-        >
-          <Plus className="w-4 h-4" />
-          Add Court
-        </button>
-      </div>
-      <div className="p-3 md:p-4">
-        {readyCourtCount > 0 && (
-          <button
-            onClick={startAllReadyCourts}
-            className={`w-full mb-3 md:mb-4 inline-flex items-center justify-center gap-2 py-3 text-base font-bold text-white ${theme.bg600} rounded-xl shadow-sm hover:opacity-90 transition`}
-          >
-            <Play className="w-5 h-5" />
-            Start {readyCourtCount} ready court{readyCourtCount !== 1 ? 's' : ''}
-          </button>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {session.courts.map((court) => (
-            <CourtView key={court.id} court={court} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  const courtsPanel = <CourtBoard />;
 
   const queuePanel = session.rotationMode === 'doubles' ? <DoublesQueue /> : <PlayerQueue wide={isLarge} />;
   const leaderboardPanel = <LeaderboardPanel session={session} onSelectPlayer={setSelectedPlayerId} />;
