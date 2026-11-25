@@ -128,7 +128,7 @@ export function analyzeSessionHealth(
   let longestMatch: LongestMatch | null = null;
   let longestMs = -1;
   for (const g of gamesCompleted) {
-    if (!g.endedAt) continue;
+    if (!g.endedAt || !g.startedAt) continue;
     const ms = new Date(g.endedAt).getTime() - new Date(g.startedAt).getTime();
     if (ms > longestMs) {
       longestMs = ms;

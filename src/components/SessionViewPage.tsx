@@ -10,7 +10,7 @@ import { PlayerList } from './PlayerList';
 import { ActivityLog } from './ActivityLog';
 import { LeaderboardPanel } from './LeaderboardPanel';
 import { PlayerStatsModal } from './PlayerStatsModal';
-import { Plus, Layers, Users, LayoutGrid, ScrollText, GripVertical, Trophy } from 'lucide-react';
+import { Plus, Layers, Users, LayoutGrid, ScrollText, GripVertical, Trophy, Play } from 'lucide-react';
 
 type MobileSection = 'courts' | 'queue' | 'leaderboard' | 'players' | 'log';
 type PanelId = MobileSection;
@@ -93,7 +93,7 @@ interface SessionViewPageProps {
 }
 
 export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
-  const { session, addCourt } = useSessionStore();
+  const { session, addCourt, startAllReadyCourts } = useSessionStore();
   const theme = useThemeClasses();
   const [activeTab, setActiveTab] = useState<MobileSection>('courts');
   const [layout, setLayoutState] = useState<PanelLayout>(loadLayout);
@@ -103,6 +103,7 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
 
   if (!session) return <Navigate to="/create-session" replace />;
   const selectedPlayer = selectedPlayerId ? session.players.find(p => p.id === selectedPlayerId) : undefined;
+  const readyCourtCount = session.courts.filter(c => c.status === 'ready').length;
 
   const saveLayout = (l: PanelLayout) => {
     setLayoutState(l);
@@ -160,6 +161,15 @@ export function SessionViewPage({ onAdminClick }: SessionViewPageProps) {
               </button>
             </div>
             <div className="p-3">
+              {readyCourtCount > 0 && (
+                <button
+                  onClick={startAllReadyCourts}
+                  className={`w-full mb-3 inline-flex items-center justify-center gap-2 py-3 text-base font-bold text-white ${theme.bg600} rounded-xl shadow-sm hover:opacity-90 transition`}
+                >
+                  <Play className="w-5 h-5" />
+                  Start {readyCourtCount} ready court{readyCourtCount !== 1 ? 's' : ''}
+                </button>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {session.courts.map((court) => (
                   <CourtView key={court.id} court={court} />

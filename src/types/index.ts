@@ -38,7 +38,8 @@ export interface Game {
   courtId: string;
   team1: [string, string]; // Player IDs for doubles
   team2: [string, string];
-  startedAt: Date;
+  /** Set when the manager presses Start; absent while the court is Ready (players on, clock not running). */
+  startedAt?: Date;
   endedAt?: Date;
   score?: { team1: number; team2: number };
   winner?: 'team1' | 'team2';
@@ -49,11 +50,17 @@ export interface Game {
 export interface Court {
   id: string;
   name: string;
-  status: 'available' | 'in_game' | 'maintenance';
+  /**
+   * available → (Next / Play) → ready → (Start) → in_game → (End Game) → available.
+   * `ready` holds a currentGame with no startedAt: players are on court and can still be
+   * swapped; Return to Ready takes an in_game court back to `ready`.
+   */
+  status: 'available' | 'ready' | 'in_game' | 'maintenance';
   currentGame?: Game;
 }
 
-export type ActivityType = 
+export type ActivityType =
+  | 'court_ready'
   | 'game_started'
   | 'game_ended'
   | 'player_added'

@@ -5,7 +5,7 @@ import type { Court, Player } from '@/types';
 import { usesRoundRobinStacks, isSkillBased, skillOf } from '@/lib/skill';
 import { pickBalancedTeamSplit } from '@/lib/roundRobin';
 import { StarRating } from './StarRating';
-import { Play, Trophy, X, Users, Wrench, Pencil, Check, UserPlus, UserMinus, ChevronDown, Timer, Shuffle } from 'lucide-react';
+import { Play, Trophy, X, Users, Wrench, Pencil, Check, UserPlus, UserMinus, ChevronDown, Timer, Shuffle, RotateCcw, SkipForward, ArrowLeftRight } from 'lucide-react';
 
 /** Format elapsed milliseconds as M:SS */
 function formatElapsed(ms: number): string {
@@ -42,7 +42,9 @@ export function CourtView({ court }: CourtViewProps) {
     removePlayerFromGame,
     replacePlayerInGame,
     swapPlayers,
-    startGame
+    assignGame,
+    startCourtGame,
+    returnToReady,
   } = useSessionStore();
   const theme = useThemeClasses();
   
@@ -92,16 +94,22 @@ export function CourtView({ court }: CourtViewProps) {
     return () => clearInterval(id);
   }, [court.currentGame?.startedAt]);
 
+  const isInGame = court.status === 'in_game' && !!court.currentGame;
+  const isReady = court.status === 'ready' && !!court.currentGame;
+  const hasMatchup = isInGame || isReady;
+  const isMaintenance = court.status === 'maintenance';
+  // Swaps are allowed before the game starts (Ready), or mid-game only from the
+  // wrench (maintenance) menu — never by accident while a game is being played.
+  const isDoubles = session?.rotationMode === 'doubles';
+  const canSwap = !isDoubles && (isReady || (isInGame && showMaintenanceMenu));
+
   // Clear a pending tap-to-swap selection when this court's game changes (new game,
-  // ended, or cancelled) so a stale highlight doesn't carry into the next game.
+  // ended, or cancelled) or swapping gets locked, so a stale highlight doesn't linger.
   useEffect(() => {
     setSelectedSlot(null);
-  }, [court.currentGame?.id]);
+  }, [court.currentGame?.id, canSwap]);
 
   if (!session) return null;
-
-  const isInGame = court.status === 'in_game' && court.currentGame;
-  const isMaintenance = court.status === 'maintenance';
 
   const handleSaveName = () => {
     const trimmedName = editName.trim();
@@ -128,7 +136,6 @@ export function CourtView({ court }: CourtViewProps) {
 
   // Check if there's a ready stack (4 players in any stack or combined)
   const isRoundRobin = usesRoundRobinStacks(session.rotationMode);
-  const isDoubles   = session.rotationMode === 'doubles';
   const skillMode   = isSkillBased(session.rotationMode);
   const teamSkill = (players?: (Player | undefined)[]) =>
     (players ?? []).reduce((sum, p) => sum + (p ? skillOf(p) : 0), 0);
@@ -176,11 +183,23 @@ export function CourtView({ court }: CourtViewProps) {
     // Note: winners do NOT mix with losers/waiting - they form separate stacks
   }
   
-  const canStartGame = hasReadyStack;
+  const canPullNext = hasReadyStack;
 
-  const handleStartGame = () => {
+  /** Next: pull the next queued stack onto this court as Ready (clock not running yet). */
+  const handleNext = () => {
     autoAssignNextGame(court.id);
   };
+
+  // Players who could be swapped in from the queue/stacks: active, available, not on any court
+  const playersOnCourts = new Set(
+    session.courts.flatMap(c => (c.currentGame ? [...c.currentGame.team1, ...c.currentGame.team2] : []))
+  );
+  const queueOrder = new Map(session.queue.map((id, i) => [id, i]));
+  const replacementCandidates = session.players
+    .filter(p => p.isActive && !p.unavailable && !playersOnCourts.has(p.id))
+    .sort((a, b) => (queueOrder.get(a.id) ?? Infinity) - (queueOrder.get(b.id) ?? Infinity));
+  const selectedPlayerId = selectedSlot && court.currentGame ? court.currentGame[selectedSlot.team][selectedSlot.index] : undefined;
+  const selectedPlayer = selectedPlayerId ? getPlayerById(selectedPlayerId) : undefined;
 
   const handleOpenEndGame = () => {
     setTeam1Score('');
@@ -263,7 +282,7 @@ export function CourtView({ court }: CourtViewProps) {
   // First tap selects a player; a second tap on a different slot swaps them; tapping
   // the same slot again deselects it.
   const handleSlotTap = (team: 'team1' | 'team2', index: number) => {
-    if (isDoubles) return;
+    if (!canSwap) return;
     if (!selectedSlot) {
       setSelectedSlot({ team, index });
       return;
@@ -278,7 +297,8 @@ export function CourtView({ court }: CourtViewProps) {
 
   return (
     <div className={`bg-white dark:bg-slate-800 rounded-xl border-2 transition-all ${
-      isInGame ? `${theme.border}` : 
+      isInGame ? `${theme.border}` :
+      isReady ? 'border-amber-300 dark:border-amber-600' :
       isMaintenance ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' :
       'border-slate-200 dark:border-slate-700'
     }`}>
@@ -334,6 +354,11 @@ export function CourtView({ court }: CourtViewProps) {
               </span>
             </>
           )}
+          {isReady && (
+            <span className="px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-full">
+              READY
+            </span>
+          )}
           {isMaintenance && (
             <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded-full flex items-center gap-1">
               <Wrench className="w-3 h-3" />
@@ -342,8 +367,8 @@ export function CourtView({ court }: CourtViewProps) {
           )}
         </div>
         <div className="flex items-center gap-1">
-          {/* Maintenance button - only show when not in game */}
-          {!isMaintenance && !isInGame && (
+          {/* Maintenance button - only when the court is empty */}
+          {!isMaintenance && !hasMatchup && (
             <button
               onClick={() => setCourtStatus(court.id, 'maintenance')}
               className="p-1.5 text-slate-400 hover:text-orange-500 transition"
@@ -361,7 +386,7 @@ export function CourtView({ court }: CourtViewProps) {
               <Check className="w-4 h-4" />
             </button>
           )}
-          {session.courts.length > 1 && !isInGame && (
+          {session.courts.length > 1 && !hasMatchup && (
             <button
               onClick={() => removeCourt(court.id)}
               className="p-1.5 text-slate-400 hover:text-red-500 transition"
@@ -375,7 +400,7 @@ export function CourtView({ court }: CourtViewProps) {
 
       {/* Content */}
       <div className="p-3">
-        {isInGame && team1Players && team2Players ? (
+        {hasMatchup && team1Players && team2Players ? (
           <div className="space-y-2">
             {/* Maintenance Mode Toggle */}
             {maintenanceMode && (
@@ -464,13 +489,13 @@ export function CourtView({ court }: CourtViewProps) {
                   return (
                     <div
                       key={i}
-                      draggable={!isDoubles}
-                      onDragStart={() => !isDoubles && setDraggedPlayer({ team: 'team1', index: i })}
+                      draggable={canSwap}
+                      onDragStart={() => canSwap && setDraggedPlayer({ team: 'team1', index: i })}
                       onDragEnd={() => setDraggedPlayer(null)}
-                      onDragOver={(e) => { if (!isDoubles && isDragTarget) e.preventDefault(); }}
+                      onDragOver={(e) => { if (canSwap && isDragTarget) e.preventDefault(); }}
                       onDrop={(e) => {
                         e.preventDefault();
-                        if (!isDoubles && draggedPlayer) {
+                        if (canSwap && draggedPlayer) {
                           swapPlayers(court.id, draggedPlayer.team, draggedPlayer.index, 'team1', i);
                           setDraggedPlayer(null);
                         }
@@ -479,8 +504,8 @@ export function CourtView({ court }: CourtViewProps) {
                       className={`flex items-center gap-1.5 p-1 rounded-lg transition-all ${
                         isSelected ? 'bg-blue-200 ring-2 ring-blue-500' :
                         isDragTarget && draggedPlayer ? 'bg-blue-100 ring-2 ring-blue-300' : 'bg-blue-50'
-                      } ${!isDoubles ? 'cursor-pointer active:cursor-grabbing' : ''}`}
-                      title={!isDoubles ? 'Tap to select, tap another player to swap' : undefined}
+                      } ${canSwap ? 'cursor-pointer active:cursor-grabbing' : ''}`}
+                      title={canSwap ? 'Tap to select, then tap another player to swap or pick a replacement' : undefined}
                     >
                       <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 font-semibold text-[10px] flex-shrink-0">
                         {player?.name.charAt(0).toUpperCase()}
@@ -579,13 +604,13 @@ export function CourtView({ court }: CourtViewProps) {
                   return (
                     <div
                       key={i}
-                      draggable={!isDoubles}
-                      onDragStart={() => !isDoubles && setDraggedPlayer({ team: 'team2', index: i })}
+                      draggable={canSwap}
+                      onDragStart={() => canSwap && setDraggedPlayer({ team: 'team2', index: i })}
                       onDragEnd={() => setDraggedPlayer(null)}
-                      onDragOver={(e) => { if (!isDoubles && isDragTarget) e.preventDefault(); }}
+                      onDragOver={(e) => { if (canSwap && isDragTarget) e.preventDefault(); }}
                       onDrop={(e) => {
                         e.preventDefault();
-                        if (!isDoubles && draggedPlayer) {
+                        if (canSwap && draggedPlayer) {
                           swapPlayers(court.id, draggedPlayer.team, draggedPlayer.index, 'team2', i);
                           setDraggedPlayer(null);
                         }
@@ -594,8 +619,8 @@ export function CourtView({ court }: CourtViewProps) {
                       className={`flex items-center gap-1.5 p-1 rounded-lg transition-all ${
                         isSelected ? 'bg-red-200 ring-2 ring-red-500' :
                         isDragTarget && draggedPlayer ? 'bg-red-100 ring-2 ring-red-300' : 'bg-red-50'
-                      } ${!isDoubles ? 'cursor-pointer active:cursor-grabbing' : ''}`}
-                      title={!isDoubles ? 'Tap to select, tap another player to swap' : undefined}
+                      } ${canSwap ? 'cursor-pointer active:cursor-grabbing' : ''}`}
+                      title={canSwap ? 'Tap to select, then tap another player to swap or pick a replacement' : undefined}
                     >
                       <div className="w-6 h-6 bg-red-200 rounded-full flex items-center justify-center text-red-700 font-semibold text-[10px] flex-shrink-0">
                         {player?.name.charAt(0).toUpperCase()}
@@ -617,23 +642,91 @@ export function CourtView({ court }: CourtViewProps) {
               </div>
             </div>
 
+            {/* Swap hint / replace-from-queue picker */}
+            {canSwap && (
+              selectedPlayer ? (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600">
+                  <ArrowLeftRight className="w-4 h-4 text-slate-400 shrink-0" />
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (!e.target.value || !selectedSlot) return;
+                      replacePlayerInGame(court.id, selectedSlot.team, selectedSlot.index, e.target.value);
+                      setSelectedSlot(null);
+                    }}
+                    disabled={replacementCandidates.length === 0}
+                    aria-label={`Replace ${selectedPlayer.name} with a waiting player`}
+                    className="flex-1 min-w-0 py-1.5 px-2 text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                  >
+                    <option value="">
+                      {replacementCandidates.length === 0 ? 'No waiting players' : `Replace ${selectedPlayer.name} with…`}
+                    </option>
+                    {replacementCandidates.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="text-[11px] text-center text-slate-400">
+                  Tap a player to swap positions or replace them from the queue
+                </p>
+              )
+            )}
+
             {/* Game Controls */}
             {!showEndGame && !showCancelConfirm && !showMaintenanceMenu ? (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleOpenEndGame}
-                  className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition"
-                >
-                  End Game
-                </button>
-                <button
-                  onClick={() => setShowMaintenanceMenu(true)}
-                  className="px-3 py-2 text-sm font-medium text-orange-600 bg-orange-50 rounded-lg hover:bg-orange-100 transition"
-                  title="Maintenance options"
-                >
-                  <Wrench className="w-4 h-4" />
-                </button>
-              </div>
+              isReady ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => startCourtGame(court.id)}
+                    disabled={[...court.currentGame!.team1, ...court.currentGame!.team2].some(id => !id)}
+                    className={`flex-1 inline-flex items-center justify-center gap-2 py-2 text-sm font-semibold text-white ${theme.bg600} rounded-lg hover:opacity-90 transition disabled:opacity-40`}
+                  >
+                    <Play className="w-4 h-4" />
+                    Start
+                  </button>
+                  <button
+                    onClick={() => setShowCancelConfirm(true)}
+                    className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 transition inline-flex items-center gap-1"
+                    title="Cancel: send these players back to the front of the queue"
+                  >
+                    <X className="w-4 h-4" />
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={handleOpenEndGame}
+                    className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition"
+                  >
+                    End Game
+                  </button>
+                  <button
+                    onClick={() => returnToReady(court.id)}
+                    className="px-2.5 py-2 text-xs font-medium text-amber-700 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300 rounded-lg hover:bg-amber-100 transition inline-flex items-center gap-1"
+                    title="Return to Ready: stop the game, keep these players, reset the timer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Ready
+                  </button>
+                  <button
+                    onClick={() => setShowCancelConfirm(true)}
+                    className="px-2.5 py-2 text-xs font-medium text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 transition inline-flex items-center gap-1"
+                    title="Cancel Game: no result, players go back to the front of the queue"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => setShowMaintenanceMenu(true)}
+                    className="px-2.5 py-2 text-sm font-medium text-orange-600 bg-orange-50 rounded-lg hover:bg-orange-100 transition"
+                    title="Maintenance: rename court, swap players"
+                  >
+                    <Wrench className="w-4 h-4" />
+                  </button>
+                </div>
+              )
             ) : showMaintenanceMenu ? (
               <div className="space-y-2 p-3 bg-orange-50 rounded-lg border border-orange-100">
                 <p className="text-sm text-center text-orange-700 font-medium">
@@ -688,20 +781,10 @@ export function CourtView({ court }: CourtViewProps) {
                   <span className="text-xs">(Soon)</span>
                 </button>
 
-                {/* Cancel Game - hide while in player edit mode */}
-                {!maintenanceMode && (
-                  <button
-                    onClick={() => {
-                      setShowMaintenanceMenu(false);
-                      setShowCancelConfirm(true);
-                    }}
-                    className="w-full py-2 text-sm font-medium text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition flex items-center justify-center gap-2"
-                  >
-                    <X className="w-4 h-4" />
-                    Cancel Game
-                  </button>
+                {!isDoubles && (
+                  <p className="text-xs text-center text-orange-700/80">Player swapping is unlocked while this menu is open</p>
                 )}
-                
+
                 {!maintenanceMode && (
                   <button
                     onClick={() => {
@@ -710,14 +793,14 @@ export function CourtView({ court }: CourtViewProps) {
                     }}
                     className="w-full py-1 text-xs text-slate-500 hover:text-slate-700"
                   >
-                    Back
+                    Done
                   </button>
                 )}
               </div>
             ) : showCancelConfirm ? (
               <div className="space-y-2 p-3 bg-red-50 rounded-lg border border-red-100">
-                <p className="text-sm text-center text-red-700 font-medium">Cancel this game?</p>
-                <p className="text-xs text-center text-red-600">Players will be moved back to the front of the queue</p>
+                <p className="text-sm text-center text-red-700 font-medium">{isReady ? 'Clear this court?' : 'Cancel this game?'}</p>
+                <p className="text-xs text-center text-red-600">No result is recorded. Players go back to the front of the queue.</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
@@ -805,7 +888,7 @@ export function CourtView({ court }: CourtViewProps) {
                 <Wrench className="w-6 h-6 text-orange-400 mx-auto" />
                 <p className="text-sm text-orange-600">Court under maintenance</p>
               </div>
-            ) : canStartGame ? (
+            ) : canPullNext ? (
               <div 
                 className={`space-y-2 p-3 rounded-lg transition-all ${
                   courtDragOver ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-400' : ''
@@ -830,7 +913,7 @@ export function CourtView({ court }: CourtViewProps) {
                           ids = pickBalancedTeamSplit(four as [Player, Player, Player, Player], session.matchHistory);
                         }
                       }
-                      startGame(
+                      assignGame(
                         court.id,
                         [ids[0], ids[1]] as [string, string],
                         [ids[2], ids[3]] as [string, string]
@@ -841,18 +924,18 @@ export function CourtView({ court }: CourtViewProps) {
                   }
                 }}
               >
-                {/* Quick Start Button */}
+                {/* Next: pull the next stack onto this court as Ready */}
                 <button
-                  onClick={handleStartGame}
+                  onClick={handleNext}
                   className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 ${theme.bg600} text-white font-medium rounded-lg hover:opacity-90 transition text-sm`}
                 >
-                  <Play className="w-5 h-5" />
-                  Start Next Game
+                  <SkipForward className="w-5 h-5" />
+                  Next
                 </button>
-                
+
                 {/* Drag hint */}
                 <p className="text-xs text-center text-slate-400">
-                  Or drag a ready stack here
+                  Brings the next stack on court, or drag a stack here
                 </p>
               </div>
             ) : (

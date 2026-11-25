@@ -20,7 +20,7 @@ interface StackGroup {
 }
 
 export function PlayerQueue() {
-  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, startGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime, reshuffleByGamesPlayed, smartRebuildStacks, prepareNextRoundRobinStack } = useSessionStore();
+  const { session, getPlayersInQueue, removeFromQueue, movePlayerToPosition, movePlayerToStack, assignGame, createCustomStack, removeCustomStack, reshuffleByWaitingTime, reshuffleByGamesPlayed, smartRebuildStacks, prepareNextRoundRobinStack } = useSessionStore();
   const theme = useThemeClasses();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set(['forming-winners', 'forming-losers', 'forming-free', 'forming-mixed']));
@@ -178,7 +178,7 @@ export function PlayerQueue() {
       const tryWinnerFirst = lastType === 'loser' || lastType === 'regular';
       
       // Build ordered ready stacks: Regular first, then alternating win/lose
-      // The order is stable - it only changes when lastStackType changes (in startGame)
+      // The order is stable - it only changes when lastStackType changes (in assignGame)
       let orderedWinLoseStacks: StackGroup[] = [];
       if (tryWinnerFirst) {
         orderedWinLoseStacks = [...readyWinner, ...readyLoser];
@@ -395,7 +395,7 @@ export function PlayerQueue() {
     session?.winnerStacks, 
     session?.loserStacks, 
     session?.waitingStacks, 
-    session?.lastStackType,  // Visual order ONLY changes when this changes (in startGame)
+    session?.lastStackType,  // Visual order ONLY changes when this changes (in assignGame)
     session?.customStacks, 
     session?.roundRobinStacks, 
     session?.rotationMode, 
@@ -909,7 +909,7 @@ export function PlayerQueue() {
                             : balanced
                               ? { team1: [balanced[0], balanced[1]] as [string, string], team2: [balanced[2], balanced[3]] as [string, string] }
                               : splitStackIntoTeams(playerIds, session.players);
-                          startGame(
+                          assignGame(
                             availableCourt.id,
                             team1,
                             team2,
@@ -920,7 +920,7 @@ export function PlayerQueue() {
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-white flex-shrink-0 ${
                           skippedQueue ? 'bg-purple-600 hover:bg-purple-700' : 'bg-green-600 hover:bg-green-700'
                         }`}
-                        title={skippedQueue ? `Skip queue and play on ${availableCourt.name}` : `Start game on ${availableCourt.name}`}
+                        title={skippedQueue ? `Skip the queue: send to ${availableCourt.name} (ready to start)` : `Send to ${availableCourt.name} (ready to start)`}
                       >
                         {skippedQueue ? <Rocket className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                         {skippedQueue ? 'Skip' : 'Play'}

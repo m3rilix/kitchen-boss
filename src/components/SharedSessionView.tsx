@@ -39,6 +39,8 @@ const formatWaitTime = (waitingSince: number, gamesPlayed: number = 0): string =
 // Get activity icon
 const getActivityIcon = (type: ActivityType) => {
   switch (type) {
+    case 'court_ready':
+      return <Play className="w-3.5 h-3.5 text-amber-400" />;
     case 'game_started':
       return <Play className="w-3.5 h-3.5 text-blue-500" />;
     case 'game_ended':
@@ -967,6 +969,7 @@ function ReadOnlyCourtView({ court, getPlayerById, showSkill = false }: { court:
   const teamSkill = (players: (Player | undefined)[]) =>
     players.reduce((sum, p) => sum + (p ? skillOf(p) : 0), 0);
   const isInGame = court.status === 'in_game' && court.currentGame;
+  const isReady = court.status === 'ready' && court.currentGame;
   const isMaintenance = court.status === 'maintenance';
 
   // Live elapsed-time ticker
@@ -1015,6 +1018,10 @@ function ReadOnlyCourtView({ court, getPlayerById, showSkill = false }: { court:
                 {elapsedTime}
               </span>
             </div>
+          ) : isReady ? (
+            <span className="px-2 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-full">
+              READY · starting soon
+            </span>
           ) : (
             <span className="px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-600 dark:bg-slate-600 dark:text-slate-300 rounded-full">
               Available
@@ -1025,7 +1032,7 @@ function ReadOnlyCourtView({ court, getPlayerById, showSkill = false }: { court:
 
       {/* Content */}
       <div className="p-3">
-        {isInGame && team1Players && team2Players ? (
+        {(isInGame || isReady) && team1Players && team2Players ? (
           <div className="grid grid-cols-2 gap-3">
             {/* Team 1 */}
             <div className="space-y-1.5">

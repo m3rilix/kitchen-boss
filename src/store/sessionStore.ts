@@ -31,6 +31,15 @@ const createLogEntry = (
   details,
 });
 
+/** Keeps a game's matchHistory entry in step with its current teams after a swap/replace. */
+const syncMatchEntry = (
+  history: Session['matchHistory'],
+  gameId: string,
+  team1: [string, string],
+  team2: [string, string]
+): Session['matchHistory'] =>
+  (history ?? []).map(m => (m.gameId === gameId ? { ...m, team1, team2 } : m));
+
 interface SessionState {
   session: Session | null;
   
@@ -93,7 +102,14 @@ interface SessionState {
   isNameDuplicate: (name: string) => boolean;
   
   // Game actions
-  startGame: (courtId: string, team1: [string, string], team2: [string, string], skippedQueue?: boolean, customStackIndex?: number) => void;
+  /** Puts a matchup on a court as Ready (players taken off the queue, clock not running yet). */
+  assignGame: (courtId: string, team1: [string, string], team2: [string, string], skippedQueue?: boolean, customStackIndex?: number) => void;
+  /** Starts a Ready court: status → in_game, clock starts now. */
+  startCourtGame: (courtId: string) => void;
+  /** Starts every Ready court at once. */
+  startAllReadyCourts: () => void;
+  /** Takes an in-play court back to Ready (same players, clock reset, no result recorded). */
+  returnToReady: (courtId: string) => void;
   endGame: (courtId: string, winner: 'team1' | 'team2', score?: { team1: number; team2: number }) => void;
   editCompletedGame: (gameId: string, updates: { score?: { team1: number; team2: number }; winner?: 'team1' | 'team2' }) => void;
   cancelGame: (courtId: string) => void;
@@ -1872,16 +1888,16 @@ export const useSessionStore = create<SessionState>()(
         });
       },
 
-      startGame: (courtId, team1, team2, skippedQueue = false, customStackIndex) => {
+      assignGame: (courtId, team1, team2, skippedQueue = false, customStackIndex) => {
         set((state) => {
           if (!state.session) return state;
 
+          // No startedAt yet — the clock starts when the manager presses Start
           const game: Game = {
             id: uuidv4(),
             courtId,
             team1,
             team2,
-            startedAt: new Date(),
           };
 
           const court = state.session.courts.find(c => c.id === courtId);
@@ -1964,8 +1980,8 @@ export const useSessionStore = create<SessionState>()(
           // Build activity log entries
           const logEntries: ActivityLogEntry[] = [
             createLogEntry(
-              'game_started',
-              `Game started on ${court?.name}: ${team1Names.join(' & ')} vs ${team2Names.join(' & ')}`,
+              'court_ready',
+              `${court?.name} ready: ${team1Names.join(' & ')} vs ${team2Names.join(' & ')}`,
               { courtId, courtName: court?.name, team1Names, team2Names }
             ),
           ];
@@ -1996,7 +2012,7 @@ export const useSessionStore = create<SessionState>()(
               ...state.session,
               courts: state.session.courts.map((c) =>
                 c.id === courtId
-                  ? { ...c, status: 'in_game', currentGame: game }
+                  ? { ...c, status: 'ready', currentGame: game }
                   : c
               ),
               players: updatedPlayers,
@@ -2023,6 +2039,67 @@ export const useSessionStore = create<SessionState>()(
         });
         // Add new stacks without touching existing ones (players moved out of waiting)
         get().addNewRoundRobinStacks();
+      },
+
+      startCourtGame: (courtId) => {
+        set((state) => {
+          if (!state.session) return state;
+          const court = state.session.courts.find(c => c.id === courtId);
+          const game = court?.currentGame;
+          if (!court || court.status !== 'ready' || !game) return state;
+          // Every slot must be filled before the clock can start
+          if ([...game.team1, ...game.team2].some(id => !id)) return state;
+
+          const nameOf = (id: string) => state.session!.players.find(p => p.id === id)?.name || '';
+          const team1Names = game.team1.map(nameOf);
+          const team2Names = game.team2.map(nameOf);
+          return {
+            session: {
+              ...state.session,
+              courts: state.session.courts.map(c =>
+                c.id === courtId
+                  ? { ...c, status: 'in_game' as const, currentGame: { ...game, startedAt: new Date() } }
+                  : c
+              ),
+              activityLog: [
+                createLogEntry(
+                  'game_started',
+                  `Game started on ${court.name}: ${team1Names.join(' & ')} vs ${team2Names.join(' & ')}`,
+                  { courtId, courtName: court.name, team1Names, team2Names }
+                ),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
+      },
+
+      startAllReadyCourts: () => {
+        const ready = get().session?.courts.filter(c => c.status === 'ready') ?? [];
+        ready.forEach(c => get().startCourtGame(c.id));
+      },
+
+      returnToReady: (courtId) => {
+        set((state) => {
+          if (!state.session) return state;
+          const court = state.session.courts.find(c => c.id === courtId);
+          const game = court?.currentGame;
+          if (!court || court.status !== 'in_game' || !game) return state;
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { startedAt: _discarded, ...readyGame } = game;
+          return {
+            session: {
+              ...state.session,
+              courts: state.session.courts.map(c =>
+                c.id === courtId ? { ...c, status: 'ready' as const, currentGame: readyGame } : c
+              ),
+              activityLog: [
+                createLogEntry('court_ready', `${court.name}: game returned to ready, timer reset`, { courtId, courtName: court.name }),
+                ...state.session.activityLog,
+              ],
+            },
+          };
+        });
       },
 
       endGame: (courtId, winner, score) => {
@@ -2502,7 +2579,7 @@ export const useSessionStore = create<SessionState>()(
             }
             // In doubles mode, only pairs can start a game — no FIFO fallback
             if (team1 && team2) {
-              get().startGame(courtId, team1, team2);
+              get().assignGame(courtId, team1, team2);
             }
             return;
           }
@@ -2656,7 +2733,7 @@ export const useSessionStore = create<SessionState>()(
         }
 
         if (team1 && team2) {
-          state.startGame(courtId, team1, team2);
+          state.assignGame(courtId, team1, team2);
         }
       },
 
@@ -2691,6 +2768,7 @@ export const useSessionStore = create<SessionState>()(
           return {
             session: {
               ...state.session,
+              matchHistory: syncMatchEntry(state.session.matchHistory, game.id, newTeam1, newTeam2),
               courts: state.session.courts.map((c) =>
                 c.id === courtId
                   ? {
@@ -2948,6 +3026,7 @@ export const useSessionStore = create<SessionState>()(
               roundRobinStacks: newRoundRobinStacks,
               customStacks: newCustomStacks,
               players: updatedPlayers,
+              matchHistory: syncMatchEntry(state.session.matchHistory, game.id, newTeam1, newTeam2),
               activityLog: [
                 createLogEntry(
                   'player_moved',

@@ -9,6 +9,8 @@ const isDev = import.meta.env.DEV;
 
 const getActivityIcon = (type: ActivityType) => {
   switch (type) {
+    case 'court_ready':
+      return <Play className="w-3.5 h-3.5 text-amber-400" />;
     case 'game_started':
       return <Play className="w-3.5 h-3.5 text-blue-500" />;
     case 'game_ended':
